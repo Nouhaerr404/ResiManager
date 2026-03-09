@@ -1,15 +1,32 @@
-// apartments(1500).dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ============================================================================
-// MODELS
+// BRAND PALETTE
 // ============================================================================
-
-enum ApartmentStatus {
-  occupied, // occupé
-  vacant, // libre
+class _C {
+  static const mint        = Color(0xFF5FD4A0);
+  static const mintLight   = Color(0xFFE8F8F2);
+  static const mintMid     = Color(0xFFB2EADA);
+  static const coral       = Color(0xFFFF6B4A);
+  static const coralLight  = Color(0xFFFFEDE9);
+  static const cream       = Color(0xFFF5EFE7);
+  static const dark        = Color(0xFF2D2D2D);
+  static const gray        = Color(0xFF6B6B6B);
+  static const divider     = Color(0xFFEDE8E0);
+  static const white       = Color(0xFFFFFFFF);
+  static const amber       = Color(0xFFF59E0B);
+  static const amberLight  = Color(0xFFFFF7E6);
+  static const blue        = Color(0xFF3B82F6);
+  static const blueLight   = Color(0xFFEFF6FF);
+  static const green       = Color(0xFF16A34A);
+  static const greenLight  = Color(0xFFF0FDF4);
 }
+
+// ============================================================================
+// MODELS (unchanged logic)
+// ============================================================================
+enum ApartmentStatus { occupied, vacant }
 
 class Apartment {
   final int id;
@@ -34,36 +51,28 @@ class Apartment {
     required this.updatedAt,
   });
 
-  String get numero {
-    return "R$residence-T$tranche-Imm$immeuble-$numeroAppartement";
-  }
+  String get numero =>
+      'R$residence-T$tranche-Imm$immeuble-$numeroAppartement';
 
-  /// construit depuis une map renvoyée par Supabase/Postgres
   factory Apartment.fromMap(Map<String, dynamic> map) {
-    // Defensive: certain champs peuvent être int / String selon la requête
     final numeroRaw = map['numero'] ?? '';
-    final numero = numeroRaw is String ? numeroRaw : numeroRaw.toString();
-
-    // Parse numero format: R{res}-T{tranche}-Imm{immeuble}-{num}
+    final numero =
+    numeroRaw is String ? numeroRaw : numeroRaw.toString();
     int residence = 0, tranche = 0, immeuble = 0, numeroAppartement = 0;
     try {
       final parts = numero.split('-');
       if (parts.length >= 4) {
         residence = int.parse(parts[0].substring(1));
         tranche = int.parse(parts[1].substring(1));
-        // prendre apres "Imm"
         immeuble = int.parse(parts[2].substring(3));
         numeroAppartement = int.parse(parts[3]);
       }
-    } catch (_) {
-      // si parse échoue, on laisse 0 et on pourra afficher numero brut
-    }
+    } catch (_) {}
 
     final statutRaw = (map['statut'] ?? '').toString().toLowerCase();
-    final statut = statutRaw.contains('lib') || statutRaw == 'vacant' ? ApartmentStatus.vacant : ApartmentStatus.occupied;
-
-    final createdAtRaw = map['created_at'] ?? map['createdAt'] ?? DateTime.now().toIso8601String();
-    final updatedAtRaw = map['updated_at'] ?? map['updatedAt'] ?? DateTime.now().toIso8601String();
+    final statut = statutRaw.contains('lib') || statutRaw == 'vacant'
+        ? ApartmentStatus.vacant
+        : ApartmentStatus.occupied;
 
     DateTime parseDate(dynamic raw) {
       if (raw is DateTime) return raw;
@@ -78,29 +87,22 @@ class Apartment {
       immeuble: immeuble,
       numeroAppartement: numeroAppartement,
       statut: statut,
-      residentId: map['resident_id'] == null ? null : (map['resident_id'] is int ? map['resident_id'] : int.parse(map['resident_id'].toString())),
-      createdAt: parseDate(createdAtRaw),
-      updatedAt: parseDate(updatedAtRaw),
+      residentId: map['resident_id'] == null
+          ? null
+          : (map['resident_id'] is int
+          ? map['resident_id']
+          : int.parse(map['resident_id'].toString())),
+      createdAt: parseDate(
+          map['created_at'] ?? map['createdAt'] ?? DateTime.now().toIso8601String()),
+      updatedAt: parseDate(
+          map['updated_at'] ?? map['updatedAt'] ?? DateTime.now().toIso8601String()),
     );
-  }
-
-  Map<String, dynamic> toMapForInsert() {
-    // Pour insérer en DB : envoyer le champ 'numero' + 'immeuble_id' + 'statut' + 'resident_id'
-    return {
-      'numero': numero,
-      'immeuble_id': immeuble,
-      'statut': statut == ApartmentStatus.vacant ? 'libre' : 'occupe',
-      'resident_id': residentId,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
-    };
   }
 }
 
 // ============================================================================
-// UI WIDGETS (même structure que ton fichier original) MAIS connectés à Supabase
+// APARTMENT CARD
 // ============================================================================
-
 class ApartmentCard extends StatelessWidget {
   final Apartment apartment;
   final VoidCallback? onTap;
@@ -120,222 +122,224 @@ class ApartmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isOccupied = apartment.statut == ApartmentStatus.occupied;
+    final statusColor = isOccupied ? _C.mint : _C.amber;
+    final statusBg    = isOccupied ? _C.mintLight : _C.amberLight;
+    final statusLabel = isOccupied ? 'Occupe' : 'Vacant';
+    final canDelete   = !isOccupied && apartment.residentId == null;
 
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: Colors.grey.shade200,
-          width: 1,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: _C.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _C.divider),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 3)),
+          ],
         ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // En-tête avec numéro et statut
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // -- Top row
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Icon
+                Container(
+                  width: 46, height: 46,
+                  decoration: BoxDecoration(
+                      color: statusBg,
+                      borderRadius: BorderRadius.circular(14)),
+                  child: Icon(Icons.home_rounded,
+                      color: statusColor, size: 22),
+                ),
+                const SizedBox(width: 14),
+                // Number + address path
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.home,
-                        color: Theme.of(context).primaryColor,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 8),
+                      Text(apartment.numero,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              color: _C.dark)),
+                      const SizedBox(height: 3),
                       Text(
-                        apartment.numero,
+                        'Imm. ${apartment.immeuble}  ·  Tranche ${apartment.tranche}  ·  Res. ${apartment.residence}',
                         style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                            color: _C.gray, fontSize: 11),
                       ),
                     ],
                   ),
-                  _buildStatusBadge(context),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // Informations structurelles
-              _buildInfoRow(Icons.location_city, 'Résidence', 'Résidence ${apartment.residence}'),
-              const SizedBox(height: 6),
-              _buildInfoRow(Icons.category, 'Tranche', 'Tranche ${apartment.tranche}'),
-              const SizedBox(height: 6),
-              _buildInfoRow(Icons.business, 'Immeuble', 'Immeuble ${apartment.immeuble}'),
-              const SizedBox(height: 6),
-              _buildInfoRow(Icons.meeting_room, 'N° Appart', '${apartment.numeroAppartement}'),
-
-              // Informations du résident si occupé
-              if (isOccupied) ...[
-                const SizedBox(height: 12),
-                const Divider(),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
-                      child: Icon(
-                        Icons.person,
-                        color: Theme.of(context).primaryColor,
-                        size: 20,
+                ),
+                // Status badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                      color: statusBg,
+                      borderRadius: BorderRadius.circular(20)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6, height: 6,
+                        decoration: BoxDecoration(
+                            color: statusColor,
+                            shape: BoxShape.circle),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Résident ID: ${apartment.residentId}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Occupé',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.green.shade700,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                      const SizedBox(width: 5),
+                      Text(statusLabel,
+                          style: TextStyle(
+                              color: statusColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700)),
+                    ],
+                  ),
                 ),
               ],
+            ),
 
+            // -- Resident info if occupied
+            if (isOccupied) ...[
               const SizedBox(height: 12),
-
-              // Actions
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  if (!isOccupied)
-                    TextButton.icon(
-                      onPressed: onAssign,
-                      icon: const Icon(Icons.person_add, size: 18),
-                      label: const Text('Assigner'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.green,
-                      ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                    color: _C.mintLight,
+                    borderRadius: BorderRadius.circular(12)),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 30, height: 30,
+                      decoration: BoxDecoration(
+                          color: _C.mint,
+                          borderRadius: BorderRadius.circular(9)),
+                      child: const Icon(Icons.person_rounded,
+                          color: _C.white, size: 16),
                     ),
-                  TextButton.icon(
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit, size: 18),
-                    label: const Text('Modifier'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.blue,
+                    const SizedBox(width: 10),
+                    Text('Resident ID: ${apartment.residentId}',
+                        style: const TextStyle(
+                            color: _C.dark,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13)),
+                    const Spacer(),
+                    Text('Occupe',
+                        style: const TextStyle(
+                            color: _C.mint,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 14),
+
+            // -- Actions row
+            Row(
+              children: [
+                // Assign (only if vacant)
+                if (!isOccupied) ...[
+                  Expanded(
+                    child: _actionBtn(
+                      label: 'Assigner',
+                      icon: Icons.person_add_rounded,
+                      color: _C.mint,
+                      bg: _C.mintLight,
+                      onTap: onAssign,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  IconButton(
-                    onPressed: (apartment.statut == ApartmentStatus.vacant && apartment.residentId == null)
-                        ? onDelete
-                        : null,
-                    icon: const Icon(Icons.delete),
-                    tooltip: apartment.statut == ApartmentStatus.vacant && apartment.residentId == null
-                        ? 'Supprimer'
-                        : 'Impossible: appartement occupé/assigné',
-                    color: (apartment.statut == ApartmentStatus.vacant && apartment.residentId == null)
-                        ? Colors.red
-                        : null,
-                  ),
                 ],
-              ),
-            ],
-          ),
+                // Edit
+                _squareBtn(
+                  icon: Icons.edit_rounded,
+                  color: _C.blue,
+                  bg: _C.blueLight,
+                  onTap: onEdit,
+                ),
+                const SizedBox(width: 8),
+                // Delete
+                _squareBtn(
+                  icon: Icons.delete_rounded,
+                  color: canDelete ? _C.coral : _C.gray,
+                  bg: canDelete ? _C.coralLight : _C.cream,
+                  onTap: canDelete ? onDelete : null,
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildStatusBadge(BuildContext context) {
-    final isOccupied = apartment.statut == ApartmentStatus.occupied;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: isOccupied ? Colors.green.shade50 : Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isOccupied ? Colors.green : Colors.orange,
-          width: 1.5,
+  Widget _actionBtn({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required Color bg,
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+            color: bg, borderRadius: BorderRadius.circular(12)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 6),
+            Text(label,
+                style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13)),
+          ],
         ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: isOccupied ? Colors.green : Colors.orange,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            isOccupied ? 'Occupé' : 'Vacant',
-            style: TextStyle(
-              color: isOccupied ? Colors.green.shade900 : Colors.orange.shade900,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-          ),
-        ],
       ),
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: Colors.grey.shade600),
-        const SizedBox(width: 8),
-        Text(
-          '$label: ',
-          style: TextStyle(
-            fontSize: 13,
-            color: Colors.grey.shade600,
-          ),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
+  Widget _squareBtn({
+    required IconData icon,
+    required Color color,
+    required Color bg,
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40, height: 40,
+        decoration: BoxDecoration(
+            color: bg, borderRadius: BorderRadius.circular(12)),
+        child: Icon(icon, color: color, size: 18),
+      ),
     );
   }
 }
 
 // ============================================================================
-// FILTERS (identique au fichier original)
+// FILTERS PANEL
 // ============================================================================
-
 class ApartmentFilters extends StatefulWidget {
-  final Function(int? tranche, int? immeuble, ApartmentStatus? status) onFilterChanged;
+  final Function(int? tranche, int? immeuble, ApartmentStatus? status)
+  onFilterChanged;
 
-  const ApartmentFilters({
-    Key? key,
-    required this.onFilterChanged,
-  }) : super(key: key);
+  const ApartmentFilters({Key? key, required this.onFilterChanged})
+      : super(key: key);
 
   @override
   State<ApartmentFilters> createState() => _ApartmentFiltersState();
@@ -345,11 +349,10 @@ class _ApartmentFiltersState extends State<ApartmentFilters> {
   int? selectedTranche;
   int? selectedImmeuble;
   ApartmentStatus? selectedStatus;
-
   final List<int> tranches = [1, 2, 3];
   final List<int> immeubles = [1, 2, 3];
 
-  void _resetFilters() {
+  void _reset() {
     setState(() {
       selectedTranche = null;
       selectedImmeuble = null;
@@ -358,77 +361,88 @@ class _ApartmentFiltersState extends State<ApartmentFilters> {
     widget.onFilterChanged(null, null, null);
   }
 
-  void _applyFilters() {
-    widget.onFilterChanged(
-      selectedTranche,
-      selectedImmeuble,
-      selectedStatus,
-    );
-  }
+  void _apply() =>
+      widget.onFilterChanged(selectedTranche, selectedImmeuble, selectedStatus);
+
+  InputDecoration _dropDeco(String label) => InputDecoration(
+    labelText: label,
+    labelStyle: const TextStyle(color: _C.gray, fontSize: 12),
+    filled: true,
+    fillColor: _C.cream,
+    border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide.none),
+    focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: _C.mint, width: 1.5)),
+    contentPadding:
+    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+  );
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey.shade200),
-        ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+      decoration: const BoxDecoration(
+        color: _C.white,
+        border: Border(bottom: BorderSide(color: _C.divider)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.filter_list, size: 20),
-              const SizedBox(width: 8),
-              const Text(
-                'Filtres',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+              Container(
+                width: 28, height: 28,
+                decoration: BoxDecoration(
+                    color: _C.cream,
+                    borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.tune_rounded,
+                    size: 15, color: _C.gray),
               ),
+              const SizedBox(width: 10),
+              const Text('Filtres',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: _C.dark)),
               const Spacer(),
-              TextButton.icon(
-                onPressed: _resetFilters,
-                icon: const Icon(Icons.clear_all, size: 18),
-                label: const Text('Réinitialiser'),
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.grey.shade700,
+              GestureDetector(
+                onTap: _reset,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                      color: _C.cream,
+                      borderRadius: BorderRadius.circular(20)),
+                  child: const Text('Reinitialiser',
+                      style: TextStyle(
+                          color: _C.gray,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
           ),
-
-          const SizedBox(height: 16),
-
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
                 child: DropdownButtonFormField<int>(
                   value: selectedTranche,
-                  decoration: InputDecoration(
-                    labelText: 'Tranche',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                  ),
+                  decoration: _dropDeco('Tranche'),
+                  style: const TextStyle(
+                      color: _C.dark, fontSize: 13),
+                  dropdownColor: _C.white,
                   items: [
-                    const DropdownMenuItem(value: null, child: Text('Toutes')),
+                    const DropdownMenuItem(
+                        value: null, child: Text('Toutes')),
                     ...tranches.map((t) => DropdownMenuItem(
-                      value: t,
-                      child: Text('Tranche $t'),
-                    )),
+                        value: t, child: Text('Tranche $t'))),
                   ],
-                  onChanged: (value) {
-                    setState(() => selectedTranche = value);
-                    _applyFilters();
+                  onChanged: (v) {
+                    setState(() => selectedTranche = v);
+                    _apply();
                   },
                 ),
               ),
@@ -436,866 +450,1396 @@ class _ApartmentFiltersState extends State<ApartmentFilters> {
               Expanded(
                 child: DropdownButtonFormField<int>(
                   value: selectedImmeuble,
-                  decoration: InputDecoration(
-                    labelText: 'Immeuble',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                  ),
+                  decoration: _dropDeco('Immeuble'),
+                  style: const TextStyle(
+                      color: _C.dark, fontSize: 13),
+                  dropdownColor: _C.white,
                   items: [
-                    const DropdownMenuItem(value: null, child: Text('Tous')),
+                    const DropdownMenuItem(
+                        value: null, child: Text('Tous')),
                     ...immeubles.map((i) => DropdownMenuItem(
-                      value: i,
-                      child: Text('Immeuble $i'),
-                    )),
+                        value: i, child: Text('Immeuble $i'))),
                   ],
-                  onChanged: (value) {
-                    setState(() => selectedImmeuble = value);
-                    _applyFilters();
+                  onChanged: (v) {
+                    setState(() => selectedImmeuble = v);
+                    _apply();
                   },
                 ),
               ),
             ],
           ),
-
-          const SizedBox(height: 12),
-
-          const Text(
-            'Statut d\'occupation',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          const SizedBox(height: 14),
+          const Text("Statut d'occupation",
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: _C.gray)),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
+          Row(
             children: [
-              FilterChip(
-                label: const Text('Tous'),
-                selected: selectedStatus == null,
-                onSelected: (selected) {
-                  setState(() => selectedStatus = null);
-                  _applyFilters();
-                },
-              ),
-              FilterChip(
-                label: const Text('Occupé'),
-                selected: selectedStatus == ApartmentStatus.occupied,
-                onSelected: (selected) {
-                  setState(() => selectedStatus = selected ? ApartmentStatus.occupied : null);
-                  _applyFilters();
-                },
-                selectedColor: Colors.green.shade100,
-              ),
-              FilterChip(
-                label: const Text('Vacant'),
-                selected: selectedStatus == ApartmentStatus.vacant,
-                onSelected: (selected) {
-                  setState(() => selectedStatus = selected ? ApartmentStatus.vacant : null);
-                  _applyFilters();
-                },
-                selectedColor: Colors.orange.shade100,
-              ),
+              _statusChip('Tous', null),
+              const SizedBox(width: 8),
+              _statusChip('Occupes', ApartmentStatus.occupied),
+              const SizedBox(width: 8),
+              _statusChip('Vacants', ApartmentStatus.vacant),
             ],
           ),
         ],
       ),
     );
   }
+
+  Widget _statusChip(String label, ApartmentStatus? status) {
+    final isSelected = selectedStatus == status;
+    Color accent;
+    if (status == ApartmentStatus.occupied) {
+      accent = _C.mint;
+    } else if (status == ApartmentStatus.vacant) {
+      accent = _C.amber;
+    } else {
+      accent = _C.dark;
+    }
+    return GestureDetector(
+      onTap: () {
+        setState(() => selectedStatus = status);
+        _apply();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding:
+        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? accent.withValues(alpha: 0.1)
+              : _C.cream,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: isSelected ? accent : _C.divider,
+              width: isSelected ? 1.5 : 1),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                color: isSelected ? accent : _C.gray,
+                fontWeight: FontWeight.w700,
+                fontSize: 12)),
+      ),
+    );
+  }
 }
 
 // ============================================================================
-// SCREEN - APARTMENTS LIST (connecté à Supabase)
+// MAIN SCREEN
 // ============================================================================
-
 class ApartmentsListScreen extends StatefulWidget {
   const ApartmentsListScreen({Key? key}) : super(key: key);
 
   @override
-  State<ApartmentsListScreen> createState() => _ApartmentsListScreenState();
+  State<ApartmentsListScreen> createState() =>
+      _ApartmentsListScreenState();
 }
 
-class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
+class _ApartmentsListScreenState extends State<ApartmentsListScreen>
+    with SingleTickerProviderStateMixin {
   final _supabase = Supabase.instance.client;
   List<Apartment> apartments = [];
   List<Apartment> filteredApartments = [];
   bool showFilters = false;
-  final TextEditingController searchController = TextEditingController();
   bool loading = false;
-
-  // For undo deletion (local): keep last deleted so user can undo (DB delete will be permanent)
-  Apartment? _recentlyDeleted;
-  int? _recentlyDeletedIndex;
+  final _searchCtrl = TextEditingController();
+  late AnimationController _fadeCtrl;
+  late Animation<double> _fadeAnim;
 
   @override
   void initState() {
     super.initState();
+    _fadeCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 450));
+    _fadeAnim =
+        CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _loadApartments();
+    _searchCtrl.addListener(() => _search(_searchCtrl.text));
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _fadeCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadApartments() async {
     setState(() => loading = true);
     try {
-      final response = await _supabase.from('appartements').select().order('id', ascending: true) as List<dynamic>;
-      final list = response.map((e) => Apartment.fromMap(Map<String, dynamic>.from(e))).toList();
+      final response = await _supabase
+          .from('appartements')
+          .select()
+          .order('id', ascending: true) as List<dynamic>;
+      final list = response
+          .map((e) => Apartment.fromMap(Map<String, dynamic>.from(e)))
+          .toList();
       setState(() {
         apartments = list;
         filteredApartments = apartments;
       });
-    } catch (e, st) {
-      debugPrint('Erreur fetch appartements: $e\n$st');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur lors du chargement des appartements')),
-      );
+      _fadeCtrl.forward(from: 0);
+    } catch (e) {
+      debugPrint('Erreur fetch: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Erreur lors du chargement')));
+      }
     } finally {
       setState(() => loading = false);
     }
   }
 
-  void _applyFilters({
-    int? tranche,
-    int? immeuble,
-    ApartmentStatus? status,
-  }) {
+  void _applyFilters(
+      {int? tranche, int? immeuble, ApartmentStatus? status}) {
     setState(() {
-      filteredApartments = apartments.where((apt) {
-        if (tranche != null && apt.tranche != tranche) return false;
-        if (immeuble != null && apt.immeuble != immeuble) return false;
-        if (status != null && apt.statut != status) return false;
+      filteredApartments = apartments.where((a) {
+        if (tranche != null && a.tranche != tranche) return false;
+        if (immeuble != null && a.immeuble != immeuble) return false;
+        if (status != null && a.statut != status) return false;
         return true;
       }).toList();
     });
   }
 
-  void _search(String query) {
+  void _search(String q) {
     setState(() {
-      if (query.isEmpty) {
+      if (q.isEmpty) {
         filteredApartments = apartments;
       } else {
-        filteredApartments = apartments.where((apt) {
-          final searchLower = query.toLowerCase();
-          return apt.numero.toLowerCase().contains(searchLower) ||
-              'immeuble ${apt.immeuble}'.toLowerCase().contains(searchLower) ||
-              'tranche ${apt.tranche}'.toLowerCase().contains(searchLower) ||
-              'résidence ${apt.residence}'.toLowerCase().contains(searchLower) ||
-              apt.numeroAppartement.toString().contains(searchLower);
+        final s = q.toLowerCase();
+        filteredApartments = apartments.where((a) {
+          return a.numero.toLowerCase().contains(s) ||
+              'immeuble ${a.immeuble}'.contains(s) ||
+              'tranche ${a.tranche}'.contains(s);
         }).toList();
       }
     });
   }
 
-  // -------------------------
-  // CRUD via Supabase
-  // -------------------------
-
-  Future<void> _addApartmentToDb({
-    required int residence,
-    required int tranche,
-    required int immeuble,
-    required int numeroApt,
-    required ApartmentStatus status,
-    int? residentId,
-  }) async {
-    final numero = "R${residence}-T${tranche}-Imm${immeuble}-${numeroApt}";
-    final now = DateTime.now().toIso8601String();
-    final row = {
-      'numero': numero,
-      'immeuble_id': immeuble,
-      'statut': status == ApartmentStatus.vacant ? 'libre' : 'occupe',
-      'resident_id': residentId,
-      'created_at': now,
-      'updated_at': now,
-    };
-
-    try {
-      final inserted = await _supabase.from('appartements').insert(row).select() as List<dynamic>;
-      if (inserted.isNotEmpty) {
-        final ap = Apartment.fromMap(Map<String, dynamic>.from(inserted.first));
-        setState(() {
-          apartments.add(ap);
-          if (searchController.text.isEmpty) filteredApartments = apartments;
-          else _search(searchController.text);
-        });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Appartement $numero ajouté.')));
-      } else {
-        throw Exception('Aucune ligne insérée');
-      }
-    } catch (e) {
-      debugPrint('Erreur insert: $e');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur lors de l\'ajout en base')));
-    }
-  }
-
-  Future<void> _updateApartmentInDb({
-    required Apartment oldApartment,
-    required int residence,
-    required int tranche,
-    required int immeuble,
-    required int numeroApt,
-    required ApartmentStatus status,
-    int? residentId,
-  }) async {
-    final numero = "R${residence}-T${tranche}-Imm${immeuble}-${numeroApt}";
-    final now = DateTime.now().toIso8601String();
-    final row = {
-      'numero': numero,
-      'immeuble_id': immeuble,
-      'statut': status == ApartmentStatus.vacant ? 'libre' : 'occupe',
-      'resident_id': residentId,
-      'updated_at': now,
-    };
-
-    try {
-      final updated = await _supabase
-          .from('appartements')
-          .update(row)
-          .eq('id', oldApartment.id)
-          .select() as List<dynamic>;
-      if (updated.isNotEmpty) {
-        final ap = Apartment.fromMap(Map<String, dynamic>.from(updated.first));
-        setState(() {
-          final idx = apartments.indexWhere((a) => a.id == ap.id);
-          if (idx != -1) apartments[idx] = ap;
-          if (searchController.text.isEmpty) filteredApartments = apartments;
-          else _search(searchController.text);
-        });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Appartement $numero modifié.')));
-      } else {
-        throw Exception('Aucune ligne mise à jour');
-      }
-    } catch (e) {
-      debugPrint('Erreur update: $e');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur lors de la modification en base')));
-    }
-  }
-
-  Future<void> _deleteApartmentFromDb(Apartment apartment) async {
-    try {
-      await _supabase.from('appartements').delete().eq('id', apartment.id);
-      // remove locally
-      setState(() {
-        apartments.removeWhere((a) => a.id == apartment.id);
-        if (searchController.text.isEmpty) filteredApartments = apartments;
-        else _search(searchController.text);
-      });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Appartement ${apartment.numero} supprimé en base.')));
-    } catch (e) {
-      debugPrint('Erreur delete: $e');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur suppression en base')));
-    }
-  }
-
-  Future<void> _assignResidentInDb(Apartment apartment, int residentId) async {
-    try {
-      final now = DateTime.now().toIso8601String();
-      final updated = await _supabase
-          .from('appartements')
-          .update({'resident_id': residentId, 'statut': 'occupe', 'updated_at': now})
-          .eq('id', apartment.id)
-          .select() as List<dynamic>;
-      if (updated.isNotEmpty) {
-        final ap = Apartment.fromMap(Map<String, dynamic>.from(updated.first));
-        setState(() {
-          final idx = apartments.indexWhere((a) => a.id == ap.id);
-          if (idx != -1) apartments[idx] = ap;
-          if (searchController.text.isEmpty) filteredApartments = apartments;
-          else _search(searchController.text);
-        });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Resident $residentId assigné à ${apartment.numero}')));
-      }
-    } catch (e) {
-      debugPrint('Erreur assign: $e');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur lors de l\'assignation')));
-    }
-  }
-
-  // -------------------------
-  // Dialogs UI : reuse ton UI original mais en appelant les méthodes DB ci-dessus
-  // -------------------------
-
-  void _showAddApartmentDialog() {
-    final _formKey = GlobalKey<FormState>();
-    final residenceController = TextEditingController(text: '1');
-    final trancheController = TextEditingController();
-    final immeubleController = TextEditingController();
-    final numeroController = TextEditingController();
-    final residentController = TextEditingController();
-    ApartmentStatus status = ApartmentStatus.vacant;
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(builder: (context, setStateDialog) {
-          return AlertDialog(
-            title: const Text('Nouvel Appartement'),
-            content: SingleChildScrollView(
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: residenceController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Résidence (ex: 1)'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: trancheController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Tranche (ex: 2)'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: immeubleController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Immeuble (ex: 3)'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: numeroController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'N° Appartement (ex: 201)'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<ApartmentStatus>(
-                      value: status,
-                      decoration: const InputDecoration(labelText: 'Statut'),
-                      items: const [
-                        DropdownMenuItem(value: ApartmentStatus.vacant, child: Text('Vacant')),
-                        DropdownMenuItem(value: ApartmentStatus.occupied, child: Text('Occupé')),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) setStateDialog(() => status = value);
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    if (status == ApartmentStatus.occupied) ...[
-                      TextFormField(
-                        controller: residentController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Resident ID (entier positif)'),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) return 'Resident ID requis';
-                          final v = int.tryParse(value.trim());
-                          if (v == null || v <= 0) return 'Entrez un entier positif';
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-              ElevatedButton(
-                onPressed: () async {
-                  if (!_formKey.currentState!.validate()) return;
-                  final residence = int.parse(residenceController.text.trim());
-                  final tranche = int.parse(trancheController.text.trim());
-                  final immeuble = int.parse(immeubleController.text.trim());
-                  final numeroApt = int.parse(numeroController.text.trim());
-                  final residentId = (status == ApartmentStatus.occupied && residentController.text.trim().isNotEmpty)
-                      ? int.parse(residentController.text.trim())
-                      : null;
-                  final newNumero = "R$residence-T$tranche-Imm$immeuble-$numeroApt";
-
-                  final exists = apartments.any((a) => a.numero == newNumero);
-                  if (exists) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Le numéro $newNumero existe déjà.')));
-                    return;
-                  }
-
-                  Navigator.pop(context);
-                  await _addApartmentToDb(
-                    residence: residence,
-                    tranche: tranche,
-                    immeuble: immeuble,
-                    numeroApt: numeroApt,
-                    status: status,
-                    residentId: residentId,
-                  );
-                },
-                child: const Text('Ajouter'),
-              ),
-            ],
-          );
-        });
-      },
-    );
-  }
-
-  void _showAssignResidentDialog(Apartment apartment) {
-    if (apartment.statut == ApartmentStatus.occupied) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Impossible : ${apartment.numero} est déjà occupé.')));
-      return;
-    }
-    final _formKey = GlobalKey<FormState>();
-    final residentController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Assigner un résident à ${apartment.numero}'),
-        content: Form(
-          key: _formKey,
-          child: TextFormField(
-            controller: residentController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Resident ID (entier positif)'),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) return 'Requis';
-              final v = int.tryParse(value.trim());
-              if (v == null || v <= 0) return 'Entrez un entier positif';
-              return null;
-            },
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-          ElevatedButton(
-            onPressed: () async {
-              if (!_formKey.currentState!.validate()) return;
-              final residentId = int.parse(residentController.text.trim());
-              Navigator.pop(context);
-              await _assignResidentInDb(apartment, residentId);
-            },
-            child: const Text('Assigner'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showEditApartmentDialog(Apartment apartment) {
-    final _formKey = GlobalKey<FormState>();
-    final residenceController = TextEditingController(text: apartment.residence.toString());
-    final trancheController = TextEditingController(text: apartment.tranche.toString());
-    final immeubleController = TextEditingController(text: apartment.immeuble.toString());
-    final numeroController = TextEditingController(text: apartment.numeroAppartement.toString());
-    final residentController = TextEditingController(text: apartment.residentId?.toString() ?? '');
-    ApartmentStatus status = apartment.statut;
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(builder: (context, setStateDialog) {
-          return AlertDialog(
-            title: Text('Modifier ${apartment.numero}'),
-            content: SingleChildScrollView(
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: residenceController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Résidence'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: trancheController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Tranche'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: immeubleController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Immeuble'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: numeroController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'N° Appartement'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<ApartmentStatus>(
-                      value: status,
-                      decoration: const InputDecoration(labelText: 'Statut'),
-                      items: const [
-                        DropdownMenuItem(value: ApartmentStatus.vacant, child: Text('Vacant')),
-                        DropdownMenuItem(value: ApartmentStatus.occupied, child: Text('Occupé')),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setStateDialog(() {
-                            status = value;
-                            if (value == ApartmentStatus.vacant) residentController.clear();
-                          });
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    if (status == ApartmentStatus.occupied) ...[
-                      TextFormField(
-                        controller: residentController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Resident ID (laisser vide si vacant)'),
-                        validator: (value) {
-                          if (status == ApartmentStatus.occupied) {
-                            if (value == null || value.trim().isEmpty) return 'Resident ID requis pour un appartement occupé';
-                            final v = int.tryParse(value.trim());
-                            if (v == null || v <= 0) return 'Entrez un entier positif';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-              ElevatedButton(
-                onPressed: () async {
-                  if (!_formKey.currentState!.validate()) return;
-
-                  final residence = int.parse(residenceController.text.trim());
-                  final tranche = int.parse(trancheController.text.trim());
-                  final immeuble = int.parse(immeubleController.text.trim());
-                  final numeroApt = int.parse(numeroController.text.trim());
-                  final residentId = (status == ApartmentStatus.occupied && residentController.text.trim().isNotEmpty)
-                      ? int.parse(residentController.text.trim())
-                      : null;
-
-                  final newNumero = "R$residence-T$tranche-Imm$immeuble-$numeroApt";
-
-                  final exists = apartments.any((a) => a.numero == newNumero && a.id != apartment.id);
-                  if (exists) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Le numéro $newNumero existe déjà pour un autre appartement.')));
-                    return;
-                  }
-
-                  Navigator.pop(context);
-                  await _updateApartmentInDb(
-                    oldApartment: apartment,
-                    residence: residence,
-                    tranche: tranche,
-                    immeuble: immeuble,
-                    numeroApt: numeroApt,
-                    status: status,
-                    residentId: residentId,
-                  );
-                },
-                child: const Text('Enregistrer'),
-              ),
-            ],
-          );
-        });
-      },
-    );
-  }
-
-  void _showDeleteConfirmation(Apartment apartment) {
-    final canDelete = apartment.statut == ApartmentStatus.vacant && apartment.residentId == null;
-    if (!canDelete) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Impossible de supprimer : appartement occupé ou assigné.')));
-      return;
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Supprimer ${apartment.numero} ?'),
-        content: const Text('Cette opération est irréversible. Voulez-vous continuer ?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              Navigator.pop(context);
-              await _deleteApartmentFromDb(apartment);
-            },
-            child: const Text('Supprimer'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showApartmentDetails(Apartment apartment) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (context, scrollController) => SingleChildScrollView(
-          controller: scrollController,
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
-                const SizedBox(height: 24),
-                Row(children: [Icon(Icons.home, size: 32, color: Theme.of(context).primaryColor), const SizedBox(width: 12), Text(apartment.numero, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold))]),
-                const SizedBox(height: 24),
-                _buildDetailRow('Résidence', 'Résidence ${apartment.residence}', Icons.location_city),
-                _buildDetailRow('Tranche', 'Tranche ${apartment.tranche}', Icons.category),
-                _buildDetailRow('Immeuble', 'Immeuble ${apartment.immeuble}', Icons.business),
-                _buildDetailRow('N° Appartement', '${apartment.numeroAppartement}', Icons.meeting_room),
-                _buildDetailRow('Statut', apartment.statut == ApartmentStatus.occupied ? 'Occupé' : 'Vacant', Icons.info_outline),
-                if (apartment.statut == ApartmentStatus.occupied) ...[
-                  const Divider(height: 32),
-                  _buildDetailRow('Résident ID', '${apartment.residentId}', Icons.person),
-                ],
-                const SizedBox(height: 32),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _showEditApartmentDialog(apartment);
-                        },
-                        icon: const Icon(Icons.edit),
-                        label: const Text('Modifier'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    if (apartment.statut == ApartmentStatus.vacant) ...[
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            _showAssignResidentDialog(apartment);
-                          },
-                          icon: const Icon(Icons.person_add),
-                          label: const Text('Assigner'),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            _showDeleteConfirmation(apartment);
-                          },
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          label: const Text('Supprimer', style: TextStyle(color: Colors.red)),
-                          style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: Colors.grey.shade600),
-          const SizedBox(width: 12),
-          Text('$label: ', style: TextStyle(fontSize: 14, color: Colors.grey.shade600)),
-          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-
-  // -------------------------
-  // Build UI
-  // -------------------------
+  // -- Stats
+  int get _total => filteredApartments.length;
+  int get _occupied =>
+      filteredApartments.where((a) => a.statut == ApartmentStatus.occupied).length;
+  int get _vacant =>
+      filteredApartments.where((a) => a.statut == ApartmentStatus.vacant).length;
 
   @override
   Widget build(BuildContext context) {
-    final occupiedCount = filteredApartments.where((a) => a.statut == ApartmentStatus.occupied).length;
-    final vacantCount = filteredApartments.where((a) => a.statut == ApartmentStatus.vacant).length;
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Gestion des Appartements'),
-        actions: [
-          IconButton(
-            icon: Icon(showFilters ? Icons.filter_list_off : Icons.filter_list),
-            onPressed: () {
-              setState(() => showFilters = !showFilters);
-            },
-            tooltip: 'Filtres',
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadApartments,
-            tooltip: 'Rafraîchir',
-          ),
-        ],
+      backgroundColor: _C.cream,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(),
+            if (showFilters)
+              ApartmentFilters(
+                onFilterChanged: (t, i, s) =>
+                    _applyFilters(tranche: t, immeuble: i, status: s),
+              ),
+            Expanded(
+              child: loading
+                  ? _buildLoader()
+                  : FadeTransition(
+                opacity: _fadeAnim,
+                child: RefreshIndicator(
+                  color: _C.mint,
+                  onRefresh: _loadApartments,
+                  child: ListView(
+                    physics:
+                    const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(
+                        20, 20, 20, 100),
+                    children: [
+                      _buildStatsBanner(),
+                      const SizedBox(height: 20),
+                      _buildSearchBar(),
+                      const SizedBox(height: 20),
+                      _buildSectionLabel(
+                          '$_total appartement${_total > 1 ? 's' : ''}'),
+                      const SizedBox(height: 12),
+                      if (filteredApartments.isEmpty)
+                        _buildEmpty()
+                      else
+                        ...filteredApartments.map(
+                              (a) => ApartmentCard(
+                            apartment: a,
+                            onTap: () =>
+                                _showDetails(a),
+                            onEdit: () =>
+                                _showEditDialog(a),
+                            onAssign: () =>
+                                _showAssignDialog(a),
+                            onDelete: () =>
+                                _showDeleteConfirm(a),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-      body: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.white,
-            child: TextField(
-              controller: searchController,
-              onChanged: _search,
-              decoration: InputDecoration(
-                hintText: 'Rechercher par numéro, résidence, immeuble ou tranche...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: searchController.text.isNotEmpty
-                    ? IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    searchController.clear();
-                    _search('');
-                  },
-                )
-                    : null,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.grey.shade50,
-              ),
-            ),
+      floatingActionButton: GestureDetector(
+        onTap: _showAddDialog,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: 22, vertical: 14),
+          decoration: BoxDecoration(
+              color: _C.dark,
+              borderRadius: BorderRadius.circular(30),
+              boxShadow: [
+                BoxShadow(
+                    color: _C.dark.withValues(alpha: 0.25),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6))
+              ]),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.add_rounded, color: _C.white, size: 18),
+              SizedBox(width: 8),
+              Text('Nouvel appartement',
+                  style: TextStyle(
+                      color: _C.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14)),
+            ],
           ),
-
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: Colors.blue.shade50,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildStatCard('Total', filteredApartments.length.toString(), Icons.home, Colors.blue),
-                _buildStatCard('Occupés', occupiedCount.toString(), Icons.check_circle, Colors.green),
-                _buildStatCard('Vacants', vacantCount.toString(), Icons.error_outline, Colors.orange),
-              ],
-            ),
-          ),
-
-          if (showFilters)
-            ApartmentFilters(
-              onFilterChanged: (tranche, immeuble, status) {
-                _applyFilters(tranche: tranche, immeuble: immeuble, status: status);
-              },
-            ),
-
-          Expanded(
-            child: loading
-                ? const Center(child: CircularProgressIndicator())
-                : filteredApartments.isEmpty
-                ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
-                  const SizedBox(height: 16),
-                  Text('Aucun appartement trouvé', style: TextStyle(fontSize: 16, color: Colors.grey.shade600)),
-                ],
-              ),
-            )
-                : RefreshIndicator(
-              onRefresh: _loadApartments,
-              child: ListView.builder(
-                itemCount: filteredApartments.length,
-                padding: const EdgeInsets.only(bottom: 80),
-                itemBuilder: (context, index) {
-                  final apartment = filteredApartments[index];
-                  return ApartmentCard(
-                    apartment: apartment,
-                    onTap: () => _showApartmentDetails(apartment),
-                    onEdit: () => _showEditApartmentDialog(apartment),
-                    onAssign: () => _showAssignResidentDialog(apartment),
-                    onDelete: () => _showDeleteConfirmation(apartment),
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddApartmentDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('Nouvel appartement'),
+        ),
       ),
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
-    return Column(
+  // -- Loader
+  Widget _buildLoader() => const Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+        CircularProgressIndicator(
+            color: _C.mint, strokeWidth: 3),
+        SizedBox(height: 14),
+        Text('Chargement...',
+            style: TextStyle(color: _C.gray, fontSize: 13)),
+      ],
+    ),
+  );
+
+  // -- Empty
+  Widget _buildEmpty() => Padding(
+    padding: const EdgeInsets.only(top: 60),
+    child: Column(
+      children: [
+        Container(
+          width: 64, height: 64,
+          decoration: BoxDecoration(
+              color: _C.amberLight,
+              borderRadius: BorderRadius.circular(20)),
+          child: const Icon(Icons.home_rounded,
+              color: _C.amber, size: 32),
+        ),
+        const SizedBox(height: 14),
+        const Text('Aucun appartement',
+            style: TextStyle(
+                color: _C.dark,
+                fontSize: 15,
+                fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        const Text('Modifiez les filtres ou ajoutez un appartement.',
+            style: TextStyle(color: _C.gray, fontSize: 12)),
+      ],
+    ),
+  );
+
+  // -- Header
+  Widget _buildHeader() {
+    return Container(
+      color: _C.white,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                  color: _C.cream,
+                  borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.arrow_back_ios_new_rounded,
+                  size: 14, color: _C.dark),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text('Appartements',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 17,
+                        color: _C.dark)),
+                Text('Gestion des appartements',
+                    style: TextStyle(color: _C.gray, fontSize: 11)),
+              ],
+            ),
+          ),
+          // Filter toggle
+          GestureDetector(
+            onTap: () => setState(() => showFilters = !showFilters),
+            child: Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: showFilters ? _C.dark : _C.cream,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.tune_rounded,
+                  size: 17,
+                  color: showFilters ? _C.white : _C.gray),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Refresh
+          GestureDetector(
+            onTap: _loadApartments,
+            child: Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                  color: _C.cream,
+                  borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.refresh_rounded,
+                  size: 17, color: _C.gray),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // -- Stats banner
+  Widget _buildStatsBanner() {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+          color: _C.dark, borderRadius: BorderRadius.circular(22)),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                    color: _C.blue,
+                    borderRadius: BorderRadius.circular(13)),
+                child: const Icon(Icons.home_rounded,
+                    color: _C.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('$_total appartements',
+                      style: const TextStyle(
+                          color: _C.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18)),
+                  const Text('dans la selection',
+                      style: TextStyle(
+                          color: Colors.white38, fontSize: 11)),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Container(height: 1, color: Colors.white12),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _bannerStat('$_occupied', 'Occupes', _C.mint),
+              _bannerDivider(),
+              _bannerStat('$_vacant', 'Vacants', _C.amber),
+              _bannerDivider(),
+              _bannerStat(
+                  _total > 0
+                      ? '${(_occupied / _total * 100).round()}%'
+                      : '0%',
+                  'Taux occup.',
+                  _C.blue),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bannerStat(String val, String label, Color color) =>
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(val,
+                style: TextStyle(
+                    color: color,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800)),
+            Text(label,
+                style: const TextStyle(
+                    color: Colors.white38, fontSize: 10)),
+          ],
+        ),
+      );
+
+  Widget _bannerDivider() => Container(
+      width: 1,
+      height: 32,
+      color: Colors.white12,
+      margin: const EdgeInsets.symmetric(horizontal: 12));
+
+  // -- Search bar
+  Widget _buildSearchBar() {
+    return Container(
+      decoration: BoxDecoration(
+          color: _C.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _C.divider)),
+      child: TextField(
+        controller: _searchCtrl,
+        style: const TextStyle(fontSize: 14, color: _C.dark),
+        decoration: InputDecoration(
+          hintText: 'Rechercher par numero, tranche, immeuble...',
+          hintStyle: const TextStyle(color: _C.gray, fontSize: 13),
+          prefixIcon: const Icon(Icons.search_rounded,
+              color: _C.gray, size: 20),
+          suffixIcon: _searchCtrl.text.isNotEmpty
+              ? GestureDetector(
+            onTap: () {
+              _searchCtrl.clear();
+              _search('');
+            },
+            child: const Icon(Icons.close_rounded,
+                color: _C.gray, size: 18),
+          )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16, vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  // -- Section label
+  Widget _buildSectionLabel(String text) => Row(
+    children: [
+      Container(
+          width: 4, height: 16,
+          decoration: BoxDecoration(
+              color: _C.coral,
+              borderRadius: BorderRadius.circular(2))),
+      const SizedBox(width: 10),
+      Text(text,
+          style: const TextStyle(
+              color: _C.dark,
+              fontWeight: FontWeight.w700,
+              fontSize: 14)),
+    ],
+  );
+
+  // ============================================================
+  // SHARED DIALOG HELPERS
+  // ============================================================
+  Widget _dialogHeader(BuildContext ctx, String title,
+      {IconData? icon, Color? iconColor}) {
+    return Row(
+      children: [
+        if (icon != null) ...[
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+                color:
+                (iconColor ?? _C.mint).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: iconColor ?? _C.mint, size: 18),
+          ),
+          const SizedBox(width: 12),
+        ],
+        Expanded(
+          child: Text(title,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                  color: _C.dark)),
+        ),
+        GestureDetector(
+          onTap: () => Navigator.pop(ctx),
+          child: Container(
+            width: 30, height: 30,
+            decoration: BoxDecoration(
+                color: _C.cream,
+                borderRadius: BorderRadius.circular(8)),
+            child: const Icon(Icons.close_rounded,
+                size: 15, color: _C.gray),
+          ),
+        ),
       ],
     );
   }
 
-  @override
-  void dispose() {
-    searchController.dispose();
-    super.dispose();
+  Widget _dialogActions({
+    required BuildContext ctx,
+    required bool saving,
+    required String confirmLabel,
+    required Color confirmColor,
+    required VoidCallback onConfirm,
+  }) =>
+      Row(children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: saving ? null : () => Navigator.pop(ctx),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                  color: _C.cream,
+                  borderRadius: BorderRadius.circular(12)),
+              child: const Text('Annuler',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: _C.dark,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14)),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: GestureDetector(
+            onTap: saving ? null : onConfirm,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                  color: saving
+                      ? confirmColor.withValues(alpha: 0.5)
+                      : confirmColor,
+                  borderRadius: BorderRadius.circular(12)),
+              child: saving
+                  ? const Center(
+                  child: SizedBox(
+                      width: 18, height: 18,
+                      child: CircularProgressIndicator(
+                          color: _C.white, strokeWidth: 2)))
+                  : Text(confirmLabel,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: _C.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14)),
+            ),
+          ),
+        ),
+      ]);
+
+  Widget _fldLabel(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(text,
+        style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+            color: _C.gray)),
+  );
+
+  Widget _fld(TextEditingController ctrl, String hint,
+      {TextInputType inputType = TextInputType.text,
+        FormFieldValidator<String>? validator}) =>
+      TextFormField(
+        controller: ctrl,
+        keyboardType: inputType,
+        style: const TextStyle(fontSize: 14, color: _C.dark),
+        validator: validator,
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: _C.gray, fontSize: 13),
+          filled: true,
+          fillColor: _C.cream,
+          border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide:
+              const BorderSide(color: _C.mint, width: 1.5)),
+          errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide:
+              const BorderSide(color: _C.coral, width: 1.5)),
+          contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14, vertical: 13),
+        ),
+      );
+
+  // ============================================================
+  // DIALOG: Add apartment
+  // ============================================================
+  void _showAddDialog() {
+    final formKey = GlobalKey<FormState>();
+    final resCtrl = TextEditingController(text: '1');
+    final trCtrl = TextEditingController();
+    final immCtrl = TextEditingController();
+    final numCtrl = TextEditingController();
+    final ridCtrl = TextEditingController();
+    ApartmentStatus status = ApartmentStatus.vacant;
+    bool saving = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => Dialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _dialogHeader(ctx, 'Nouvel Appartement',
+                        icon: Icons.home_rounded, iconColor: _C.blue),
+                    const SizedBox(height: 20),
+                    _fldLabel('Residence (ex: 1)'),
+                    _fld(resCtrl, 'ex: 1',
+                        inputType: TextInputType.number,
+                        validator: _intValidator),
+                    const SizedBox(height: 12),
+                    _fldLabel('Tranche (ex: 2)'),
+                    _fld(trCtrl, 'ex: 2',
+                        inputType: TextInputType.number,
+                        validator: _intValidator),
+                    const SizedBox(height: 12),
+                    _fldLabel('Immeuble (ex: 3)'),
+                    _fld(immCtrl, 'ex: 3',
+                        inputType: TextInputType.number,
+                        validator: _intValidator),
+                    const SizedBox(height: 12),
+                    _fldLabel('N Appartement (ex: 201)'),
+                    _fld(numCtrl, 'ex: 201',
+                        inputType: TextInputType.number,
+                        validator: _intValidator),
+                    const SizedBox(height: 12),
+                    _fldLabel('Statut'),
+                    _statusToggle(
+                        status,
+                            (v) => setD(() => status = v)),
+                    if (status == ApartmentStatus.occupied) ...[
+                      const SizedBox(height: 12),
+                      _fldLabel('Resident ID'),
+                      _fld(ridCtrl, 'ex: 42',
+                          inputType: TextInputType.number,
+                          validator: _intValidator),
+                    ],
+                    const SizedBox(height: 24),
+                    _dialogActions(
+                      ctx: ctx,
+                      saving: saving,
+                      confirmLabel: 'Ajouter',
+                      confirmColor: _C.mint,
+                      onConfirm: () async {
+                        if (!formKey.currentState!.validate()) return;
+                        final res = int.parse(resCtrl.text.trim());
+                        final tr  = int.parse(trCtrl.text.trim());
+                        final imm = int.parse(immCtrl.text.trim());
+                        final num = int.parse(numCtrl.text.trim());
+                        final rid = ridCtrl.text.trim().isNotEmpty
+                            ? int.parse(ridCtrl.text.trim())
+                            : null;
+                        final newNum = 'R$res-T$tr-Imm$imm-$num';
+                        if (apartments.any((a) => a.numero == newNum)) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text(
+                                      'Le numero $newNum existe deja.')));
+                          return;
+                        }
+                        setD(() => saving = true);
+                        Navigator.pop(ctx);
+                        final now = DateTime.now().toIso8601String();
+                        try {
+                          final inserted = await _supabase
+                              .from('appartements')
+                              .insert({
+                            'numero': newNum,
+                            'immeuble_id': imm,
+                            'statut': status == ApartmentStatus.vacant
+                                ? 'libre'
+                                : 'occupe',
+                            'resident_id': rid,
+                            'created_at': now,
+                            'updated_at': now,
+                          })
+                              .select() as List<dynamic>;
+                          if (inserted.isNotEmpty) {
+                            final ap = Apartment.fromMap(
+                                Map<String, dynamic>.from(
+                                    inserted.first));
+                            setState(() {
+                              apartments.add(ap);
+                              filteredApartments = apartments;
+                            });
+                          }
+                        } catch (e) {
+                          debugPrint('Insert error: $e');
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // DIALOG: Edit
+  // ============================================================
+  void _showEditDialog(Apartment apt) {
+    final formKey = GlobalKey<FormState>();
+    final resCtrl =
+    TextEditingController(text: apt.residence.toString());
+    final trCtrl =
+    TextEditingController(text: apt.tranche.toString());
+    final immCtrl =
+    TextEditingController(text: apt.immeuble.toString());
+    final numCtrl =
+    TextEditingController(text: apt.numeroAppartement.toString());
+    final ridCtrl = TextEditingController(
+        text: apt.residentId?.toString() ?? '');
+    ApartmentStatus status = apt.statut;
+    bool saving = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => Dialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _dialogHeader(ctx, 'Modifier ${apt.numero}',
+                        icon: Icons.edit_rounded, iconColor: _C.blue),
+                    const SizedBox(height: 20),
+                    _fldLabel('Residence'),
+                    _fld(resCtrl, '',
+                        inputType: TextInputType.number,
+                        validator: _intValidator),
+                    const SizedBox(height: 12),
+                    _fldLabel('Tranche'),
+                    _fld(trCtrl, '',
+                        inputType: TextInputType.number,
+                        validator: _intValidator),
+                    const SizedBox(height: 12),
+                    _fldLabel('Immeuble'),
+                    _fld(immCtrl, '',
+                        inputType: TextInputType.number,
+                        validator: _intValidator),
+                    const SizedBox(height: 12),
+                    _fldLabel('N Appartement'),
+                    _fld(numCtrl, '',
+                        inputType: TextInputType.number,
+                        validator: _intValidator),
+                    const SizedBox(height: 12),
+                    _fldLabel('Statut'),
+                    _statusToggle(status, (v) {
+                      setD(() {
+                        status = v;
+                        if (v == ApartmentStatus.vacant) ridCtrl.clear();
+                      });
+                    }),
+                    if (status == ApartmentStatus.occupied) ...[
+                      const SizedBox(height: 12),
+                      _fldLabel('Resident ID'),
+                      _fld(ridCtrl, '',
+                          inputType: TextInputType.number,
+                          validator: _intValidator),
+                    ],
+                    const SizedBox(height: 24),
+                    _dialogActions(
+                      ctx: ctx,
+                      saving: saving,
+                      confirmLabel: 'Enregistrer',
+                      confirmColor: _C.blue,
+                      onConfirm: () async {
+                        if (!formKey.currentState!.validate()) return;
+                        final res = int.parse(resCtrl.text.trim());
+                        final tr  = int.parse(trCtrl.text.trim());
+                        final imm = int.parse(immCtrl.text.trim());
+                        final num = int.parse(numCtrl.text.trim());
+                        final rid = ridCtrl.text.trim().isNotEmpty
+                            ? int.parse(ridCtrl.text.trim())
+                            : null;
+                        final newNum = 'R$res-T$tr-Imm$imm-$num';
+                        if (apartments.any((a) =>
+                        a.numero == newNum && a.id != apt.id)) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text(
+                                      '$newNum existe deja.')));
+                          return;
+                        }
+                        setD(() => saving = true);
+                        Navigator.pop(ctx);
+                        try {
+                          final updated = await _supabase
+                              .from('appartements')
+                              .update({
+                            'numero': newNum,
+                            'immeuble_id': imm,
+                            'statut': status == ApartmentStatus.vacant
+                                ? 'libre'
+                                : 'occupe',
+                            'resident_id': rid,
+                            'updated_at':
+                            DateTime.now().toIso8601String(),
+                          })
+                              .eq('id', apt.id)
+                              .select() as List<dynamic>;
+                          if (updated.isNotEmpty) {
+                            final ap = Apartment.fromMap(
+                                Map<String, dynamic>.from(
+                                    updated.first));
+                            setState(() {
+                              final idx = apartments
+                                  .indexWhere((a) => a.id == ap.id);
+                              if (idx != -1) apartments[idx] = ap;
+                              filteredApartments = apartments;
+                            });
+                          }
+                        } catch (e) {
+                          debugPrint('Update error: $e');
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // DIALOG: Assign resident
+  // ============================================================
+  void _showAssignDialog(Apartment apt) {
+    if (apt.statut == ApartmentStatus.occupied) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${apt.numero} est deja occupe.')));
+      return;
+    }
+    final formKey = GlobalKey<FormState>();
+    final ridCtrl = TextEditingController();
+    bool saving = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => Dialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _dialogHeader(ctx, 'Assigner ${apt.numero}',
+                      icon: Icons.person_add_rounded,
+                      iconColor: _C.mint),
+                  const SizedBox(height: 20),
+                  _fldLabel('Resident ID'),
+                  _fld(ridCtrl, 'ex: 42',
+                      inputType: TextInputType.number,
+                      validator: _intValidator),
+                  const SizedBox(height: 24),
+                  _dialogActions(
+                    ctx: ctx,
+                    saving: saving,
+                    confirmLabel: 'Assigner',
+                    confirmColor: _C.mint,
+                    onConfirm: () async {
+                      if (!formKey.currentState!.validate()) return;
+                      final rid = int.parse(ridCtrl.text.trim());
+                      setD(() => saving = true);
+                      Navigator.pop(ctx);
+                      try {
+                        final updated = await _supabase
+                            .from('appartements')
+                            .update({
+                          'resident_id': rid,
+                          'statut': 'occupe',
+                          'updated_at':
+                          DateTime.now().toIso8601String(),
+                        })
+                            .eq('id', apt.id)
+                            .select() as List<dynamic>;
+                        if (updated.isNotEmpty) {
+                          final ap = Apartment.fromMap(
+                              Map<String, dynamic>.from(
+                                  updated.first));
+                          setState(() {
+                            final idx = apartments
+                                .indexWhere((a) => a.id == ap.id);
+                            if (idx != -1) apartments[idx] = ap;
+                            filteredApartments = apartments;
+                          });
+                        }
+                      } catch (e) {
+                        debugPrint('Assign error: $e');
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // DIALOG: Delete confirm
+  // ============================================================
+  void _showDeleteConfirm(Apartment apt) {
+    final canDelete =
+        apt.statut == ApartmentStatus.vacant && apt.residentId == null;
+    if (!canDelete) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Impossible: appartement occupe ou assigne.')));
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56, height: 56,
+                decoration: BoxDecoration(
+                    color: _C.coralLight,
+                    borderRadius: BorderRadius.circular(18)),
+                child: const Icon(Icons.delete_rounded,
+                    color: _C.coral, size: 28),
+              ),
+              const SizedBox(height: 16),
+              const Text('Confirmer la suppression',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17,
+                      color: _C.dark)),
+              const SizedBox(height: 8),
+              Text(
+                'Supprimer ${apt.numero} ? Cette action est irreversible.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: _C.gray, fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              Row(children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(ctx),
+                    child: Container(
+                      padding:
+                      const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                          color: _C.cream,
+                          borderRadius: BorderRadius.circular(12)),
+                      child: const Text('Annuler',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: _C.dark,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      try {
+                        await _supabase
+                            .from('appartements')
+                            .delete()
+                            .eq('id', apt.id);
+                        setState(() {
+                          apartments
+                              .removeWhere((a) => a.id == apt.id);
+                          filteredApartments = apartments;
+                        });
+                      } catch (e) {
+                        debugPrint('Delete error: $e');
+                      }
+                    },
+                    child: Container(
+                      padding:
+                      const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                          color: _C.coral,
+                          borderRadius: BorderRadius.circular(12)),
+                      child: const Text('Supprimer',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: _C.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14)),
+                    ),
+                  ),
+                ),
+              ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // BOTTOM SHEET: Details
+  // ============================================================
+  void _showDetails(Apartment apt) {
+    final isOcc = apt.statut == ApartmentStatus.occupied;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.only(top: 60),
+        decoration: const BoxDecoration(
+          color: _C.white,
+          borderRadius:
+          BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: DraggableScrollableSheet(
+          initialChildSize: 1.0,
+          minChildSize: 0.5,
+          maxChildSize: 1.0,
+          expand: false,
+          builder: (ctx, scrollCtrl) => SingleChildScrollView(
+            controller: scrollCtrl,
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                        color: _C.divider,
+                        borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Title row
+                Row(
+                  children: [
+                    Container(
+                      width: 48, height: 48,
+                      decoration: BoxDecoration(
+                          color: isOcc
+                              ? _C.mintLight
+                              : _C.amberLight,
+                          borderRadius:
+                          BorderRadius.circular(14)),
+                      child: Icon(Icons.home_rounded,
+                          color: isOcc ? _C.mint : _C.amber,
+                          size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    Column(
+                      crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                      children: [
+                        Text(apt.numero,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 18,
+                                color: _C.dark)),
+                        Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                              color: isOcc
+                                  ? _C.mintLight
+                                  : _C.amberLight,
+                              borderRadius:
+                              BorderRadius.circular(20)),
+                          child: Text(
+                              isOcc ? 'Occupe' : 'Vacant',
+                              style: TextStyle(
+                                  color: isOcc
+                                      ? _C.mint
+                                      : _C.amber,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                      color: _C.cream,
+                      borderRadius: BorderRadius.circular(16)),
+                  child: Column(
+                    children: [
+                      _detailRow('Residence',
+                          'Residence ${apt.residence}',
+                          Icons.location_city_rounded),
+                      _divRow(),
+                      _detailRow('Tranche',
+                          'Tranche ${apt.tranche}',
+                          Icons.layers_rounded),
+                      _divRow(),
+                      _detailRow('Immeuble',
+                          'Immeuble ${apt.immeuble}',
+                          Icons.business_rounded),
+                      _divRow(),
+                      _detailRow('N Appart',
+                          '${apt.numeroAppartement}',
+                          Icons.meeting_room_rounded),
+                      if (isOcc) ...[
+                        _divRow(),
+                        _detailRow('Resident ID',
+                            '${apt.residentId}',
+                            Icons.person_rounded),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // Action buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _showEditDialog(apt);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 13),
+                          decoration: BoxDecoration(
+                              color: _C.blueLight,
+                              borderRadius:
+                              BorderRadius.circular(14)),
+                          child: Row(
+                            mainAxisAlignment:
+                            MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.edit_rounded,
+                                  size: 16, color: _C.blue),
+                              SizedBox(width: 6),
+                              Text('Modifier',
+                                  style: TextStyle(
+                                      color: _C.blue,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (!isOcc) ...[
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _showAssignDialog(apt);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 13),
+                            decoration: BoxDecoration(
+                                color: _C.mintLight,
+                                borderRadius:
+                                BorderRadius.circular(14)),
+                            child: Row(
+                              mainAxisAlignment:
+                              MainAxisAlignment.center,
+                              children: const [
+                                Icon(Icons.person_add_rounded,
+                                    size: 16, color: _C.mint),
+                                SizedBox(width: 6),
+                                Text('Assigner',
+                                    style: TextStyle(
+                                        color: _C.mint,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _showDeleteConfirm(apt);
+                        },
+                        child: Container(
+                          width: 46, height: 46,
+                          decoration: BoxDecoration(
+                              color: _C.coralLight,
+                              borderRadius:
+                              BorderRadius.circular(14)),
+                          child: const Icon(Icons.delete_rounded,
+                              color: _C.coral, size: 20),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value, IconData icon) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 30, height: 30,
+              decoration: BoxDecoration(
+                  color: _C.white,
+                  borderRadius: BorderRadius.circular(8)),
+              child: Icon(icon, size: 15, color: _C.gray),
+            ),
+            const SizedBox(width: 12),
+            Text('$label  ',
+                style: const TextStyle(
+                    color: _C.gray, fontSize: 13)),
+            Expanded(
+              child: Text(value,
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(
+                      color: _C.dark,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13)),
+            ),
+          ],
+        ),
+      );
+
+  Widget _divRow() =>
+      Container(height: 1, color: _C.divider);
+
+  // ============================================================
+  // HELPERS
+  // ============================================================
+  Widget _statusToggle(
+      ApartmentStatus current, ValueChanged<ApartmentStatus> onChange) {
+    return Row(children: [
+      Expanded(
+        child: GestureDetector(
+          onTap: () => onChange(ApartmentStatus.vacant),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: current == ApartmentStatus.vacant
+                  ? _C.amberLight
+                  : _C.cream,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: current == ApartmentStatus.vacant
+                      ? _C.amber
+                      : _C.divider,
+                  width: current == ApartmentStatus.vacant ? 1.5 : 1),
+            ),
+            child: Text('Vacant',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: current == ApartmentStatus.vacant
+                        ? _C.amber
+                        : _C.gray,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13)),
+          ),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: GestureDetector(
+          onTap: () => onChange(ApartmentStatus.occupied),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: current == ApartmentStatus.occupied
+                  ? _C.mintLight
+                  : _C.cream,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: current == ApartmentStatus.occupied
+                      ? _C.mint
+                      : _C.divider,
+                  width: current == ApartmentStatus.occupied ? 1.5 : 1),
+            ),
+            child: Text('Occupe',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: current == ApartmentStatus.occupied
+                        ? _C.mint
+                        : _C.gray,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13)),
+          ),
+        ),
+      ),
+    ]);
+  }
+
+  String? _intValidator(String? value) {
+    if (value == null || value.trim().isEmpty) return 'Requis';
+    final v = int.tryParse(value.trim());
+    if (v == null || v <= 0) return 'Entier positif requis';
+    return null;
   }
 }
-
