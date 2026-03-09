@@ -15,7 +15,7 @@ class _AddGlobalExpenseScreenState extends State<AddGlobalExpenseScreen> {
   final FinanceService _service = FinanceService();
 
   int? _selectedCategoryId;
-  int _selectedMois = DateTime.now().month;
+  int _selectedAnnee = DateTime.now().year;
   final TextEditingController _montantController = TextEditingController();
   final TextEditingController _descController = TextEditingController();
   PlatformFile? _pickedFile;
@@ -196,12 +196,17 @@ class _AddGlobalExpenseScreenState extends State<AddGlobalExpenseScreen> {
       ),
       child: Column(
         children: [
-          _buildFieldLabel("Mois de consommation *"),
+          _buildFieldLabel("Année de consommation *"),
           DropdownButtonFormField<int>(
-            value: _selectedMois,
-            decoration: _inputStyle("Sélectionner un mois"),
-            items: List.generate(12, (i) => DropdownMenuItem(value: i + 1, child: Text(_moisFr[i]))).toList(),
-            onChanged: (val) => setState(() => _selectedMois = val!),
+            value: _selectedAnnee,
+            decoration: _inputStyle("Sélectionner une année"),
+            items: [2024, 2025, 2026, 2027, 2028, 2029, 2030].map((int annee) {
+              return DropdownMenuItem<int>(
+                value: annee,
+                child: Text("Année $annee"),
+              );
+            }).toList(),
+            onChanged: (val) => setState(() => _selectedAnnee = val!),
           ),
           const SizedBox(height: 25),
           _buildFieldLabel("Montant (DH) *"),
@@ -306,15 +311,24 @@ class _AddGlobalExpenseScreenState extends State<AddGlobalExpenseScreen> {
   }
 
   void _submitForm() async {
-    if (_montantController.text.isEmpty) return;
+    if (_montantController.text.isEmpty || _selectedCategoryId == null) return;
+
     setState(() => _isUploading = true);
-    // ... Logique d'enregistrement ...
-    await _service.addGlobalExpense(
-      residenceId: widget.residenceId, montant: double.parse(_montantController.text),
-      categorieId: _selectedCategoryId!, date: DateTime.now(), syndicId: 1,
-      description: _descController.text,
-    );
-    setState(() => _isUploading = false);
-    Navigator.pop(context);
+
+    try {
+      await _service.addGlobalExpense(
+        residenceId: widget.residenceId,
+        montant: double.parse(_montantController.text.replaceAll(',', '.')),
+        categorieId: _selectedCategoryId!,
+        date: DateTime(_selectedAnnee, 1, 1), // On enregistre au 1er Janvier de l'année choisie
+        syndicId: 1,
+        description: _descController.text,
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : $e")));
+    } finally {
+      setState(() => _isUploading = false);
+    }
   }
 }
