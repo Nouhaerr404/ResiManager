@@ -28,7 +28,8 @@ class GarageModel {
     this.trancheNom,
     this.isResident,
   });
-
+  // Ajout du getter pour gérer le type dynamiquement
+  String get beneficiaireType => (isResident ?? false) ? 'resident' : 'externe';
   factory GarageModel.fromJson(Map<String, dynamic> j) => GarageModel(
     id: j['id'],
     numero: j['numero'],
