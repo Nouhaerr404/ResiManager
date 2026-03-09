@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/tranche_model.dart';
 
+
 class TrancheService {
   final _db = Supabase.instance.client;
 
@@ -118,4 +119,50 @@ class TrancheService {
       };
     }
   }
+
+  Future<List<TrancheModel>> getTranchesByResidence(int residenceId) async {
+    final response = await _db
+        .from('tranches')
+        .select('*, users(nom, prenom)') // Jointure avec users pour le nom de l'inter-syndic
+        .eq('residence_id', residenceId);
+
+    return (response as List)
+        .map((e) => TrancheModel.fromJson(e))
+        .toList();
+  }
+
+  Future<void> createTrancheComplet(
+      int residenceId, String nom, String description,
+      int nbImm, int nbApp, int nbPark, int nbGar, int nbBox) async {
+
+    await _db.from('tranches').insert({
+      'residence_id': residenceId,
+      'nom': nom,
+      'description': description,
+      'nombre_immeubles': nbImm,
+      'nombre_appartements': nbApp,
+      'nombre_parkings': nbPark,
+      'nombre_garages': nbGar,
+      'nombre_boxes': nbBox,
+    });
+  }
+
+  // Récupère la liste des inter-syndics disponibles
+  Future<List<Map<String, dynamic>>> getAvailableInterSyndics() async {
+    final response = await _db
+        .from('users')
+        .select('id, nom, prenom')
+        .eq('role', 'inter_syndic')
+        .eq('statut', 'actif');
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  // Met à jour la tranche avec le nouvel ID d'inter-syndic
+  Future<void> assignInterSyndic(int trancheId, int? interSyndicId) async {
+    await _db
+        .from('tranches')
+        .update({'inter_syndic_id': interSyndicId})
+        .eq('id', trancheId);
+  }
+
 }

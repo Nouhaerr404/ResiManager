@@ -5,25 +5,29 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
 import 'screens/inter_syndic/tranches_list_screen.dart';
 import 'screens/inter_syndic/apartments/apartments.dart';
+import 'screens/syndic_general/residence_selection_screen.dart';
 
+// LA FONCTION MANQUANTE : C'est le point d'entrée de l'app
 void main() async {
+  // Obligatoire pour initialiser les plugins
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Initialisation de Supabase avec ta classe de config
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
     anonKey: SupabaseConfig.supabaseAnonKey,
   );
 
-  runApp(const MyApp());
+  runApp(const ResiManagerApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class ResiManagerApp extends StatelessWidget {
+  const ResiManagerApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ResiManager',
+      title: 'ResiManager - Syndic Général',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         fontFamily: 'Roboto',
