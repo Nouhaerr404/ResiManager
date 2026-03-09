@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../screens/syndic_general/tranches_management_screen.dart';
+import '../screens/syndic_general/dashboard_screen.dart';
 class SyndicSidebar extends StatelessWidget {
   const SyndicSidebar({Key? key}) : super(key: key);
 
@@ -41,7 +42,12 @@ class SyndicSidebar extends StatelessWidget {
             title: const Text('Tableau de bord', style: TextStyle(fontWeight: FontWeight.bold)),
             selectedTileColor: Colors.grey.shade100,
             selected: true, // A rendre dynamique plus tard
-            onTap: () {},
+            onTap: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const DashboardScreen(residenceId: 1)),
+              );
+            },
           ),
           ListTile(
             leading: const Icon(Icons.people_outline),
