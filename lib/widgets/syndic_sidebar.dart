@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../screens/syndic_general/dashboard_screen.dart';
 import '../screens/syndic_general/tranches_management_screen.dart';
+import '../screens/syndic_general/residence_finances_screen.dart';
+
+
 
 class SyndicSidebar extends StatelessWidget {
   const SyndicSidebar({Key? key}) : super(key: key);
@@ -51,6 +54,12 @@ class SyndicSidebar extends StatelessWidget {
           _buildMenuItem(context, Icons.people_outline, 'Syndics', false, () {}),
           _buildMenuItem(context, Icons.domain, 'Tranches', false, () {
             Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const TranchesManagementScreen(residenceId: 1)));
+          }),
+          _buildMenuItem(context, Icons.account_balance_wallet_outlined, 'Finances', false, () {
+            Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => ResidenceFinancesScreen(residenceId: 1))
+            );
           }),
           _buildMenuItem(context, Icons.apartment, 'Immeubles', false, () {}),
           _buildMenuItem(context, Icons.local_parking, 'Parkings', false, () {}),
