@@ -1,10 +1,12 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/supabase_config.dart';
+import 'screens/inter_syndic/tranches_list_screen.dart';
 import 'screens/inter_syndic/apartments/apartments.dart';
 
-Future<void> main() async {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialisation Supabase
@@ -12,7 +14,6 @@ Future<void> main() async {
     url: SupabaseConfig.supabaseUrl,
     anonKey: SupabaseConfig.supabaseAnonKey,
   );
-
   runApp(const MyApp());
 }
 
