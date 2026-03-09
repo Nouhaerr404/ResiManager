@@ -94,4 +94,22 @@ class TrancheService {
     });
   }
 
+  // Récupère la liste des inter-syndics disponibles
+  Future<List<Map<String, dynamic>>> getAvailableInterSyndics() async {
+    final response = await _db
+        .from('users')
+        .select('id, nom, prenom')
+        .eq('role', 'inter_syndic')
+        .eq('statut', 'actif');
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  // Met à jour la tranche avec le nouvel ID d'inter-syndic
+  Future<void> assignInterSyndic(int trancheId, int? interSyndicId) async {
+    await _db
+        .from('tranches')
+        .update({'inter_syndic_id': interSyndicId})
+        .eq('id', trancheId);
+  }
+
 }

@@ -82,6 +82,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: 30),
 
               // Première rangée : Les 4 petites cartes
+              // Première rangée : Statistiques Générales (avec les nouvelles couleurs)
               Wrap(
                 spacing: 20,
                 runSpacing: 20,
@@ -90,32 +91,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       title: 'Syndics Actifs',
                       value: data.syndicsActifs.toString(),
                       icon: Icons.people,
-                      iconColor: Colors.blue
+                      iconColor: const Color(0xFF2C2C2C) // Gris Foncé
                   ),
                   KpiCard(
                       title: 'Tranches',
                       value: data.tranches.toString(),
                       icon: Icons.domain,
-                      iconColor: Colors.purple
+                      iconColor: const Color(0xFFFF6F4A) // Orange Corail
                   ),
                   KpiCard(
                       title: 'Immeubles',
                       value: data.immeubles.toString(),
                       icon: Icons.apartment,
-                      iconColor: Colors.green
+                      iconColor: const Color(0xFF2C2C2C) // Gris Foncé
                   ),
                   KpiCard(
                       title: 'Appartements',
                       value: data.appartements.toString(),
                       icon: Icons.home,
-                      iconColor: Colors.orange
+                      iconColor: const Color(0xFFFF6F4A) // Orange Corail
                   ),
                 ],
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 30), // Un peu plus d'espace entre les deux sections
 
-              // Deuxième rangée : Finances
+              // DEUXIÈME RANGÉE : Finances (C'est ici qu'on change les données)
+              const Text('Résumé Financier', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 15),
+
               Wrap(
                 spacing: 20,
                 runSpacing: 20,
@@ -123,8 +127,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   KpiCard(
                     title: 'Charges Totales (Ce mois)',
                     value: data.chargesTotales.toStringAsFixed(2),
-                    icon: Icons.attach_money,
-                    iconColor: Colors.red,
+                    icon: Icons.payments_outlined,
+                    iconColor: const Color(0xFF2C2C2C), // Gris Foncé
                     isCurrency: true,
                     subtitle: 'par mois',
                   ),
@@ -132,7 +136,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     title: 'Revenus Parkings',
                     value: data.revenusParkings.toStringAsFixed(2),
                     icon: Icons.local_parking,
-                    iconColor: Colors.indigo,
+                    iconColor: const Color(0xFFFF6F4A), // Orange Corail
                     isCurrency: true,
                     subtitle: 'par mois',
                   ),
