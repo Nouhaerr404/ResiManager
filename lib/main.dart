@@ -9,11 +9,11 @@ import 'screens/inter_syndic/apartments/apartments.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialisation Supabase
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
     anonKey: SupabaseConfig.supabaseAnonKey,
   );
+
   runApp(const MyApp());
 }
 
@@ -26,8 +26,11 @@ class MyApp extends StatelessWidget {
       title: 'ResiManager',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        fontFamily: 'Roboto',
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF8B5CF6),
+        ),
         useMaterial3: true,
-        primarySwatch: Colors.blue,
       ),
       home: const HomePage(),
     );
@@ -53,7 +56,6 @@ class HomePage extends StatelessWidget {
               const Icon(
                 Icons.cloud_done,
                 size: 80,
-                color: Colors.green,
               ),
 
               const SizedBox(height: 20),
@@ -79,12 +81,21 @@ class HomePage extends StatelessWidget {
                 },
                 icon: const Icon(Icons.apartment),
                 label: const Text("Gérer les appartements"),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 30,
-                    vertical: 15,
-                  ),
-                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const TranchesListScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.layers),
+                label: const Text("Gérer les tranches"),
               ),
             ],
           ),
