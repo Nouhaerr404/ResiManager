@@ -1,517 +1,8 @@
-// apartments(1500).dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-// ============================================================================
-// MODELS
-// ============================================================================
-
-enum ApartmentStatus {
-  occupied, // occupé
-  vacant, // libre
-}
-
-class Apartment {
-  final int id;
-  final int residence;
-  final int tranche;
-  final int immeuble;
-  final int numeroAppartement;
-  final ApartmentStatus statut;
-  final int? residentId;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-
-  Apartment({
-    required this.id,
-    required this.residence,
-    required this.tranche,
-    required this.immeuble,
-    required this.numeroAppartement,
-    required this.statut,
-    this.residentId,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-
-  String get numero {
-    return "R$residence-T$tranche-Imm$immeuble-$numeroAppartement";
-  }
-
-  /// construit depuis une map renvoyée par Supabase/Postgres
-  factory Apartment.fromMap(Map<String, dynamic> map) {
-    // Defensive: certain champs peuvent être int / String selon la requête
-    final numeroRaw = map['numero'] ?? '';
-    final numero = numeroRaw is String ? numeroRaw : numeroRaw.toString();
-
-    // Parse numero format: R{res}-T{tranche}-Imm{immeuble}-{num}
-    int residence = 0, tranche = 0, immeuble = 0, numeroAppartement = 0;
-    try {
-      final parts = numero.split('-');
-      if (parts.length >= 4) {
-        residence = int.parse(parts[0].substring(1));
-        tranche = int.parse(parts[1].substring(1));
-        // prendre apres "Imm"
-        immeuble = int.parse(parts[2].substring(3));
-        numeroAppartement = int.parse(parts[3]);
-      }
-    } catch (_) {
-      // si parse échoue, on laisse 0 et on pourra afficher numero brut
-    }
-
-    final statutRaw = (map['statut'] ?? '').toString().toLowerCase();
-    final statut = statutRaw.contains('lib') || statutRaw == 'vacant' ? ApartmentStatus.vacant : ApartmentStatus.occupied;
-
-    final createdAtRaw = map['created_at'] ?? map['createdAt'] ?? DateTime.now().toIso8601String();
-    final updatedAtRaw = map['updated_at'] ?? map['updatedAt'] ?? DateTime.now().toIso8601String();
-
-    DateTime parseDate(dynamic raw) {
-      if (raw is DateTime) return raw;
-      if (raw is String) return DateTime.parse(raw);
-      return DateTime.now();
-    }
-
-    return Apartment(
-      id: map['id'] is int ? map['id'] : int.parse(map['id'].toString()),
-      residence: residence,
-      tranche: tranche,
-      immeuble: immeuble,
-      numeroAppartement: numeroAppartement,
-      statut: statut,
-      residentId: map['resident_id'] == null ? null : (map['resident_id'] is int ? map['resident_id'] : int.parse(map['resident_id'].toString())),
-      createdAt: parseDate(createdAtRaw),
-      updatedAt: parseDate(updatedAtRaw),
-    );
-  }
-
-  Map<String, dynamic> toMapForInsert() {
-    // Pour insérer en DB : envoyer le champ 'numero' + 'immeuble_id' + 'statut' + 'resident_id'
-    return {
-      'numero': numero,
-      'immeuble_id': immeuble,
-      'statut': statut == ApartmentStatus.vacant ? 'libre' : 'occupe',
-      'resident_id': residentId,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
-    };
-  }
-}
-
-// ============================================================================
-// UI WIDGETS (même structure que ton fichier original) MAIS connectés à Supabase
-// ============================================================================
-
-class ApartmentCard extends StatelessWidget {
-  final Apartment apartment;
-  final VoidCallback? onTap;
-  final VoidCallback? onEdit;
-  final VoidCallback? onAssign;
-  final VoidCallback? onDelete;
-
-  const ApartmentCard({
-    Key? key,
-    required this.apartment,
-    this.onTap,
-    this.onEdit,
-    this.onAssign,
-    this.onDelete,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final isOccupied = apartment.statut == ApartmentStatus.occupied;
-
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: Colors.grey.shade200,
-          width: 1,
-        ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // En-tête avec numéro et statut
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.home,
-                        color: Theme.of(context).primaryColor,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        apartment.numero,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  _buildStatusBadge(context),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // Informations structurelles
-              _buildInfoRow(Icons.location_city, 'Résidence', 'Résidence ${apartment.residence}'),
-              const SizedBox(height: 6),
-              _buildInfoRow(Icons.category, 'Tranche', 'Tranche ${apartment.tranche}'),
-              const SizedBox(height: 6),
-              _buildInfoRow(Icons.business, 'Immeuble', 'Immeuble ${apartment.immeuble}'),
-              const SizedBox(height: 6),
-              _buildInfoRow(Icons.meeting_room, 'N° Appart', '${apartment.numeroAppartement}'),
-
-              // Informations du résident si occupé
-              if (isOccupied) ...[
-                const SizedBox(height: 12),
-                const Divider(),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
-                      child: Icon(
-                        Icons.person,
-                        color: Theme.of(context).primaryColor,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Résident ID: ${apartment.residentId}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Occupé',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.green.shade700,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-
-              const SizedBox(height: 12),
-
-              // Actions
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  if (!isOccupied)
-                    TextButton.icon(
-                      onPressed: onAssign,
-                      icon: const Icon(Icons.person_add, size: 18),
-                      label: const Text('Assigner'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.green,
-                      ),
-                    ),
-                  TextButton.icon(
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit, size: 18),
-                    label: const Text('Modifier'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.blue,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    onPressed: (apartment.statut == ApartmentStatus.vacant && apartment.residentId == null)
-                        ? onDelete
-                        : null,
-                    icon: const Icon(Icons.delete),
-                    tooltip: apartment.statut == ApartmentStatus.vacant && apartment.residentId == null
-                        ? 'Supprimer'
-                        : 'Impossible: appartement occupé/assigné',
-                    color: (apartment.statut == ApartmentStatus.vacant && apartment.residentId == null)
-                        ? Colors.red
-                        : null,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusBadge(BuildContext context) {
-    final isOccupied = apartment.statut == ApartmentStatus.occupied;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: isOccupied ? Colors.green.shade50 : Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isOccupied ? Colors.green : Colors.orange,
-          width: 1.5,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: isOccupied ? Colors.green : Colors.orange,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            isOccupied ? 'Occupé' : 'Vacant',
-            style: TextStyle(
-              color: isOccupied ? Colors.green.shade900 : Colors.orange.shade900,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: Colors.grey.shade600),
-        const SizedBox(width: 8),
-        Text(
-          '$label: ',
-          style: TextStyle(
-            fontSize: 13,
-            color: Colors.grey.shade600,
-          ),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ============================================================================
-// FILTERS (identique au fichier original)
-// ============================================================================
-
-class ApartmentFilters extends StatefulWidget {
-  final Function(int? tranche, int? immeuble, ApartmentStatus? status) onFilterChanged;
-
-  const ApartmentFilters({
-    Key? key,
-    required this.onFilterChanged,
-  }) : super(key: key);
-
-  @override
-  State<ApartmentFilters> createState() => _ApartmentFiltersState();
-}
-
-class _ApartmentFiltersState extends State<ApartmentFilters> {
-  int? selectedTranche;
-  int? selectedImmeuble;
-  ApartmentStatus? selectedStatus;
-
-  final List<int> tranches = [1, 2, 3];
-  final List<int> immeubles = [1, 2, 3];
-
-  void _resetFilters() {
-    setState(() {
-      selectedTranche = null;
-      selectedImmeuble = null;
-      selectedStatus = null;
-    });
-    widget.onFilterChanged(null, null, null);
-  }
-
-  void _applyFilters() {
-    widget.onFilterChanged(
-      selectedTranche,
-      selectedImmeuble,
-      selectedStatus,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey.shade200),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.filter_list, size: 20),
-              const SizedBox(width: 8),
-              const Text(
-                'Filtres',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: _resetFilters,
-                icon: const Icon(Icons.clear_all, size: 18),
-                label: const Text('Réinitialiser'),
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.grey.shade700,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<int>(
-                  value: selectedTranche,
-                  decoration: InputDecoration(
-                    labelText: 'Tranche',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                  ),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('Toutes')),
-                    ...tranches.map((t) => DropdownMenuItem(
-                      value: t,
-                      child: Text('Tranche $t'),
-                    )),
-                  ],
-                  onChanged: (value) {
-                    setState(() => selectedTranche = value);
-                    _applyFilters();
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<int>(
-                  value: selectedImmeuble,
-                  decoration: InputDecoration(
-                    labelText: 'Immeuble',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                  ),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('Tous')),
-                    ...immeubles.map((i) => DropdownMenuItem(
-                      value: i,
-                      child: Text('Immeuble $i'),
-                    )),
-                  ],
-                  onChanged: (value) {
-                    setState(() => selectedImmeuble = value);
-                    _applyFilters();
-                  },
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          const Text(
-            'Statut d\'occupation',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: [
-              FilterChip(
-                label: const Text('Tous'),
-                selected: selectedStatus == null,
-                onSelected: (selected) {
-                  setState(() => selectedStatus = null);
-                  _applyFilters();
-                },
-              ),
-              FilterChip(
-                label: const Text('Occupé'),
-                selected: selectedStatus == ApartmentStatus.occupied,
-                onSelected: (selected) {
-                  setState(() => selectedStatus = selected ? ApartmentStatus.occupied : null);
-                  _applyFilters();
-                },
-                selectedColor: Colors.green.shade100,
-              ),
-              FilterChip(
-                label: const Text('Vacant'),
-                selected: selectedStatus == ApartmentStatus.vacant,
-                onSelected: (selected) {
-                  setState(() => selectedStatus = selected ? ApartmentStatus.vacant : null);
-                  _applyFilters();
-                },
-                selectedColor: Colors.orange.shade100,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ============================================================================
-// SCREEN - APARTMENTS LIST (connecté à Supabase)
-// ============================================================================
+import '../../../models/appartement_model.dart';
+import '../../../widgets/apartment_card.dart';
+import '../../../widgets/apartment_filters.dart';
 
 class ApartmentsListScreen extends StatefulWidget {
   const ApartmentsListScreen({Key? key}) : super(key: key);
@@ -522,15 +13,11 @@ class ApartmentsListScreen extends StatefulWidget {
 
 class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
   final _supabase = Supabase.instance.client;
-  List<Apartment> apartments = [];
-  List<Apartment> filteredApartments = [];
+  List<AppartementModel> apartments = [];
+  List<AppartementModel> filteredApartments = [];
   bool showFilters = false;
   final TextEditingController searchController = TextEditingController();
   bool loading = false;
-
-  // For undo deletion (local): keep last deleted so user can undo (DB delete will be permanent)
-  Apartment? _recentlyDeleted;
-  int? _recentlyDeletedIndex;
 
   @override
   void initState() {
@@ -542,30 +29,32 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     setState(() => loading = true);
     try {
       final response = await _supabase.from('appartements').select().order('id', ascending: true) as List<dynamic>;
-      final list = response.map((e) => Apartment.fromMap(Map<String, dynamic>.from(e))).toList();
+      final list = response.map((e) => AppartementModel.fromJson(Map<String, dynamic>.from(e))).toList();
       setState(() {
         apartments = list;
         filteredApartments = apartments;
       });
     } catch (e, st) {
       debugPrint('Erreur fetch appartements: $e\n$st');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur lors du chargement des appartements')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erreur lors du chargement des appartements')),
+        );
+      }
     } finally {
-      setState(() => loading = false);
+      if (mounted) setState(() => loading = false);
     }
   }
 
   void _applyFilters({
     int? tranche,
     int? immeuble,
-    ApartmentStatus? status,
+    StatutAppartEnum? status,
   }) {
     setState(() {
       filteredApartments = apartments.where((apt) {
         if (tranche != null && apt.tranche != tranche) return false;
-        if (immeuble != null && apt.immeuble != immeuble) return false;
+        if (immeuble != null && apt.immeubleNum != immeuble) return false;
         if (status != null && apt.statut != status) return false;
         return true;
       }).toList();
@@ -580,7 +69,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
         filteredApartments = apartments.where((apt) {
           final searchLower = query.toLowerCase();
           return apt.numero.toLowerCase().contains(searchLower) ||
-              'immeuble ${apt.immeuble}'.toLowerCase().contains(searchLower) ||
+              'immeuble ${apt.immeubleNum}'.toLowerCase().contains(searchLower) ||
               'tranche ${apt.tranche}'.toLowerCase().contains(searchLower) ||
               'résidence ${apt.residence}'.toLowerCase().contains(searchLower) ||
               apt.numeroAppartement.toString().contains(searchLower);
@@ -598,15 +87,15 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     required int tranche,
     required int immeuble,
     required int numeroApt,
-    required ApartmentStatus status,
+    required StatutAppartEnum status,
     int? residentId,
   }) async {
-    final numero = "R${residence}-T${tranche}-Imm${immeuble}-${numeroApt}";
+    final numero = AppartementModel.generateNumero(residence, tranche, immeuble, numeroApt);
     final now = DateTime.now().toIso8601String();
     final row = {
       'numero': numero,
       'immeuble_id': immeuble,
-      'statut': status == ApartmentStatus.vacant ? 'libre' : 'occupe',
+      'statut': status == StatutAppartEnum.libre ? 'libre' : 'occupe',
       'resident_id': residentId,
       'created_at': now,
       'updated_at': now,
@@ -615,37 +104,38 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     try {
       final inserted = await _supabase.from('appartements').insert(row).select() as List<dynamic>;
       if (inserted.isNotEmpty) {
-        final ap = Apartment.fromMap(Map<String, dynamic>.from(inserted.first));
+        final ap = AppartementModel.fromJson(Map<String, dynamic>.from(inserted.first));
         setState(() {
           apartments.add(ap);
-          if (searchController.text.isEmpty) filteredApartments = apartments;
-          else _search(searchController.text);
+          if (searchController.text.isEmpty) {
+            filteredApartments = apartments;
+          } else {
+            _search(searchController.text);
+          }
         });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Appartement $numero ajouté.')));
-      } else {
-        throw Exception('Aucune ligne insérée');
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Appartement $numero ajouté.')));
       }
     } catch (e) {
       debugPrint('Erreur insert: $e');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur lors de l\'ajout en base')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de l\'ajout en base')));
     }
   }
 
   Future<void> _updateApartmentInDb({
-    required Apartment oldApartment,
+    required AppartementModel oldApartment,
     required int residence,
     required int tranche,
     required int immeuble,
     required int numeroApt,
-    required ApartmentStatus status,
+    required StatutAppartEnum status,
     int? residentId,
   }) async {
-    final numero = "R${residence}-T${tranche}-Imm${immeuble}-${numeroApt}";
+    final numero = AppartementModel.generateNumero(residence, tranche, immeuble, numeroApt);
     final now = DateTime.now().toIso8601String();
     final row = {
       'numero': numero,
       'immeuble_id': immeuble,
-      'statut': status == ApartmentStatus.vacant ? 'libre' : 'occupe',
+      'statut': status == StatutAppartEnum.libre ? 'libre' : 'occupe',
       'resident_id': residentId,
       'updated_at': now,
     };
@@ -657,40 +147,43 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
           .eq('id', oldApartment.id)
           .select() as List<dynamic>;
       if (updated.isNotEmpty) {
-        final ap = Apartment.fromMap(Map<String, dynamic>.from(updated.first));
+        final ap = AppartementModel.fromJson(Map<String, dynamic>.from(updated.first));
         setState(() {
           final idx = apartments.indexWhere((a) => a.id == ap.id);
           if (idx != -1) apartments[idx] = ap;
-          if (searchController.text.isEmpty) filteredApartments = apartments;
-          else _search(searchController.text);
+          if (searchController.text.isEmpty) {
+            filteredApartments = apartments;
+          } else {
+            _search(searchController.text);
+          }
         });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Appartement $numero modifié.')));
-      } else {
-        throw Exception('Aucune ligne mise à jour');
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Appartement $numero modifié.')));
       }
     } catch (e) {
       debugPrint('Erreur update: $e');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur lors de la modification en base')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de la modification en base')));
     }
   }
 
-  Future<void> _deleteApartmentFromDb(Apartment apartment) async {
+  Future<void> _deleteApartmentFromDb(AppartementModel apartment) async {
     try {
       await _supabase.from('appartements').delete().eq('id', apartment.id);
-      // remove locally
       setState(() {
         apartments.removeWhere((a) => a.id == apartment.id);
-        if (searchController.text.isEmpty) filteredApartments = apartments;
-        else _search(searchController.text);
+        if (searchController.text.isEmpty) {
+          filteredApartments = apartments;
+        } else {
+          _search(searchController.text);
+        }
       });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Appartement ${apartment.numero} supprimé en base.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Appartement ${apartment.numero} supprimé.')));
     } catch (e) {
       debugPrint('Erreur delete: $e');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur suppression en base')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur suppression en base')));
     }
   }
 
-  Future<void> _assignResidentInDb(Apartment apartment, int residentId) async {
+  Future<void> _assignResidentInDb(AppartementModel apartment, int residentId) async {
     try {
       final now = DateTime.now().toIso8601String();
       final updated = await _supabase
@@ -699,23 +192,26 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
           .eq('id', apartment.id)
           .select() as List<dynamic>;
       if (updated.isNotEmpty) {
-        final ap = Apartment.fromMap(Map<String, dynamic>.from(updated.first));
+        final ap = AppartementModel.fromJson(Map<String, dynamic>.from(updated.first));
         setState(() {
           final idx = apartments.indexWhere((a) => a.id == ap.id);
           if (idx != -1) apartments[idx] = ap;
-          if (searchController.text.isEmpty) filteredApartments = apartments;
-          else _search(searchController.text);
+          if (searchController.text.isEmpty) {
+            filteredApartments = apartments;
+          } else {
+            _search(searchController.text);
+          }
         });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Resident $residentId assigné à ${apartment.numero}')));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Resident $residentId assigné à ${apartment.numero}')));
       }
     } catch (e) {
       debugPrint('Erreur assign: $e');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur lors de l\'assignation')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de l\'assignation')));
     }
   }
 
   // -------------------------
-  // Dialogs UI : reuse ton UI original mais en appelant les méthodes DB ci-dessus
+  // Dialogs UI
   // -------------------------
 
   void _showAddApartmentDialog() {
@@ -725,7 +221,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     final immeubleController = TextEditingController();
     final numeroController = TextEditingController();
     final residentController = TextEditingController();
-    ApartmentStatus status = ApartmentStatus.vacant;
+    StatutAppartEnum status = StatutAppartEnum.libre;
 
     showDialog(
       context: context,
@@ -787,19 +283,19 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                       },
                     ),
                     const SizedBox(height: 8),
-                    DropdownButtonFormField<ApartmentStatus>(
+                    DropdownButtonFormField<StatutAppartEnum>(
                       value: status,
                       decoration: const InputDecoration(labelText: 'Statut'),
                       items: const [
-                        DropdownMenuItem(value: ApartmentStatus.vacant, child: Text('Vacant')),
-                        DropdownMenuItem(value: ApartmentStatus.occupied, child: Text('Occupé')),
+                        DropdownMenuItem(value: StatutAppartEnum.libre, child: Text('Libre')),
+                        DropdownMenuItem(value: StatutAppartEnum.occupe, child: Text('Occupé')),
                       ],
                       onChanged: (value) {
                         if (value != null) setStateDialog(() => status = value);
                       },
                     ),
                     const SizedBox(height: 8),
-                    if (status == ApartmentStatus.occupied) ...[
+                    if (status == StatutAppartEnum.occupe) ...[
                       TextFormField(
                         controller: residentController,
                         keyboardType: TextInputType.number,
@@ -826,10 +322,10 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                   final tranche = int.parse(trancheController.text.trim());
                   final immeuble = int.parse(immeubleController.text.trim());
                   final numeroApt = int.parse(numeroController.text.trim());
-                  final residentId = (status == ApartmentStatus.occupied && residentController.text.trim().isNotEmpty)
+                  final residentId = (status == StatutAppartEnum.occupe && residentController.text.trim().isNotEmpty)
                       ? int.parse(residentController.text.trim())
                       : null;
-                  final newNumero = "R$residence-T$tranche-Imm$immeuble-$numeroApt";
+                  final newNumero = AppartementModel.generateNumero(residence, tranche, immeuble, numeroApt);
 
                   final exists = apartments.any((a) => a.numero == newNumero);
                   if (exists) {
@@ -856,8 +352,8 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     );
   }
 
-  void _showAssignResidentDialog(Apartment apartment) {
-    if (apartment.statut == ApartmentStatus.occupied) {
+  void _showAssignResidentDialog(AppartementModel apartment) {
+    if (apartment.statut == StatutAppartEnum.occupe) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Impossible : ${apartment.numero} est déjà occupé.')));
       return;
     }
@@ -897,14 +393,14 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     );
   }
 
-  void _showEditApartmentDialog(Apartment apartment) {
+  void _showEditApartmentDialog(AppartementModel apartment) {
     final _formKey = GlobalKey<FormState>();
     final residenceController = TextEditingController(text: apartment.residence.toString());
     final trancheController = TextEditingController(text: apartment.tranche.toString());
-    final immeubleController = TextEditingController(text: apartment.immeuble.toString());
+    final immeubleController = TextEditingController(text: apartment.immeubleNum.toString());
     final numeroController = TextEditingController(text: apartment.numeroAppartement.toString());
     final residentController = TextEditingController(text: apartment.residentId?.toString() ?? '');
-    ApartmentStatus status = apartment.statut;
+    StatutAppartEnum status = apartment.statut;
 
     showDialog(
       context: context,
@@ -966,30 +462,30 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                       },
                     ),
                     const SizedBox(height: 8),
-                    DropdownButtonFormField<ApartmentStatus>(
+                    DropdownButtonFormField<StatutAppartEnum>(
                       value: status,
                       decoration: const InputDecoration(labelText: 'Statut'),
                       items: const [
-                        DropdownMenuItem(value: ApartmentStatus.vacant, child: Text('Vacant')),
-                        DropdownMenuItem(value: ApartmentStatus.occupied, child: Text('Occupé')),
+                        DropdownMenuItem(value: StatutAppartEnum.libre, child: Text('Libre')),
+                        DropdownMenuItem(value: StatutAppartEnum.occupe, child: Text('Occupé')),
                       ],
                       onChanged: (value) {
                         if (value != null) {
                           setStateDialog(() {
                             status = value;
-                            if (value == ApartmentStatus.vacant) residentController.clear();
+                            if (value == StatutAppartEnum.libre) residentController.clear();
                           });
                         }
                       },
                     ),
                     const SizedBox(height: 8),
-                    if (status == ApartmentStatus.occupied) ...[
+                    if (status == StatutAppartEnum.occupe) ...[
                       TextFormField(
                         controller: residentController,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(labelText: 'Resident ID (laisser vide si vacant)'),
                         validator: (value) {
-                          if (status == ApartmentStatus.occupied) {
+                          if (status == StatutAppartEnum.occupe) {
                             if (value == null || value.trim().isEmpty) return 'Resident ID requis pour un appartement occupé';
                             final v = int.tryParse(value.trim());
                             if (v == null || v <= 0) return 'Entrez un entier positif';
@@ -1013,11 +509,11 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                   final tranche = int.parse(trancheController.text.trim());
                   final immeuble = int.parse(immeubleController.text.trim());
                   final numeroApt = int.parse(numeroController.text.trim());
-                  final residentId = (status == ApartmentStatus.occupied && residentController.text.trim().isNotEmpty)
+                  final residentId = (status == StatutAppartEnum.occupe && residentController.text.trim().isNotEmpty)
                       ? int.parse(residentController.text.trim())
                       : null;
 
-                  final newNumero = "R$residence-T$tranche-Imm$immeuble-$numeroApt";
+                  final newNumero = AppartementModel.generateNumero(residence, tranche, immeuble, numeroApt);
 
                   final exists = apartments.any((a) => a.numero == newNumero && a.id != apartment.id);
                   if (exists) {
@@ -1045,9 +541,8 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     );
   }
 
-  void _showDeleteConfirmation(Apartment apartment) {
-    final canDelete = apartment.statut == ApartmentStatus.vacant && apartment.residentId == null;
-    if (!canDelete) {
+  void _showDeleteConfirmation(AppartementModel apartment) {
+    if (!apartment.estLibre || apartment.residentId != null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Impossible de supprimer : appartement occupé ou assigné.')));
       return;
     }
@@ -1072,7 +567,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     );
   }
 
-  void _showApartmentDetails(Apartment apartment) {
+  void _showApartmentDetails(AppartementModel apartment) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1095,12 +590,12 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                 const SizedBox(height: 24),
                 _buildDetailRow('Résidence', 'Résidence ${apartment.residence}', Icons.location_city),
                 _buildDetailRow('Tranche', 'Tranche ${apartment.tranche}', Icons.category),
-                _buildDetailRow('Immeuble', 'Immeuble ${apartment.immeuble}', Icons.business),
+                _buildDetailRow('Immeuble', 'Immeuble ${apartment.immeubleNum}', Icons.business),
                 _buildDetailRow('N° Appartement', '${apartment.numeroAppartement}', Icons.meeting_room),
-                _buildDetailRow('Statut', apartment.statut == ApartmentStatus.occupied ? 'Occupé' : 'Vacant', Icons.info_outline),
-                if (apartment.statut == ApartmentStatus.occupied) ...[
+                _buildDetailRow('Statut', apartment.statut == StatutAppartEnum.occupe ? 'Occupé' : 'Libre', Icons.info_outline),
+                if (apartment.statut == StatutAppartEnum.occupe) ...[
                   const Divider(height: 32),
-                  _buildDetailRow('Résident ID', '${apartment.residentId}', Icons.person),
+                  _buildDetailRow('Résident', apartment.residentNomComplet ?? 'ID: ${apartment.residentId}', Icons.person),
                 ],
                 const SizedBox(height: 32),
                 Row(
@@ -1116,7 +611,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    if (apartment.statut == ApartmentStatus.vacant) ...[
+                    if (apartment.estLibre) ...[
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: () {
@@ -1171,8 +666,8 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final occupiedCount = filteredApartments.where((a) => a.statut == ApartmentStatus.occupied).length;
-    final vacantCount = filteredApartments.where((a) => a.statut == ApartmentStatus.vacant).length;
+    final occupiedCount = filteredApartments.where((a) => a.statut == StatutAppartEnum.occupe).length;
+    final vacantCount = filteredApartments.where((a) => a.statut == StatutAppartEnum.libre).length;
 
     return Scaffold(
       appBar: AppBar(
@@ -1249,7 +744,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                 children: [
                   Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
                   const SizedBox(height: 16),
-                  Text('Aucun appartement trouvé', style: TextStyle(fontSize: 16, color: Colors.grey.shade600)),
+                  const Text('Aucun appartement trouvé', style: TextStyle(fontSize: 16, color: Colors.grey)),
                 ],
               ),
             )
@@ -1298,4 +793,3 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     super.dispose();
   }
 }
-

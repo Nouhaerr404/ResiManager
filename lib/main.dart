@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/supabase_config.dart';
 import 'screens/inter_syndic/tranches_list_screen.dart';
-import 'screens/inter_syndic/apartments/apartments.dart';
+import 'screens/inter_syndic/apartments/apartments_screen.dart';
 import 'screens/syndic_general/residence_selection_screen.dart';
 
 Future<void> main() async {
