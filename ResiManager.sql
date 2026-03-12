@@ -302,7 +302,6 @@ CREATE TABLE paiements (
     id              BIGSERIAL            PRIMARY KEY,
     resident_id     BIGINT               NOT NULL,
     appartement_id  BIGINT               NOT NULL,
-    depense_id      BIGINT               NOT NULL,
     inter_syndic_id BIGINT               NOT NULL,
     residence_id    BIGINT               NOT NULL,
     montant_total   NUMERIC(10,2)        NOT NULL,
