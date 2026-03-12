@@ -44,11 +44,81 @@ class GarageService {
     }).eq('id', garageId);
   }
 
-  // Libérer un garages
+
+
+  Future<String?> addGarage({
+    required String numero,
+    required int trancheId,
+    required int residenceId,
+    required double prixAnnuel,
+  }) async {
+    try {
+      await _db.from('garages').insert({
+        'numero': numero,
+        'tranche_id': trancheId,
+        'residence_id': residenceId,
+        'prix_annuel': prixAnnuel,
+        'statut': 'disponible',
+      });
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> updateGarage({
+    required int garageId,
+    required String numero,
+    required double prixAnnuel,
+  }) async {
+    try {
+      await _db.from('garages').update({
+        'numero': numero,
+        'prix_annuel': prixAnnuel,
+      }).eq('id', garageId);
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> assignerGarage({
+    required int garageId,
+    required String nom,
+    required String prenom,
+    String? telephone,
+    required String type,
+    required int trancheId,
+  }) async {
+    try {
+      // Créer bénéficiaire
+      final benef = await _db.from('beneficiaires').insert({
+        'nom': nom,
+        'prenom': prenom,
+        'telephone': telephone,
+        'tranche_id': trancheId,
+      }).select('id').single();
+
+      // Assigner garage
+      await _db.from('garages').update({
+        'statut': 'occupe',
+        'beneficiaire_id': benef['id'],
+      }).eq('id', garageId);
+
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
   Future<void> libererGarage(int garageId) async {
-    await _db.from('garages').update({
-      'beneficiaire_id': null,
-      'statut': 'disponible',
-    }).eq('id', garageId);
+    try {
+      await _db.from('garages').update({
+        'statut': 'disponible',
+        'beneficiaire_id': null,
+      }).eq('id', garageId);
+    } catch (e) {
+      print('>>> ERREUR libererGarage: $e');
+    }
   }
 }

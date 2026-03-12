@@ -6,10 +6,10 @@ class TrancheCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const TrancheCard({
-    Key? key,
+    super.key,
     required this.tranche,
     required this.onTap
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +20,7 @@ class TrancheCard extends StatelessWidget {
       child: ListTile(
         onTap: onTap,
         leading: CircleAvatar(
-          backgroundColor: Colors.blue.withOpacity(0.1),
+          backgroundColor: Colors.blue.withValues(alpha: 0.1),
           child: const Icon(Icons.domain, color: Colors.blue),
         ),
         title: Text(tranche.nom, style: const TextStyle(fontWeight: FontWeight.bold)),
