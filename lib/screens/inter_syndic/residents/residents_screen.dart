@@ -2,6 +2,30 @@ import 'package:flutter/material.dart';
 import '../../../models/resident_model.dart';
 import '../../../services/resident_service.dart';
 
+// -- Brand palette
+class _C {
+  static const mint        = Color(0xFF4CAF82);
+  static const mintLight   = Color(0xFFE8F5EE);
+  static const mintMid     = Color(0xFFB2EADA);
+  static const coral       = Color(0xFFFF6B4A);
+  static const coralLight  = Color(0xFFFFEDE9);
+  static const cream       = Color(0xFFF4F6F8);
+  static const dark        = Color(0xFF1C1C1E);
+  static const gray        = Color(0xFF718096);
+  static const divider     = Color(0xFFE2E8F0);
+  static const white       = Color(0xFFFFFFFF);
+  static const amber       = Color(0xFFF59E0B);
+  static const amberLight  = Color(0xFFFFF7E6);
+  static const blue        = Color(0xFF3B82F6);
+  static const blueLight   = Color(0xFFEFF6FF);
+  static const green       = Color(0xFF16A34A);
+  static const greenLight  = Color(0xFFF0FDF4);
+  static const red         = Color(0xFFDC2626);
+  static const redLight    = Color(0xFFFEF2F2);
+  static const orange      = Color(0xFFF97316);
+  static const orangeLight = Color(0xFFFFF7ED);
+}
+
 class ResidentsScreen extends StatefulWidget {
   final int trancheId;
   const ResidentsScreen({super.key, required this.trancheId});
@@ -10,20 +34,23 @@ class ResidentsScreen extends StatefulWidget {
   State<ResidentsScreen> createState() => _ResidentsScreenState();
 }
 
-class _ResidentsScreenState extends State<ResidentsScreen> {
+class _ResidentsScreenState extends State<ResidentsScreen>
+    with SingleTickerProviderStateMixin {
   final _service = ResidentService();
   List<ResidentModel> _residents = [];
   List<ResidentModel> _filtered = [];
   bool _loading = true;
   String _filterStatut = 'tous';
   final _searchCtrl = TextEditingController();
-
-  static const _purple = Color(0xFF8B5CF6);
-  static const _bg = Color(0xFFF5F5F5);
+  late AnimationController _fadeCtrl;
+  late Animation<double> _fadeAnim;
 
   @override
   void initState() {
     super.initState();
+    _fadeCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 450));
+    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _load();
     _searchCtrl.addListener(_applyFilter);
   }
@@ -31,6 +58,7 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _fadeCtrl.dispose();
     super.dispose();
   }
 
@@ -45,8 +73,9 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
         _loading = false;
       });
       _applyFilter();
+      _fadeCtrl.forward(from: 0);
     } catch (e) {
-      print('>>> ERREUR _load: $e');
+      debugPrint('>>> ERREUR _load: $e');
       setState(() => _loading = false);
     }
   }
@@ -55,12 +84,10 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
     final q = _searchCtrl.text.toLowerCase();
     setState(() {
       _filtered = _residents.where((r) {
-        final matchSearch =
-            r.nomComplet.toLowerCase().contains(q) ||
-                (r.appartementNumero?.toLowerCase().contains(q) ??
-                    false);
-        final matchStatut = _filterStatut == 'tous' ||
-            r.statutPaiement == _filterStatut;
+        final matchSearch = r.nomComplet.toLowerCase().contains(q) ||
+            (r.appartementNumero?.toLowerCase().contains(q) ?? false);
+        final matchStatut =
+            _filterStatut == 'tous' || r.statutPaiement == _filterStatut;
         return matchSearch && matchStatut;
       }).toList();
     });
@@ -71,307 +98,269 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
     _applyFilter();
   }
 
+  int get _total => _residents.length;
+  int get _complets =>
+      _residents.where((r) => r.statutPaiement == 'complet').length;
+  int get _impayes =>
+      _residents.where((r) => r.statutPaiement == 'impaye').length;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: _C.cream,
       body: SafeArea(
         child: Column(
           children: [
             _buildHeader(),
             Expanded(
               child: _loading
-                  ? const Center(
-                  child: CircularProgressIndicator(
-                      color: _purple))
-                  : ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _buildSearchBar(),
-                  const SizedBox(height: 12),
-                  _buildFilterTabs(),
-                  const SizedBox(height: 16),
-                  if (_filtered.isEmpty)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.only(top: 60),
-                        child: Text('Aucun résident',
-                            style: TextStyle(
-                                color: Colors.grey)),
-                      ),
-                    )
-                  else
-                    ..._filtered.map(_buildResidentCard),
-                ],
-              ),
-            ),
-            _buildBottomNav(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ══════════════════════════════════════
-  // HEADER
-  // ══════════════════════════════════════
-  Widget _buildHeader() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(12, 8, 16, 12),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: _purple,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.apartment,
-                color: Colors.white, size: 20),
-          ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('ResiManager',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15)),
-                Text('Espace Syndic',
-                    style: TextStyle(
-                        color: Colors.grey, fontSize: 11)),
-              ],
-            ),
-          ),
-          ElevatedButton.icon(
-            onPressed: _showAddResidentDialog,
-            icon: const Icon(Icons.add, size: 16),
-            label: const Text('Ajouter'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _purple,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 8),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ══════════════════════════════════════
-  // SEARCH BAR
-  // ══════════════════════════════════════
-  Widget _buildSearchBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: TextField(
-        controller: _searchCtrl,
-        decoration: const InputDecoration(
-          hintText: 'Rechercher...',
-          prefixIcon: Icon(Icons.search, color: Colors.grey),
-          border: InputBorder.none,
-          contentPadding:
-          EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        ),
-      ),
-    );
-  }
-
-  // ══════════════════════════════════════
-  // FILTER TABS
-  // ══════════════════════════════════════
-  Widget _buildFilterTabs() {
-    final filters = [
-      ('tous', 'Tous'),
-      ('complet', 'Complets'),
-      ('partiel', 'Partiels'),
-      ('impaye', 'Impayés'),
-    ];
-    return Row(
-      children: filters.map((f) {
-        final isSelected = _filterStatut == f.$1;
-        return GestureDetector(
-          onTap: () => _setFilter(f.$1),
-          child: Container(
-            margin: const EdgeInsets.only(right: 8),
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: isSelected ? _purple : Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(f.$2,
-                style: TextStyle(
-                  color:
-                  isSelected ? Colors.white : Colors.black87,
-                  fontWeight: isSelected
-                      ? FontWeight.bold
-                      : FontWeight.normal,
-                  fontSize: 13,
-                )),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  // ══════════════════════════════════════
-  // RESIDENT CARD
-  // ══════════════════════════════════════
-  Widget _buildResidentCard(ResidentModel r) {
-    final pct = r.pourcentagePaiement;
-    final Color barColor = pct >= 1.0
-        ? Colors.green
-        : pct > 0
-        ? Colors.orange
-        : Colors.red;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Nom + badges + actions
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  ? _buildLoader()
+                  : FadeTransition(
+                opacity: _fadeAnim,
+                child: RefreshIndicator(
+                  color: _C.mint,
+                  onRefresh: _load,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
                     children: [
-                      Text(r.nomComplet,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15)),
-                      Text(r.adresseAppart,
-                          style: const TextStyle(
-                              color: Colors.grey, fontSize: 12)),
+                      _buildStatsBanner(),
+                      const SizedBox(height: 20),
+                      _buildSearchBar(),
+                      const SizedBox(height: 12),
+                      _buildFilterTabs(),
+                      const SizedBox(height: 20),
+                      _buildSectionLabel(
+                          '${_filtered.length} resident${_filtered.length > 1 ? 's' : ''}'),
+                      const SizedBox(height: 12),
+                      if (_filtered.isEmpty)
+                        _buildEmpty()
+                      else
+                        ..._filtered.map(_buildResidentCard),
                     ],
                   ),
                 ),
-                _badgeType(r.type),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () => _showEditDialog(r),
-                  child: const Icon(Icons.edit_outlined,
-                      color: Colors.grey, size: 18),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () => _showDeleteConfirm(r),
-                  child: const Icon(Icons.delete_outline,
-                      color: Colors.red, size: 18),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // ── Paiement label + %
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Paiement ${r.anneePaiement}',
-                    style: const TextStyle(
-                        color: Colors.grey, fontSize: 12)),
-                Row(children: [
-                  Icon(
-                    pct >= 1.0
-                        ? Icons.check_circle
-                        : Icons.warning_amber_rounded,
-                    color: barColor,
-                    size: 14,
-                  ),
-                  const SizedBox(width: 4),
-                  Text('${(pct * 100).toInt()}%',
-                      style: TextStyle(
-                          color: barColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13)),
-                ]),
-              ],
-            ),
-            const SizedBox(height: 6),
-
-            // ── Barre progression
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: pct.clamp(0.0, 1.0),
-                backgroundColor: Colors.grey.shade200,
-                valueColor: AlwaysStoppedAnimation(barColor),
-                minHeight: 6,
               ),
             ),
-            const SizedBox(height: 6),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // ── Montants
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Payé: ${r.montantPaye.toInt()} DH',
-                    style: const TextStyle(
-                        color: Colors.grey, fontSize: 11)),
-                Text('Total: ${r.montantTotal.toInt()} DH',
-                    style: const TextStyle(
-                        color: Colors.grey, fontSize: 11)),
+  Widget _buildLoader() => const Center(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircularProgressIndicator(color: _C.mint, strokeWidth: 3),
+        SizedBox(height: 14),
+        Text('Chargement...',
+            style: TextStyle(color: _C.gray, fontSize: 13)),
+      ],
+    ),
+  );
+
+  Widget _buildEmpty() => Padding(
+    padding: const EdgeInsets.only(top: 60),
+    child: Column(
+      children: [
+        Container(
+          width: 64, height: 64,
+          decoration: BoxDecoration(
+              color: _C.mintLight,
+              borderRadius: BorderRadius.circular(20)),
+          child: const Icon(Icons.people_rounded, color: _C.mint, size: 32),
+        ),
+        const SizedBox(height: 14),
+        const Text('Aucun resident',
+            style: TextStyle(
+                color: _C.dark, fontSize: 15, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        const Text('Modifiez les filtres ou ajoutez un resident.',
+            style: TextStyle(color: _C.gray, fontSize: 12)),
+      ],
+    ),
+  );
+
+  Widget _buildHeader() {
+    return Container(
+      color: _C.white,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                  color: _C.cream, borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.arrow_back_ios_new_rounded,
+                  size: 14, color: _C.dark),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text('Residents',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 17,
+                        color: _C.dark)),
+                Text('Gestion des residents',
+                    style: TextStyle(color: _C.gray, fontSize: 11)),
               ],
             ),
-            const SizedBox(height: 10),
+          ),
+          GestureDetector(
+            onTap: _showAddResidentDialog,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+              decoration: BoxDecoration(
+                  color: _C.mint, borderRadius: BorderRadius.circular(22)),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.add_rounded, size: 16, color: _C.white),
+                  SizedBox(width: 6),
+                  Text('Ajouter',
+                      style: TextStyle(
+                          color: _C.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            // ── Boutons Payer + Historique
-            Row(
+  // ══════════════════════════════════════
+  // STATS BANNER — light version (pas noir)
+  // ══════════════════════════════════════
+  Widget _buildStatsBanner() {
+    final totalPercent = _total == 0 ? 0.0 : _complets / _total;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _C.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _C.divider),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 3)),
+        ],
+      ),
+      child: Column(
+        children: [
+          // ── Top row: icon + title + progress ──────────────────────────────
+          Row(
+            children: [
+              Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                    color: _C.mintLight,
+                    borderRadius: BorderRadius.circular(14)),
+                child: const Icon(Icons.people_rounded,
+                    color: _C.mint, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('$_total residents',
+                        style: const TextStyle(
+                            color: _C.dark,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18)),
+                    const Text('dans cette tranche',
+                        style: TextStyle(color: _C.gray, fontSize: 11)),
+                  ],
+                ),
+              ),
+              // Percentage badge
+              Container(
+                padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _C.mintLight,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${(_complets == 0 && _total == 0) ? 0 : (_complets * 100 ~/ (_total == 0 ? 1 : _total))}% complets',
+                  style: const TextStyle(
+                      color: _C.mint,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // ── Progress bar ───────────────────────────────────────────────────
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: totalPercent.clamp(0.0, 1.0),
+              backgroundColor: _C.divider,
+              valueColor: const AlwaysStoppedAnimation(_C.mint),
+              minHeight: 8,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ── 3 stat chips ───────────────────────────────────────────────────
+          Row(
+            children: [
+              _bannerChip('$_complets', 'Complets',
+                  _C.green, _C.greenLight, Icons.check_circle_rounded),
+              const SizedBox(width: 10),
+              _bannerChip('$_impayes', 'Impayes',
+                  _C.coral, _C.coralLight, Icons.cancel_rounded),
+              const SizedBox(width: 10),
+              _bannerChip('${_total - _complets - _impayes}', 'Partiels',
+                  _C.amber, _C.amberLight, Icons.timelapse_rounded),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bannerChip(String value, String label, Color color, Color bg,
+      IconData icon) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _showPaiementDialog(r),
-                    icon: const Icon(Icons.attach_money, size: 16),
-                    label: const Text('Payer'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _purple,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () => _showHistoriqueDialog(r),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      border:
-                      Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                        Icons.remove_red_eye_outlined,
-                        color: Colors.grey,
-                        size: 18),
-                  ),
-                ),
+                Text(value,
+                    style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16)),
+                Text(label,
+                    style: TextStyle(
+                        color: color.withValues(alpha: 0.7),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600)),
               ],
             ),
           ],
@@ -380,78 +369,479 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
     );
   }
 
-  // ══════════════════════════════════════
-  // BADGE TYPE
-  // ══════════════════════════════════════
-  Widget _badgeType(String type) {
-    final isProprietaire = type == 'proprietaire';
+  Widget _buildSearchBar() {
     return Container(
-      padding:
-      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       decoration: BoxDecoration(
-        color: isProprietaire
-            ? Colors.blue.shade50
-            : Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        isProprietaire ? 'Propriétaire' : 'Locataire',
-        style: TextStyle(
-          color: isProprietaire ? Colors.blue : Colors.orange,
-          fontSize: 11,
-          fontWeight: FontWeight.w500,
+          color: _C.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _C.divider)),
+      child: TextField(
+        controller: _searchCtrl,
+        style: const TextStyle(fontSize: 14, color: _C.dark),
+        decoration: InputDecoration(
+          hintText: 'Rechercher un resident...',
+          hintStyle: const TextStyle(color: _C.gray, fontSize: 13),
+          prefixIcon:
+          const Icon(Icons.search_rounded, color: _C.gray, size: 20),
+          suffixIcon: _searchCtrl.text.isNotEmpty
+              ? GestureDetector(
+            onTap: () {
+              _searchCtrl.clear();
+              _applyFilter();
+            },
+            child: const Icon(Icons.close_rounded,
+                color: _C.gray, size: 18),
+          )
+              : null,
+          border: InputBorder.none,
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
       ),
     );
   }
 
-  // ══════════════════════════════════════
-  // BOTTOM NAV
-  // ══════════════════════════════════════
-  Widget _buildBottomNav() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          )
-        ],
-      ),
-      child: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: _purple,
-        unselectedItemColor: Colors.grey,
-        backgroundColor: Colors.white,
-        elevation: 0,
-        currentIndex: 1,
-        items: const [
-          BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard_outlined),
-              label: 'Accueil'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.people_outline),
-              label: 'Résidents'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.people_alt_outlined),
-              label: 'Personnel'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.wallet_outlined),
-              label: 'Finances'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.local_parking),
-              label: 'Parkings'),
-        ],
-        onTap: (i) {},
+  Widget _buildFilterTabs() {
+    final filters = [
+      ('tous', 'Tous', _total),
+      ('complet', 'Complets', _complets),
+      ('partiel', 'Partiels', _total - _complets - _impayes),
+      ('impaye', 'Impayes', _impayes),
+    ];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: filters.map((f) {
+          final isSelected = _filterStatut == f.$1;
+          return GestureDetector(
+            onTap: () => _setFilter(f.$1),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.only(right: 8),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected ? _C.mint : _C.white,
+                borderRadius: BorderRadius.circular(22),
+                border:
+                Border.all(color: isSelected ? _C.mint : _C.divider),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(f.$2,
+                      style: TextStyle(
+                          color: isSelected ? _C.white : _C.gray,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12)),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? Colors.white.withValues(alpha: 0.25)
+                          : _C.cream,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text('${f.$3}',
+                        style: TextStyle(
+                            color: isSelected ? _C.white : _C.gray,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
 
-  // ══════════════════════════════════════════
-  // DIALOG : Ajouter résident
-  // ══════════════════════════════════════════
+  Widget _buildSectionLabel(String text) => Row(
+    children: [
+      Container(
+          width: 4,
+          height: 16,
+          decoration: BoxDecoration(
+              color: _C.mint, borderRadius: BorderRadius.circular(2))),
+      const SizedBox(width: 10),
+      Text(text,
+          style: const TextStyle(
+              color: _C.dark, fontWeight: FontWeight.w700, fontSize: 14)),
+    ],
+  );
+
+  Widget _buildResidentCard(ResidentModel r) {
+    final pct = r.pourcentagePaiement;
+    final Color barColor =
+    pct >= 1.0 ? _C.green : pct > 0 ? _C.orange : _C.coral;
+    final Color barBg =
+    pct >= 1.0 ? _C.greenLight : pct > 0 ? _C.orangeLight : _C.coralLight;
+    final String pctLabel = '${(pct * 100).toInt()}%';
+    final bool isProp = r.type == 'proprietaire';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _C.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _C.divider),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 3)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  color: isProp ? _C.blueLight : _C.amberLight,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Center(
+                  child: Text(
+                    r.nomComplet.isNotEmpty
+                        ? r.nomComplet[0].toUpperCase()
+                        : '?',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        color: isProp ? _C.blue : _C.amber),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(r.nomComplet,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                            color: _C.dark)),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_rounded,
+                            size: 11, color: _C.gray),
+                        const SizedBox(width: 3),
+                        Expanded(
+                          child: Text(r.adresseAppart,
+                              style:
+                              const TextStyle(color: _C.gray, fontSize: 11),
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _typeBadge(r.type),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _C.cream,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Paiement ${r.anneePaiement}',
+                        style: const TextStyle(
+                            color: _C.gray,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                          color: barBg,
+                          borderRadius: BorderRadius.circular(20)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            pct >= 1.0
+                                ? Icons.check_circle_rounded
+                                : Icons.radio_button_unchecked_rounded,
+                            color: barColor,
+                            size: 11,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(pctLabel,
+                              style: TextStyle(
+                                  color: barColor,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: pct.clamp(0.0, 1.0),
+                    backgroundColor: _C.divider,
+                    valueColor: AlwaysStoppedAnimation(barColor),
+                    minHeight: 7,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _amountChip('Paye', '${r.montantPaye.toInt()} DH',
+                        _C.greenLight, _C.green),
+                    _amountChip('Reste', '${r.resteAPayer.toInt()} DH',
+                        _C.coralLight, _C.coral),
+                    _amountChip('Total', '${r.montantTotal.toInt()} DH',
+                        _C.cream, _C.gray),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _showPaiementDialog(r),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    decoration: BoxDecoration(
+                        color: _C.mint,
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.payments_rounded,
+                            size: 15, color: _C.white),
+                        SizedBox(width: 6),
+                        Text('Payer',
+                            style: TextStyle(
+                                color: _C.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => _showHistoriqueDialog(r),
+                child: Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                      color: _C.blueLight,
+                      borderRadius: BorderRadius.circular(12)),
+                  child:
+                  const Icon(Icons.history_rounded, color: _C.blue, size: 18),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => _showEditDialog(r),
+                child: Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                      color: _C.cream,
+                      borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.edit_rounded,
+                      color: _C.gray, size: 17),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => _showDeleteConfirm(r),
+                child: Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                      color: _C.coralLight,
+                      borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.delete_rounded,
+                      color: _C.coral, size: 17),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _amountChip(String label, String value, Color bg, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: _C.gray, fontSize: 10)),
+        const SizedBox(height: 2),
+        Text(value,
+            style: TextStyle(
+                color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+      ],
+    );
+  }
+
+  Widget _typeBadge(String type) {
+    final isProp = type == 'proprietaire';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: isProp ? _C.blueLight : _C.amberLight,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        isProp ? 'Proprietaire' : 'Locataire',
+        style: TextStyle(
+            color: isProp ? _C.blue : _C.amber,
+            fontSize: 10,
+            fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+
+  // =============================================
+  // DIALOGS - shared helpers
+  // =============================================
+
+  Widget _dialogHeader(BuildContext ctx, String title,
+      {IconData? icon, Color? iconColor}) {
+    return Row(
+      children: [
+        if (icon != null) ...[
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+                color: (iconColor ?? _C.mint).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: iconColor ?? _C.mint, size: 18),
+          ),
+          const SizedBox(width: 12),
+        ],
+        Expanded(
+          child: Text(title,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w800, fontSize: 17, color: _C.dark)),
+        ),
+        GestureDetector(
+          onTap: () => Navigator.pop(ctx),
+          child: Container(
+            width: 30, height: 30,
+            decoration: BoxDecoration(
+                color: _C.cream, borderRadius: BorderRadius.circular(8)),
+            child:
+            const Icon(Icons.close_rounded, size: 15, color: _C.gray),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _errorBanner(String msg) => Container(
+    margin: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+        color: _C.coralLight, borderRadius: BorderRadius.circular(10)),
+    child: Row(children: [
+      const Icon(Icons.error_outline_rounded, color: _C.coral, size: 16),
+      const SizedBox(width: 8),
+      Expanded(
+          child: Text(msg,
+              style: const TextStyle(color: _C.coral, fontSize: 12))),
+    ]),
+  );
+
+  Widget _dialogActions({
+    required BuildContext ctx,
+    required bool saving,
+    required String confirmLabel,
+    required Color confirmColor,
+    required VoidCallback onConfirm,
+  }) {
+    return Row(children: [
+      Expanded(
+        child: GestureDetector(
+          onTap: saving ? null : () => Navigator.pop(ctx),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+                color: _C.cream, borderRadius: BorderRadius.circular(12)),
+            child: const Text('Annuler',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: _C.dark, fontWeight: FontWeight.w700, fontSize: 14)),
+          ),
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: GestureDetector(
+          onTap: saving ? null : onConfirm,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+                color: saving
+                    ? confirmColor.withValues(alpha: 0.5)
+                    : confirmColor,
+                borderRadius: BorderRadius.circular(12)),
+            child: saving
+                ? const Center(
+                child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        color: _C.white, strokeWidth: 2)))
+                : Text(confirmLabel,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: _C.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14)),
+          ),
+        ),
+      ),
+    ]);
+  }
+
+  Widget _infoRow(String label, String value, Color color,
+      {bool bold = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(color: _C.gray, fontSize: 13)),
+        Text(value,
+            style: TextStyle(
+                color: color,
+                fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+                fontSize: 14)),
+      ],
+    );
+  }
+
+  // =============================================
+  // DIALOG: Add resident
+  // =============================================
   void _showAddResidentDialog() {
     final prenomCtrl = TextEditingController();
     final nomCtrl = TextEditingController();
@@ -472,18 +862,15 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
         builder: (ctx, setDialog) {
           if (loadingApparts) {
             loadingApparts = false;
-            _service
-                .getAppartementsLibres(widget.trancheId)
-                .then((list) {
+            _service.getAppartementsLibres(widget.trancheId).then((list) {
               if (ctx.mounted) {
                 setDialog(() => appartementsLibres = list);
               }
             });
           }
-
           return Dialog(
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
+                borderRadius: BorderRadius.circular(20)),
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: SingleChildScrollView(
@@ -491,370 +878,120 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment:
-                      MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Ajouter Résident',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18)),
-                        IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () => Navigator.pop(ctx)),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    if (errorMsg != null) ...[
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(children: [
-                          const Icon(Icons.error_outline,
-                              color: Colors.red, size: 16),
-                          const SizedBox(width: 8),
-                          Expanded(
-                              child: Text(errorMsg!,
-                                  style: const TextStyle(
-                                      color: Colors.red,
-                                      fontSize: 12))),
-                        ]),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-
-                    _label('Prénom *'),
+                    _dialogHeader(ctx, 'Ajouter Resident',
+                        icon: Icons.person_add_rounded, iconColor: _C.mint),
+                    const SizedBox(height: 20),
+                    if (errorMsg != null) _errorBanner(errorMsg!),
+                    _label('Prenom *'),
                     _field(prenomCtrl, 'ex: Ahmed'),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     _label('Nom *'),
                     _field(nomCtrl, 'ex: Bennani'),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     _label('Email *'),
                     _field(emailCtrl, 'ex: ahmed@example.com',
                         inputType: TextInputType.emailAddress),
-                    const SizedBox(height: 12),
-                    _label('Téléphone'),
+                    const SizedBox(height: 14),
+                    _label('Telephone'),
                     _field(telCtrl, 'ex: 0612345678',
                         inputType: TextInputType.phone),
-                    const SizedBox(height: 12),
-
+                    const SizedBox(height: 14),
                     _label('Appartement *'),
                     appartementsLibres.isEmpty
                         ? Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        border: Border.all(
-                            color: Colors.grey.shade300),
-                        borderRadius:
-                        BorderRadius.circular(8),
+                        color: _C.cream,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Text(
-                        'Aucun appartement libre',
-                        style:
-                        TextStyle(color: Colors.grey),
-                      ),
+                      child: const Text('Aucun appartement libre',
+                          style: TextStyle(color: _C.gray)),
                     )
                         : Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12),
+                      padding:
+                      const EdgeInsets.symmetric(horizontal: 14),
                       decoration: BoxDecoration(
-                        border: Border.all(
-                            color: Colors.grey.shade300),
-                        borderRadius:
-                        BorderRadius.circular(8),
+                        color: _C.cream,
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<int>(
                           isExpanded: true,
                           hint: const Text(
-                              'Sélectionner un appartement'),
+                              'Selectionner un appartement',
+                              style: TextStyle(
+                                  color: _C.gray, fontSize: 13)),
                           value: selectedAppartId,
-                          items:
-                          appartementsLibres.map((a) {
+                          items: appartementsLibres.map((a) {
                             return DropdownMenuItem<int>(
                               value: a['id'] as int,
-                              child: Text(
-                                  a['label'].toString()),
+                              child: Text(a['label'].toString()),
                             );
                           }).toList(),
-                          onChanged: (val) => setDialog(
-                                  () => selectedAppartId = val),
+                          onChanged: (val) =>
+                              setDialog(() => selectedAppartId = val),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-
+                    const SizedBox(height: 14),
                     _label('Montant annuel (DH) *'),
                     _field(montantCtrl, '3000',
                         inputType: TextInputType.number),
-                    const SizedBox(height: 12),
-
+                    const SizedBox(height: 14),
                     _label('Type *'),
                     Row(children: [
                       Expanded(
                         child: GestureDetector(
-                          onTap: () => setDialog(
-                                  () => type = 'proprietaire'),
-                          child: _typeBtn(
-                              'Propriétaire',
-                              type == 'proprietaire'),
+                          onTap: () =>
+                              setDialog(() => type = 'proprietaire'),
+                          child: _typeToggle(
+                              'Proprietaire', type == 'proprietaire', _C.blue),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: GestureDetector(
-                          onTap: () => setDialog(
-                                  () => type = 'locataire'),
-                          child: _typeBtn(
-                              'Locataire', type == 'locataire'),
+                          onTap: () => setDialog(() => type = 'locataire'),
+                          child: _typeToggle(
+                              'Locataire', type == 'locataire', _C.amber),
                         ),
                       ),
                     ]),
                     const SizedBox(height: 24),
-
-                    Row(children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: saving
-                              ? null
-                              : () => Navigator.pop(ctx),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 14),
-                            shape: RoundedRectangleBorder(
-                                borderRadius:
-                                BorderRadius.circular(8)),
-                          ),
-                          child: const Text('Annuler'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: saving
-                              ? null
-                              : () async {
-                            if (prenomCtrl.text
-                                .trim()
-                                .isEmpty ||
-                                nomCtrl.text
-                                    .trim()
-                                    .isEmpty ||
-                                emailCtrl.text
-                                    .trim()
-                                    .isEmpty) {
-                              setDialog(() => errorMsg =
-                              'Prénom, Nom et Email obligatoires');
-                              return;
-                            }
-                            if (selectedAppartId == null) {
-                              setDialog(() => errorMsg =
-                              'Sélectionnez un appartement');
-                              return;
-                            }
-                            setDialog(() {
-                              saving = true;
-                              errorMsg = null;
-                            });
-                            final montant =
-                                double.tryParse(
-                                    montantCtrl.text) ??
-                                    3000.0;
-                            final err =
-                            await _service.addResident(
-                              nom: nomCtrl.text,
-                              prenom: prenomCtrl.text,
-                              email: emailCtrl.text,
-                              telephone:
-                              telCtrl.text.isEmpty
-                                  ? null
-                                  : telCtrl.text,
-                              type: type,
-                              trancheId: widget.trancheId,
-                              appartementId:
-                              selectedAppartId!,
-                              montantTotal: montant,
-                            );
-                            if (!ctx.mounted) return;
-                            if (err != null) {
-                              setDialog(() {
-                                errorMsg = err;
-                                saving = false;
-                              });
-                            } else {
-                              Navigator.pop(ctx);
-                              _load();
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _purple,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 14),
-                            shape: RoundedRectangleBorder(
-                                borderRadius:
-                                BorderRadius.circular(8)),
-                          ),
-                          child: saving
-                              ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child:
-                              CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2))
-                              : const Text('Ajouter'),
-                        ),
-                      ),
-                    ]),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  // ══════════════════════════════════════════
-  // DIALOG : Paiement
-  // ══════════════════════════════════════════
-  void _showPaiementDialog(ResidentModel r) {
-    final montantCtrl = TextEditingController();
-    String? errorMsg;
-    bool saving = false;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialog) => Dialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Enregistrer Paiement',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18)),
-                const SizedBox(height: 16),
-
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Résident',
-                          style: TextStyle(
-                              color: Colors.grey, fontSize: 12)),
-                      Text(r.nomComplet,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                _rowInfo('Total',
-                    '${r.montantTotal.toInt()} DH', Colors.black87),
-                const SizedBox(height: 6),
-                _rowInfo(
-                    'Payé', '${r.montantPaye.toInt()} DH', Colors.green),
-                const SizedBox(height: 6),
-                _rowInfo('Reste', '${r.resteAPayer.toInt()} DH',
-                    Colors.red,
-                    bold: true),
-                const SizedBox(height: 16),
-
-                if (errorMsg != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(errorMsg!,
-                        style: const TextStyle(
-                            color: Colors.red, fontSize: 12)),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-
-                _label('Montant à payer (DH)'),
-                TextField(
-                  controller: montantCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    hintText: 'ex: 1500',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                          color: Colors.grey.shade300),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 12),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                Row(children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius:
-                            BorderRadius.circular(8)),
-                      ),
-                      child: const Text('Annuler'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: saving
-                          ? null
-                          : () async {
-                        final montant = double.tryParse(
-                            montantCtrl.text.trim()) ??
-                            0;
-                        if (montant <= 0) {
+                    _dialogActions(
+                      ctx: ctx,
+                      saving: saving,
+                      confirmLabel: 'Ajouter',
+                      confirmColor: _C.mint,
+                      onConfirm: () async {
+                        if (prenomCtrl.text.trim().isEmpty ||
+                            nomCtrl.text.trim().isEmpty ||
+                            emailCtrl.text.trim().isEmpty) {
                           setDialog(() => errorMsg =
-                          'Entrez un montant valide');
+                          'Prenom, Nom et Email obligatoires');
                           return;
                         }
-                        if (r.paiementId == null) {
-                          setDialog(() => errorMsg =
-                          'Aucun paiement trouvé');
+                        if (selectedAppartId == null) {
+                          setDialog(
+                                  () => errorMsg = 'Selectionnez un appartement');
                           return;
                         }
                         setDialog(() {
                           saving = true;
                           errorMsg = null;
                         });
-                        final err = await _service
-                            .enregistrerPaiement(
-                          paiementId: r.paiementId!,
-                          residentUserId: r.userId,
-                          montantAjoute: montant,
-                          montantDejaPane: r.montantPaye,
-                          montantTotal: r.montantTotal,
+                        final montant =
+                            double.tryParse(montantCtrl.text) ?? 3000.0;
+                        final err = await _service.addResident(
+                          nom: nomCtrl.text,
+                          prenom: prenomCtrl.text,
+                          email: emailCtrl.text,
+                          telephone:
+                          telCtrl.text.isEmpty ? null : telCtrl.text,
+                          type: type,
+                          trancheId: widget.trancheId,
+                          appartementId: selectedAppartId!,
+                          montantTotal: montant,
                         );
                         if (!ctx.mounted) return;
                         if (err != null) {
@@ -867,26 +1004,134 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
                           _load();
                         }
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _purple,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius:
-                            BorderRadius.circular(8)),
-                      ),
-                      child: saving
-                          ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2))
-                          : const Text('Enregistrer'),
                     ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // =============================================
+  // DIALOG: Payment
+  // =============================================
+  void _showPaiementDialog(ResidentModel r) {
+    final montantCtrl = TextEditingController();
+    String? errorMsg;
+    bool saving = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => Dialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _dialogHeader(ctx, 'Enregistrer Paiement',
+                    icon: Icons.payments_rounded, iconColor: _C.mint),
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                      color: _C.cream,
+                      borderRadius: BorderRadius.circular(12)),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 38, height: 38,
+                        decoration: BoxDecoration(
+                            color: _C.mintLight,
+                            borderRadius: BorderRadius.circular(12)),
+                        child: Center(
+                          child: Text(
+                            r.nomComplet.isNotEmpty
+                                ? r.nomComplet[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                                color: _C.mint),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(r.nomComplet,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: _C.dark)),
+                          Text(r.adresseAppart,
+                              style: const TextStyle(
+                                  color: _C.gray, fontSize: 11)),
+                        ],
+                      ),
+                    ],
                   ),
-                ]),
+                ),
+                const SizedBox(height: 14),
+                _infoRow('Total', '${r.montantTotal.toInt()} DH', _C.dark),
+                const SizedBox(height: 8),
+                _infoRow('Paye', '${r.montantPaye.toInt()} DH', _C.green),
+                const SizedBox(height: 8),
+                _infoRow('Reste', '${r.resteAPayer.toInt()} DH', _C.coral,
+                    bold: true),
+                const SizedBox(height: 16),
+                if (errorMsg != null) _errorBanner(errorMsg!),
+                _label('Montant a payer (DH)'),
+                _field(montantCtrl, 'ex: 1500',
+                    inputType: TextInputType.number),
+                const SizedBox(height: 22),
+                _dialogActions(
+                  ctx: ctx,
+                  saving: saving,
+                  confirmLabel: 'Enregistrer',
+                  confirmColor: _C.mint,
+                  onConfirm: () async {
+                    final montant =
+                        double.tryParse(montantCtrl.text.trim()) ?? 0;
+                    if (montant <= 0) {
+                      setDialog(() => errorMsg = 'Entrez un montant valide');
+                      return;
+                    }
+                    if (r.paiementId == null) {
+                      setDialog(() => errorMsg = 'Aucun paiement trouve');
+                      return;
+                    }
+                    setDialog(() {
+                      saving = true;
+                      errorMsg = null;
+                    });
+                    final err = await _service.enregistrerPaiement(
+                      paiementId: r.paiementId!,
+                      residentUserId: r.userId,
+                      montantAjoute: montant,
+                      montantDejaPane: r.montantPaye,
+                      montantTotal: r.montantTotal,
+                    );
+                    if (!ctx.mounted) return;
+                    if (err != null) {
+                      setDialog(() {
+                        errorMsg = err;
+                        saving = false;
+                      });
+                    } else {
+                      Navigator.pop(ctx);
+                      _load();
+                    }
+                  },
+                ),
               ],
             ),
           ),
@@ -895,9 +1140,9 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
     );
   }
 
-  // ══════════════════════════════════════════
-  // DIALOG : Historique
-  // ══════════════════════════════════════════
+  // =============================================
+  // DIALOG: History
+  // =============================================
   void _showHistoriqueDialog(ResidentModel r) {
     List<Map<String, dynamic>> historique = [];
     bool loadingHist = true;
@@ -909,206 +1154,162 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
           if (loadingHist) {
             loadingHist = false;
             _service.getHistoriquePaiements(r.userId).then((data) {
-              if (ctx.mounted) {
-                setDialog(() => historique = data);
-              }
+              if (ctx.mounted) setDialog(() => historique = data);
             });
           }
 
           final pct = r.pourcentagePaiement;
-          final Color barColor = pct >= 1.0
-              ? Colors.green
-              : pct > 0
-              ? Colors.orange
-              : Colors.red;
+          final Color barColor =
+          pct >= 1.0 ? _C.green : pct > 0 ? _C.orange : _C.coral;
 
           return Dialog(
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
+                borderRadius: BorderRadius.circular(20)),
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Historique',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18)),
-                  const SizedBox(height: 12),
-
-                  // Info résident
+                  _dialogHeader(ctx, 'Historique',
+                      icon: Icons.history_rounded, iconColor: _C.blue),
+                  const SizedBox(height: 16),
                   Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                        color: _C.cream,
+                        borderRadius: BorderRadius.circular(12)),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Résident',
-                            style: TextStyle(
-                                color: Colors.grey, fontSize: 12)),
-                        Text(r.nomComplet,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15)),
-                        Text(r.adresseAppart,
-                            style: const TextStyle(
-                                color: Colors.grey, fontSize: 12)),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(r.nomComplet,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14,
+                                    color: _C.dark)),
+                            Text('${(pct * 100).toInt()}% paye',
+                                style: TextStyle(
+                                    color: barColor,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: LinearProgressIndicator(
+                            value: pct.clamp(0.0, 1.0),
+                            backgroundColor: _C.divider,
+                            valueColor: AlwaysStoppedAnimation(barColor),
+                            minHeight: 6,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _infoRow(
+                                'Paye', '${r.montantPaye.toInt()} DH', _C.green),
+                            _infoRow('Reste',
+                                '${r.resteAPayer.toInt()} DH', _C.coral),
+                          ],
+                        ),
                       ],
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  Container(height: 1, color: _C.divider),
                   const SizedBox(height: 12),
-
-                  // Résumé
-                  Row(
-                    mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
-                    children: [
-                      _rowInfo('Total',
-                          '${r.montantTotal.toInt()} DH',
-                          Colors.black87),
-                      _rowInfo('Payé',
-                          '${r.montantPaye.toInt()} DH',
-                          Colors.green),
-                      _rowInfo('Reste',
-                          '${r.resteAPayer.toInt()} DH',
-                          Colors.red),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Barre
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: pct.clamp(0.0, 1.0),
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor:
-                      AlwaysStoppedAnimation(barColor),
-                      minHeight: 6,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text('${(pct * 100).toInt()}% payé',
-                      style: TextStyle(
-                          color: barColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500)),
-
-                  const Divider(height: 24),
-
-                  // Liste
                   historique.isEmpty
                       ? Center(
                     child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(20),
                       child: Column(children: [
-                        Icon(Icons.history,
-                            color: Colors.grey.shade300,
-                            size: 40),
+                        Icon(Icons.history_rounded,
+                            color: _C.divider, size: 40),
                         const SizedBox(height: 8),
                         const Text('Aucun historique',
-                            style: TextStyle(
-                                color: Colors.grey)),
+                            style: TextStyle(color: _C.gray)),
                       ]),
                     ),
                   )
                       : ConstrainedBox(
-                    constraints: const BoxConstraints(
-                        maxHeight: 200),
+                    constraints: const BoxConstraints(maxHeight: 220),
                     child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: historique.length,
-                      separatorBuilder: (_, __) => Divider(
-                          height: 1,
-                          color: Colors.grey.shade100),
+                      separatorBuilder: (_, __) =>
+                          Container(height: 1, color: _C.divider),
                       itemBuilder: (_, i) {
                         final h = historique[i];
-                        final montant = double.parse(
-                            h['montant'].toString())
-                            .toInt();
+                        final montant =
+                        double.parse(h['montant'].toString()).toInt();
                         return Padding(
                           padding:
-                          const EdgeInsets.symmetric(
-                              vertical: 10),
+                          const EdgeInsets.symmetric(vertical: 10),
                           child: Row(
                             children: [
                               Container(
-                                width: 36,
-                                height: 36,
+                                width: 36, height: 36,
                                 decoration: BoxDecoration(
-                                  color:
-                                  Colors.green.shade50,
-                                  borderRadius:
-                                  BorderRadius.circular(
-                                      8),
-                                ),
+                                    color: _C.greenLight,
+                                    borderRadius:
+                                    BorderRadius.circular(10)),
                                 child: const Icon(
-                                    Icons
-                                        .arrow_downward_rounded,
-                                    color: Colors.green,
-                                    size: 18),
+                                    Icons.arrow_downward_rounded,
+                                    color: _C.green,
+                                    size: 16),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment:
-                                  CrossAxisAlignment
-                                      .start,
+                                  CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      h['description'] ??
-                                          'Paiement',
+                                      h['description'] ?? 'Paiement',
                                       style: const TextStyle(
-                                          fontWeight:
-                                          FontWeight.w500,
-                                          fontSize: 13),
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                          color: _C.dark),
                                     ),
                                     Text(
-                                      h['date']?.toString() ??
-                                          '',
+                                      h['date']?.toString() ?? '',
                                       style: const TextStyle(
-                                          color: Colors.grey,
-                                          fontSize: 11),
+                                          color: _C.gray, fontSize: 11),
                                     ),
                                   ],
                                 ),
                               ),
-                              Text(
-                                '+$montant DH',
-                                style: const TextStyle(
-                                  color: Colors.green,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
+                              Text('+$montant DH',
+                                  style: const TextStyle(
+                                      color: _C.green,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 14)),
                             ],
                           ),
                         );
                       },
                     ),
                   ),
-
                   const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      style: TextButton.styleFrom(
-                        backgroundColor: Colors.grey.shade100,
-                        shape: RoundedRectangleBorder(
-                            borderRadius:
-                            BorderRadius.circular(8)),
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 14),
-                      ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(ctx),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                          color: _C.cream,
+                          borderRadius: BorderRadius.circular(12)),
                       child: const Text('Fermer',
-                          style:
-                          TextStyle(color: Colors.black87)),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: _C.dark,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14)),
                     ),
                   ),
                 ],
@@ -1120,14 +1321,13 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
     );
   }
 
-  // ══════════════════════════════════════════
-  // DIALOG : Modifier
-  // ══════════════════════════════════════════
+  // =============================================
+  // DIALOG: Edit
+  // =============================================
   void _showEditDialog(ResidentModel r) {
     final nomCtrl = TextEditingController(text: r.nom);
     final prenomCtrl = TextEditingController(text: r.prenom);
-    final telCtrl =
-    TextEditingController(text: r.telephone ?? '');
+    final telCtrl = TextEditingController(text: r.telephone ?? '');
     String type = r.type;
     bool saving = false;
 
@@ -1136,112 +1336,65 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialog) => Dialog(
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
+              borderRadius: BorderRadius.circular(20)),
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Modifier Résident',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18)),
-                    IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(ctx)),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _label('Prénom'),
+                _dialogHeader(ctx, 'Modifier Resident',
+                    icon: Icons.edit_rounded, iconColor: _C.blue),
+                const SizedBox(height: 20),
+                _label('Prenom'),
                 _field(prenomCtrl, ''),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 _label('Nom'),
                 _field(nomCtrl, ''),
-                const SizedBox(height: 12),
-                _label('Téléphone'),
-                _field(telCtrl, '',
-                    inputType: TextInputType.phone),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
+                _label('Telephone'),
+                _field(telCtrl, '', inputType: TextInputType.phone),
+                const SizedBox(height: 14),
                 _label('Type'),
                 Row(children: [
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => setDialog(
-                              () => type = 'proprietaire'),
-                      child: _typeBtn(
-                          'Propriétaire', type == 'proprietaire'),
+                      onTap: () =>
+                          setDialog(() => type = 'proprietaire'),
+                      child: _typeToggle(
+                          'Proprietaire', type == 'proprietaire', _C.blue),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: GestureDetector(
-                      onTap: () =>
-                          setDialog(() => type = 'locataire'),
-                      child: _typeBtn(
-                          'Locataire', type == 'locataire'),
+                      onTap: () => setDialog(() => type = 'locataire'),
+                      child: _typeToggle(
+                          'Locataire', type == 'locataire', _C.amber),
                     ),
                   ),
                 ]),
                 const SizedBox(height: 24),
-                Row(children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius:
-                            BorderRadius.circular(8)),
-                      ),
-                      child: const Text('Annuler'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: saving
-                          ? null
-                          : () async {
-                        setDialog(() => saving = true);
-                        await _service.updateResident(
-                          userId: r.userId,
-                          nom: nomCtrl.text,
-                          prenom: prenomCtrl.text,
-                          telephone: telCtrl.text.isEmpty
-                              ? null
-                              : telCtrl.text,
-                          type: type,
-                        );
-                        if (!ctx.mounted) return;
-                        Navigator.pop(ctx);
-                        _load();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _purple,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius:
-                            BorderRadius.circular(8)),
-                      ),
-                      child: saving
-                          ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2))
-                          : const Text('Enregistrer'),
-                    ),
-                  ),
-                ]),
+                _dialogActions(
+                  ctx: ctx,
+                  saving: saving,
+                  confirmLabel: 'Enregistrer',
+                  confirmColor: _C.blue,
+                  onConfirm: () async {
+                    setDialog(() => saving = true);
+                    await _service.updateResident(
+                      userId: r.userId,
+                      nom: nomCtrl.text,
+                      prenom: prenomCtrl.text,
+                      telephone:
+                      telCtrl.text.isEmpty ? null : telCtrl.text,
+                      type: type,
+                    );
+                    if (!ctx.mounted) return;
+                    Navigator.pop(ctx);
+                    _load();
+                  },
+                ),
               ],
             ),
           ),
@@ -1250,49 +1403,99 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
     );
   }
 
-  // ══════════════════════════════════════════
-  // DIALOG : Supprimer
-  // ══════════════════════════════════════════
+  // =============================================
+  // DIALOG: Delete confirm
+  // =============================================
   void _showDeleteConfirm(ResidentModel r) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
-        title: const Text('Confirmer la suppression'),
-        content: Text('Supprimer ${r.nomComplet} ?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annuler'),
+            borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56, height: 56,
+                decoration: BoxDecoration(
+                    color: _C.coralLight,
+                    borderRadius: BorderRadius.circular(18)),
+                child: const Icon(Icons.person_remove_rounded,
+                    color: _C.coral, size: 28),
+              ),
+              const SizedBox(height: 16),
+              const Text('Confirmer la suppression',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17,
+                      color: _C.dark)),
+              const SizedBox(height: 8),
+              Text(
+                'Supprimer ${r.nomComplet} de la liste ?',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: _C.gray, fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              Row(children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(ctx),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                          color: _C.cream,
+                          borderRadius: BorderRadius.circular(12)),
+                      child: const Text('Annuler',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: _C.dark,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () async {
+                      await _service.deleteResident(
+                          r.userId, r.appartementId);
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      _load();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                          color: _C.coral,
+                          borderRadius: BorderRadius.circular(12)),
+                      child: const Text('Supprimer',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: _C.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14)),
+                    ),
+                  ),
+                ),
+              ]),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () async {
-              await _service.deleteResident(
-                  r.userId, r.appartementId);
-              if (!ctx.mounted) return;
-              Navigator.pop(ctx);
-              _load();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Supprimer'),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  // ══════════════════════════════════════════
-  // HELPERS UI
-  // ══════════════════════════════════════════
+  // =============================================
+  // HELPERS
+  // =============================================
   Widget _label(String text) => Padding(
     padding: const EdgeInsets.only(bottom: 6),
     child: Text(text,
         style: const TextStyle(
-            fontWeight: FontWeight.w500, fontSize: 13)),
+            fontWeight: FontWeight.w600, fontSize: 12, color: _C.gray)),
   );
 
   Widget _field(TextEditingController ctrl, String hint,
@@ -1300,57 +1503,39 @@ class _ResidentsScreenState extends State<ResidentsScreen> {
       TextField(
         controller: ctrl,
         keyboardType: inputType,
+        style: const TextStyle(fontSize: 14, color: _C.dark),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: Colors.grey),
+          hintStyle: const TextStyle(color: _C.gray, fontSize: 13),
+          filled: true,
+          fillColor: _C.cream,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide:
-            BorderSide(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide:
-            BorderSide(color: Colors.grey.shade300),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: _C.mint, width: 1.5),
           ),
-          contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12, vertical: 12),
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         ),
       );
 
-  Widget _typeBtn(String label, bool selected) => Container(
+  Widget _typeToggle(String label, bool selected, Color accent) => Container(
     padding: const EdgeInsets.symmetric(vertical: 12),
     decoration: BoxDecoration(
+      color: selected ? accent.withValues(alpha: 0.1) : _C.cream,
       border: Border.all(
-        color: selected ? _purple : Colors.grey.shade300,
-        width: selected ? 2 : 1,
-      ),
-      borderRadius: BorderRadius.circular(8),
+          color: selected ? accent : _C.divider,
+          width: selected ? 1.5 : 1),
+      borderRadius: BorderRadius.circular(10),
     ),
     child: Text(label,
         textAlign: TextAlign.center,
         style: TextStyle(
-          color: selected ? _purple : Colors.black87,
-          fontWeight: selected
-              ? FontWeight.bold
-              : FontWeight.normal,
-        )),
+            color: selected ? accent : _C.gray,
+            fontWeight: FontWeight.w700,
+            fontSize: 13)),
   );
-
-  Widget _rowInfo(String label, String value, Color color,
-      {bool bold = false}) =>
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: TextStyle(
-                  color: Colors.grey.shade600, fontSize: 13)),
-          Text(value,
-              style: TextStyle(
-                  color: color,
-                  fontWeight:
-                  bold ? FontWeight.bold : FontWeight.w500,
-                  fontSize: 14)),
-        ],
-      );
 }
