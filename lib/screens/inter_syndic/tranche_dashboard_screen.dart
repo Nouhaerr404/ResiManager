@@ -5,6 +5,7 @@ import '../../services/tranche_service.dart';
 import 'garages/garages_screen.dart';
 import 'residents/residents_screen.dart';
 import 'reunions/reunions_screen.dart';
+import 'finance/finance_dashboard_screen.dart';
 
 // -- Brand palette (unified with garage/resident screens)
 class _C {
@@ -221,90 +222,101 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
     final revenus  = _stats!['revenus']  ?? 0;
     final depenses = _stats!['depenses'] ?? 0;
 
-    return Column(
-      children: [
-        // Solde card — full width hero
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            color: _C.dark,
-            borderRadius: BorderRadius.circular(22),
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => FinanceDashboardScreen(
+            residenceId: widget.tranche.residenceId,
+            interSyndicId: widget.tranche.interSyndicId ?? 0,
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                    color: _C.mint,
-                    borderRadius: BorderRadius.circular(14)),
-                child: const Icon(Icons.account_balance_wallet_rounded,
-                    color: _C.white, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('SOLDE ACTUEL',
-                      style: TextStyle(
-                          color: Colors.white38,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2)),
-                  const SizedBox(height: 4),
-                  RichText(
-                    text: TextSpan(
-                      children: [
-                        TextSpan(
-                            text: '$solde ',
-                            style: const TextStyle(
-                                color: _C.white,
-                                fontSize: 30,
-                                fontWeight: FontWeight.w800,
-                                height: 1)),
-                        const TextSpan(
-                            text: 'DH',
-                            style: TextStyle(
-                                color: Colors.white38,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600)),
-                      ],
+        ),
+      ),
+      child: Column(
+        children: [
+          // Solde card — full width hero
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: _C.dark,
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                      color: _C.mint,
+                      borderRadius: BorderRadius.circular(14)),
+                  child: const Icon(Icons.account_balance_wallet_rounded,
+                      color: _C.white, size: 24),
+                ),
+                const SizedBox(width: 16),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('SOLDE ACTUEL',
+                        style: TextStyle(
+                            color: Colors.white38,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2)),
+                    const SizedBox(height: 4),
+                    RichText(
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                              text: '$solde ',
+                              style: const TextStyle(
+                                  color: _C.white,
+                                  fontSize: 30,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1)),
+                          const TextSpan(
+                              text: 'DH',
+                              style: TextStyle(
+                                  color: Colors.white38,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600)),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Revenus + Depenses side by side
+          Row(
+            children: [
+              Expanded(
+                child: _financeCard(
+                  icon: Icons.trending_up_rounded,
+                  iconBg: _C.greenLight,
+                  iconColor: _C.green,
+                  label: 'Revenus',
+                  value: '+$revenus DH',
+                  valueColor: _C.green,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _financeCard(
+                  icon: Icons.trending_down_rounded,
+                  iconBg: _C.coralLight,
+                  iconColor: _C.coral,
+                  label: 'Depenses',
+                  value: '-$depenses DH',
+                  valueColor: _C.coral,
+                ),
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 12),
-        // Revenus + Depenses side by side
-        Row(
-          children: [
-            Expanded(
-              child: _financeCard(
-                icon: Icons.trending_up_rounded,
-                iconBg: _C.greenLight,
-                iconColor: _C.green,
-                label: 'Revenus',
-                value: '+$revenus DH',
-                valueColor: _C.green,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _financeCard(
-                icon: Icons.trending_down_rounded,
-                iconBg: _C.coralLight,
-                iconColor: _C.coral,
-                label: 'Depenses',
-                value: '-$depenses DH',
-                valueColor: _C.coral,
-              ),
-            ),
-          ],
-        ),
-      ],
+        ],
+      ),
     );
   }
 
