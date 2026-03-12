@@ -214,4 +214,74 @@ class FinanceService {
       }).toList(),
     };
   }
+
+  // 8. Récupérer le résumé financier pour les cartes de couleur
+  // 8. RÉCUPÉRATION DES VALEURS RÉELLES DEPUIS LA DB
+  Future<Map<String, double>> getFinanceSummary(int residenceId, int annee) async {
+    try {
+      // A. Récupérer le total que la résidence DOIT payer (Factures fournisseurs)
+      final depensesRes = await _db
+          .from('depenses')
+          .select('montant')
+          .eq('residence_id', residenceId)
+          .eq('annee', annee);
+
+      double totalDepenses = 0;
+      for (var row in depensesRes) {
+        totalDepenses += (row['montant'] as num).toDouble();
+      }
+
+      // B. Récupérer l'état des collectes auprès des résidents (Table paiements)
+      final paiementsRes = await _db
+          .from('paiements')
+          .select('montant_total, montant_paye')
+          .eq('residence_id', residenceId)
+          .eq('annee', annee);
+
+      double totalAttendu = 0;
+      double totalRecolte = 0;
+
+      for (var row in paiementsRes) {
+        totalAttendu += (row['montant_total'] as num).toDouble();
+        totalRecolte += (row['montant_paye'] as num).toDouble();
+      }
+
+      // C. Retourner les vrais calculs
+      return {
+        'total': totalDepenses,      // Ce que la résidence a dépensé (Factures)
+        'paye': totalRecolte,        // Ce que les résidents ont déjà payé
+        'attente': totalAttendu - totalRecolte, // Ce qui reste à recouvrer
+      };
+    } catch (e) {
+      print("Erreur Finance Summary: $e");
+      return {'total': 0, 'paye': 0, 'attente': 0};
+    }
+  }
+
+// Modifie ta fonction dans finance_service.dart
+  Future<List<Map<String, dynamic>>> getMyExpenses({
+    required int residenceId,
+    required int mySyndicId,
+    int? annee,
+    int? mois, // AJOUT
+    int? categorieId, // AJOUT
+  }) async {
+    try {
+      var query = _db.from('depenses').select('''
+        id, montant, date, annee, mois, description, facture_path,
+        categories!inner(id, nom, type)
+      ''')
+          .eq('residence_id', residenceId)
+          .eq('syndic_general_id', mySyndicId);
+
+      if (annee != null) query = query.eq('annee', annee);
+      if (mois != null) query = query.eq('mois', mois); // FILTRE SQL MOIS
+      if (categorieId != null) query = query.eq('categorie_id', categorieId); // FILTRE SQL CATÉGORIE
+
+      final response = await query.order('date', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      return [];
+    }
+  }
 }

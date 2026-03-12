@@ -99,6 +99,7 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return MainLayout(
+      activePage: 'Tranches',
       title: 'Gestion des Tranches',
       body: Stack(
         children: [

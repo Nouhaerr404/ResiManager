@@ -3,19 +3,35 @@ import 'syndic_sidebar.dart';
 
 class MainLayout extends StatelessWidget {
   final Widget body;
+  final String activePage;
   final String title;
 
-  const MainLayout({Key? key, required this.body, required this.title}) : super(key: key);
+  const MainLayout({
+    Key? key,
+    required this.body,
+    required this.activePage,
+    this.title = ""
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    bool isWeb = MediaQuery.of(context).size.width >= 900;
+
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      // Le Drawer s'affiche automatiquement sur mobile, et la Sidebar sur Web
-      drawer: MediaQuery.of(context).size.width < 900 ? const SyndicSidebar() : null,
+      backgroundColor: const Color(0xFFFCF9F6),
+      // AppBar affichée seulement sur mobile pour le menu burger
+      appBar: !isWeb ? AppBar(title: Text(title), elevation: 0) : null,
+
+      // Le menu caché (Mobile)
+      drawer: !isWeb ? SyndicSidebar(activePage: activePage) : null,
+
       body: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (MediaQuery.of(context).size.width >= 900) const SyndicSidebar(),
+          // Le menu fixe (Web)
+          if (isWeb) SizedBox(width: 260, child: SyndicSidebar(activePage: activePage)),
+
+          // Le contenu de la page
           Expanded(child: body),
         ],
       ),
