@@ -22,14 +22,11 @@ class ApartmentCard extends StatelessWidget {
     final isOccupied = apartment.statut == StatutAppartEnum.occupe;
 
     return Card(
-      elevation: 2,
+      elevation: 0,
+      color: Colors.white.withOpacity(0.95),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: Colors.grey.shade200,
-          width: 1,
-        ),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: InkWell(
         onTap: onTap,

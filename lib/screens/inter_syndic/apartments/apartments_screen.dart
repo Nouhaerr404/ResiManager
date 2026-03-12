@@ -670,108 +670,172 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     final vacantCount = filteredApartments.where((a) => a.statut == StatutAppartEnum.libre).length;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Gestion des Appartements'),
-        actions: [
-          IconButton(
-            icon: Icon(showFilters ? Icons.filter_list_off : Icons.filter_list),
-            onPressed: () {
-              setState(() => showFilters = !showFilters);
-            },
-            tooltip: 'Filtres',
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadApartments,
-            tooltip: 'Rafraîchir',
-          ),
-        ],
-      ),
-      body: Column(
+      body: Stack(
         children: [
+          // 1. IMAGE DE FOND
           Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.white,
-            child: TextField(
-              controller: searchController,
-              onChanged: _search,
-              decoration: InputDecoration(
-                hintText: 'Rechercher par numéro, résidence, immeuble ou tranche...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: searchController.text.isNotEmpty
-                    ? IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    searchController.clear();
-                    _search('');
-                  },
-                )
-                    : null,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.grey.shade50,
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/images/residence_bg.png'),
+                fit: BoxFit.cover,
               ),
             ),
           ),
 
+          // 2. VOILE SOMBRE
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: Colors.blue.shade50,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withOpacity(0.3),
+                  Colors.black.withOpacity(0.8),
+                ],
+              ),
+            ),
+          ),
+
+          // 3. CONTENU
+          SafeArea(
+            child: Column(
               children: [
-                _buildStatCard('Total', filteredApartments.length.toString(), Icons.home, Colors.blue),
-                _buildStatCard('Occupés', occupiedCount.toString(), Icons.check_circle, Colors.green),
-                _buildStatCard('Vacants', vacantCount.toString(), Icons.error_outline, Colors.orange),
+                // En-tête personnalisé (Style Syndic Général)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 30),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Gestion des,",
+                            style: TextStyle(color: Colors.white70, fontSize: 18),
+                          ),
+                          Text(
+                            "Appartements",
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold
+                            ),
+                          ),
+                        ],
+                      ),
+                      // Bouton d'ajout stylisé
+                      GestureDetector(
+                        onTap: _showAddApartmentDialog,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                              color: const Color(0xFFFF6F4A),
+                              borderRadius: BorderRadius.circular(15),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFFF6F4A).withOpacity(0.4),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                )
+                              ]
+                          ),
+                          child: const Icon(Icons.add, color: Colors.white, size: 28),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Barre de recherche stylisée
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  child: TextField(
+                    controller: searchController,
+                    onChanged: _search,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Rechercher un appartement...',
+                      hintStyle: const TextStyle(color: Colors.white70),
+                      prefixIcon: const Icon(Icons.search, color: Colors.white70),
+                      suffixIcon: searchController.text.isNotEmpty
+                          ? IconButton(
+                        icon: const Icon(Icons.clear, color: Colors.white70),
+                        onPressed: () {
+                          searchController.clear();
+                          _search('');
+                        },
+                      )
+                          : null,
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.15),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Statistiques stylisées
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildStatCard('Total', filteredApartments.length.toString(), Icons.home, Colors.white),
+                      _buildStatCard('Occupés', occupiedCount.toString(), Icons.check_circle, const Color(0xFFFF6F4A)),
+                      _buildStatCard('Vacants', vacantCount.toString(), Icons.error_outline, Colors.white70),
+                    ],
+                  ),
+                ),
+
+                if (showFilters)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: ApartmentFilters(
+                      onFilterChanged: (tranche, immeuble, status) {
+                        _applyFilters(tranche: tranche, immeuble: immeuble, status: status);
+                      },
+                    ),
+                  ),
+
+                // Liste des appartements
+                Expanded(
+                  child: loading
+                      ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                      : filteredApartments.isEmpty
+                      ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.search_off, size: 64, color: Colors.white.withOpacity(0.4)),
+                        const SizedBox(height: 16),
+                        const Text('Aucun appartement trouvé', style: TextStyle(fontSize: 16, color: Colors.white70)),
+                      ],
+                    ),
+                  )
+                      : RefreshIndicator(
+                    onRefresh: _loadApartments,
+                    child: ListView.builder(
+                      itemCount: filteredApartments.length,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                      itemBuilder: (context, index) {
+                        final apartment = filteredApartments[index];
+                        return ApartmentCard(
+                          apartment: apartment,
+                          onTap: () => _showApartmentDetails(apartment),
+                          onEdit: () => _showEditApartmentDialog(apartment),
+                          onAssign: () => _showAssignResidentDialog(apartment),
+                          onDelete: () => _showDeleteConfirmation(apartment),
+                        );
+                      },
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
-
-          if (showFilters)
-            ApartmentFilters(
-              onFilterChanged: (tranche, immeuble, status) {
-                _applyFilters(tranche: tranche, immeuble: immeuble, status: status);
-              },
-            ),
-
-          Expanded(
-            child: loading
-                ? const Center(child: CircularProgressIndicator())
-                : filteredApartments.isEmpty
-                ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
-                  const SizedBox(height: 16),
-                  const Text('Aucun appartement trouvé', style: TextStyle(fontSize: 16, color: Colors.grey)),
-                ],
-              ),
-            )
-                : RefreshIndicator(
-              onRefresh: _loadApartments,
-              child: ListView.builder(
-                itemCount: filteredApartments.length,
-                padding: const EdgeInsets.only(bottom: 80),
-                itemBuilder: (context, index) {
-                  final apartment = filteredApartments[index];
-                  return ApartmentCard(
-                    apartment: apartment,
-                    onTap: () => _showApartmentDetails(apartment),
-                    onEdit: () => _showEditApartmentDialog(apartment),
-                    onAssign: () => _showAssignResidentDialog(apartment),
-                    onDelete: () => _showDeleteConfirmation(apartment),
-                  );
-                },
-              ),
-            ),
-          ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddApartmentDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('Nouvel appartement'),
       ),
     );
   }
@@ -779,10 +843,10 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
   Widget _buildStatCard(String label, String value, IconData icon, Color color) {
     return Column(
       children: [
-        Icon(icon, color: color, size: 24),
+        Icon(icon, color: color, size: 26),
         const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+        Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.white70)),
       ],
     );
   }
