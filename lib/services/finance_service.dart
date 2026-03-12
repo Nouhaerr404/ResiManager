@@ -55,7 +55,7 @@ class FinanceService {
     }
   }
 
-  // 5. Pour enregistrer la dépense
+  // 5. Pour enregistrer la dépense (Syndic Général)
   Future<void> addGlobalExpense({
     required int residenceId,
     required double montant,
@@ -69,12 +69,149 @@ class FinanceService {
       'residence_id': residenceId,
       'montant': montant,
       'categorie_id': categorieId,
-      'date': date.toIso8601String(),
+      'date': date.toIso8601String().split('T').first,
       'annee': date.year,
       'mois': date.month,
       'syndic_general_id': syndicId,
       'facture_path': facturePath,
       'description': description,
     });
+  }
+
+  // 6. Pour enregistrer une dépense Inter-Syndic (Globale ou Spécifique)
+  Future<void> addInterSyndicExpense({
+    required int residenceId,
+    required int interSyndicId,
+    required double montant,
+    required int categorieId,
+    required DateTime date,
+    int? trancheId,
+    String? facturePath,
+    String? description,
+  }) async {
+    final expenseRes = await _db.from('depenses').insert({
+      'residence_id': residenceId,
+      'inter_syndic_id': interSyndicId,
+      'montant': montant,
+      'categorie_id': categorieId,
+      'tranche_id': trancheId,
+      'date': date.toIso8601String().split('T').first,
+      'annee': date.year,
+      'mois': date.month,
+      'facture_path': facturePath,
+      'description': description,
+    }).select().single();
+
+    final int expenseId = expenseRes['id'];
+
+    List<int> tranchesIds = [];
+    if (trancheId != null) {
+      tranchesIds = [trancheId];
+    } else {
+      final res = await _db.from('tranches')
+          .select('id')
+          .eq('inter_syndic_id', interSyndicId)
+          .eq('residence_id', residenceId);
+      tranchesIds = (res as List).map((t) => t['id'] as int).toList();
+    }
+
+    if (tranchesIds.isEmpty) return;
+
+    final immeublesRes = await _db.from('immeubles')
+        .select('id')
+        .inFilter('tranche_id', tranchesIds);
+    final listImmIds = (immeublesRes as List).map((i) => i['id'] as int).toList();
+
+    if (listImmIds.isEmpty) return;
+
+    final appartRes = await _db.from('appartements')
+        .select('id')
+        .inFilter('immeuble_id', listImmIds);
+    final listAppartIds = (appartRes as List).map((a) => a['id'] as int).toList();
+
+    if (listAppartIds.isEmpty) return;
+
+    double share = montant / listAppartIds.length;
+
+    for (int appartId in listAppartIds) {
+      final existingPaiement = await _db.from('paiements')
+          .select()
+          .eq('appartement_id', appartId)
+          .eq('annee', date.year)
+          .eq('mois', date.month)
+          .maybeSingle();
+
+      if (existingPaiement != null) {
+        double currentTotal = double.parse(existingPaiement['montant_total'].toString());
+        await _db.from('paiements').update({
+          'montant_total': currentTotal + share,
+          'statut': (double.parse(existingPaiement['montant_paye'].toString()) >= (currentTotal + share)) ? 'complet' : 'partiel',
+        }).eq('id', existingPaiement['id']);
+      } else {
+        final appartInfo = await _db.from('appartements').select('resident_id').eq('id', appartId).single();
+        if (appartInfo['resident_id'] != null) {
+          await _db.from('paiements').insert({
+            'appartement_id': appartId,
+            'resident_id': appartInfo['resident_id'],
+            'residence_id': residenceId,
+            'inter_syndic_id': interSyndicId,
+            'depense_id': expenseId,
+            'montant_total': share,
+            'montant_paye': 0,
+            'type_paiement': 'charges',
+            'statut': 'impaye',
+            'annee': date.year,
+            'mois': date.month,
+          });
+        }
+      }
+    }
+  }
+
+  // 7. Pour le dashboard Inter-Syndic
+  Future<Map<String, dynamic>> getInterSyndicFinances(int interSyndicId, int residenceId) async {
+    final tranches = await _db.from('tranches')
+        .select('id, nom')
+        .eq('inter_syndic_id', interSyndicId)
+        .eq('residence_id', residenceId);
+    final tranchesIds = (tranches as List).map((t) => t['id'] as int).toList();
+
+    if (tranchesIds.isEmpty) {
+      return {'total_depenses': 0, 'total_revenus': 0, 'solde': 0, 'depenses_par_tranche': []};
+    }
+
+    final depensesInter = await _db.from('depenses')
+        .select('montant, tranche_id')
+        .eq('inter_syndic_id', interSyndicId);
+
+    double totalDepenses = 0;
+    Map<int, double> depByTranche = {};
+    for (var d in depensesInter) {
+      double val = double.parse(d['montant'].toString());
+      totalDepenses += val;
+      if (d['tranche_id'] != null) {
+        int tId = d['tranche_id'];
+        depByTranche[tId] = (depByTranche[tId] ?? 0) + val;
+      }
+    }
+
+    final paiementsRes = await _db.from('paiements')
+        .select('montant_paye')
+        .eq('inter_syndic_id', interSyndicId);
+    
+    double totalRevenus = 0;
+    for (var p in paiementsRes) {
+      totalRevenus += double.parse(p['montant_paye'].toString());
+    }
+
+    return {
+      'total_depenses': totalDepenses,
+      'total_revenus': totalRevenus,
+      'solde': totalRevenus - totalDepenses,
+      'depenses_par_tranche': tranches.map((t) => {
+        'nom': t['nom'],
+        'montant': depByTranche[t['id']] ?? 0,
+      }).toList(),
+    };
   }
 }

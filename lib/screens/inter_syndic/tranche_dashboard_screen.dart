@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/tranche_model.dart';
 import '../../services/tranche_service.dart';
 import 'garages/garages_screen.dart';
+import 'finance/finance_dashboard_screen.dart';
 // import autres screens...
 import 'residents/residents_screen.dart';
 
@@ -103,7 +104,17 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen> {
       _CardData('Personnel', '${_stats!['nbPersonnel']}', 'employees',
           Icons.people_alt_outlined, Colors.purple, null),
       _CardData('Finances', '${_stats!['solde']} DH', 'DH',
-          Icons.wallet_outlined, Colors.orange, null),
+          Icons.wallet_outlined, Colors.orange, () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => FinanceDashboardScreen(
+                  residenceId: widget.tranche.residenceId,
+                  interSyndicId: widget.tranche.interSyndicId ?? 1, // Fallback if needed
+                ),
+              ),
+            );
+          }),
       _CardData('Parkings', '${_stats!['nbParkings']}', 'places',
           Icons.local_parking, Colors.indigo, () {
             // Navigator.push vers ParkingsScreen
