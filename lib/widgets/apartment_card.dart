@@ -9,13 +9,13 @@ class ApartmentCard extends StatelessWidget {
   final VoidCallback? onDelete;
 
   const ApartmentCard({
-    Key? key,
+    super.key,
     required this.apartment,
     this.onTap,
     this.onEdit,
     this.onAssign,
     this.onDelete,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +23,7 @@ class ApartmentCard extends StatelessWidget {
 
     return Card(
       elevation: 0,
-      color: Colors.white.withOpacity(0.95),
+      color: Colors.white.withValues(alpha: 0.95),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
@@ -81,7 +81,7 @@ class ApartmentCard extends StatelessWidget {
                   children: [
                     CircleAvatar(
                       radius: 20,
-                      backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                      backgroundColor: Theme.of(context).primaryColor.withValues(alpha: 0.1),
                       child: Icon(
                         Icons.person,
                         color: Theme.of(context).primaryColor,

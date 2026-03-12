@@ -7,6 +7,8 @@ import 'resident_reunions_screen.dart';
 import 'resident_charges_screen.dart';
 
 class ResidentDashboardScreen extends StatefulWidget {
+  const ResidentDashboardScreen({super.key});
+
   @override
   _ResidentDashboardScreenState createState() => _ResidentDashboardScreenState();
 }
@@ -290,7 +292,7 @@ class _ResidentDashboardScreenState extends State<ResidentDashboardScreen> {
     borderRadius: BorderRadius.circular(12),
     child: Container(
       padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
       child: Row(children: [Icon(i, color: Colors.white, size: 20), const SizedBox(width: 12), Text(l, style: const TextStyle(color: Colors.white))]),
     ),
   );

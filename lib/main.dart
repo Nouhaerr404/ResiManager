@@ -20,7 +20,7 @@ Future<void> main() async {
 }
 
 class ResiManagerApp extends StatelessWidget {
-  const ResiManagerApp({Key? key}) : super(key: key);
+  const ResiManagerApp({super.key});
 
   static const Color coral = Color(0xFFFF6F4A);
   static const Color beigeBackground = Color(0xFFFCF9F6);
@@ -122,7 +122,7 @@ class HomePage extends StatelessWidget {
 }
 
 class _AppDrawer extends StatelessWidget {
-  const _AppDrawer({Key? key}) : super(key: key);
+  const _AppDrawer({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -133,7 +133,7 @@ class _AppDrawer extends StatelessWidget {
           children: [
             DrawerHeader(
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
               ),
               child: const Align(
                 alignment: Alignment.bottomLeft,
