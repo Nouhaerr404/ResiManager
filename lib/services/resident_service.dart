@@ -1,274 +1,393 @@
-// lib/services/resident_service.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/resident_model.dart';
 
 class ResidentService {
   final _db = Supabase.instance.client;
-  final int annee = DateTime.now().year;
 
-  Future<List<ResidentModel>> getResidentsByTranche(int trancheId) async {
-    try {
-      // ÉTAPE 1 : Récupérer les immeubles de la tranche
-      final immeubles = await _db
-          .from('immeubles')
-          .select('id')
-          .eq('tranche_id', trancheId);
+  // ═══════════════════════════════════════════════════════════════════
+  // getChargesData
+  // Toutes les charges de la tranche du résident pour une année donnée.
+  // Chaque charge = dépense tranche + part du résident + son paiement.
+  // ═══════════════════════════════════════════════════════════════════
+  Future<Map<String, dynamic>> getChargesData(int userId, int annee) async {
 
-      if ((immeubles as List).isEmpty) return [];
-
-      final immeubleIds = immeubles.map((i) => i['id']).toList();
-
-      // ÉTAPE 2 : Récupérer les appartements de ces immeubles
-      final appartements = await _db
-          .from('appartements')
-          .select('id, numero, immeuble_id, resident_id, immeubles(nom)')
-          .inFilter('immeuble_id', immeubleIds);
-
-      if ((appartements as List).isEmpty) return [];
-
-      final appartementIds = appartements.map((a) => a['id']).toList();
-
-      // ÉTAPE 3 : Récupérer les résidents de ces appartements
-      final residents = await _db
-          .from('residents')
-          .select('id, user_id, appartement_id, type, statut, users(nom, prenom, email, telephone)')
-          .inFilter('appartement_id', appartementIds);
-
-      if ((residents as List).isEmpty) return [];
-
-      final residentUserIds = residents.map((r) => r['user_id']).toList();
-
-      // ÉTAPE 4 : Récupérer les paiements
-      final paiements = await _db
-          .from('paiements')
-          .select('resident_id, montant_total, montant_paye, statut, annee')
-          .inFilter('resident_id', residentUserIds)
-          .eq('annee', DateTime.now().year);
-
-      // ÉTAPE 5 : Assembler les données
-      return residents.map((r) {
-        final appart = appartements.firstWhere(
-              (a) => a['id'] == r['appartement_id'],
-          orElse: () => {},
-        );
-        final paiement = (paiements as List).firstWhere(
-              (p) => p['resident_id'] == r['user_id'],
-          orElse: () => null,
-        );
-
-        return ResidentModel(
-          id: r['id'],
-          userId: r['user_id'],
-          appartementId: r['appartement_id'],
-          type: r['type'] ?? 'proprietaire',
-          statut: r['statut'] ?? 'actif',
-          nom: r['users']?['nom'] ?? '',
-          prenom: r['users']?['prenom'] ?? '',
-          email: r['users']?['email'] ?? '',
-          telephone: r['users']?['telephone'],
-          appartementNumero: appart['numero'],
-          immeubleName: appart['immeubles']?['nom'],
-          montantTotal: double.parse(
-              (paiement?['montant_total'] ?? 3000).toString()),
-          montantPaye: double.parse(
-              (paiement?['montant_paye'] ?? 0).toString()),
-          statutPaiement: paiement?['statut'] ?? 'impaye',
-          anneePaiement: paiement?['annee'] ?? DateTime.now().year,
-        );
-      }).toList();
-
-    } catch (e) {
-      print('Erreur getResidentsByTranche: $e');
-      return [];
-    }
-  }
-  // Ajouter un résident (crée user + resident)
-  Future<void> addResident({
-    required String nom,
-    required String prenom,
-    required String email,
-    String? telephone,
-    required String type,
-    required int trancheId,
-    required double montantTotal,
-  }) async {
-    // 1. Créer le user
-    final userResponse = await _db
-        .from('users')
-        .insert({
-      'nom': nom,
-      'prenom': prenom,
-      'email': email,
-      'telephone': telephone,
-      'password': 'changeme123',
-      'role': 'resident',
-      'statut': 'actif',
-    })
-        .select()
-        .single();
-
-    final userId = userResponse['id'];
-
-    // 2. Créer le resident
-    final residentResponse = await _db
+    // 1. Profil résident + appartement + immeuble + tranche
+    final resRow = await _db
         .from('residents')
-        .insert({
-      'user_id': userId,
-      'type': type,
-      'statut': 'actif',
-      'date_arrivee': DateTime.now().toIso8601String(),
-    })
-        .select()
-        .single();
+        .select('''
+          id,
+          appartements (
+            id, numero,
+            immeubles (
+              id, nom, nombre_appartements,
+              tranches ( id, nom )
+            )
+          )
+        ''')
+        .eq('user_id', userId)
+        .maybeSingle();
 
-    final residentId = residentResponse['id'];
+    if (resRow == null) return _err('Profil résident introuvable');
 
-    // 3. Créer le paiement initial
-    await _db.from('paiements').insert({
-      'resident_id': userId,
-      'appartement_id': 1, // à adapter selon affectation
-      'depense_id': 1,
-      'inter_syndic_id': 1,
-      'residence_id': 1,
-      'montant_total': montantTotal,
-      'montant_paye': 0,
-      'type_paiement': 'charges',
-      'statut': 'impaye',
-      'annee': annee,
-    });
-  }
+    final appart  = resRow['appartements']   as Map<String, dynamic>?;
+    final imm     = appart?['immeubles']     as Map<String, dynamic>?;
+    final tranche = imm?['tranches']         as Map<String, dynamic>?;
 
-  // Enregistrer un paiement
-  Future<void> enregistrerPaiement({
-    required int residentUserId,
-    required int appartementId,
-    required double montantAjoute,
-    required double montantDejaPane,
-    required double montantTotal,
-  }) async {
-    final nouveauMontant = montantDejaPane + montantAjoute;
-    String statut;
-    if (nouveauMontant >= montantTotal) {
-      statut = 'complet';
-    } else if (nouveauMontant > 0) {
-      statut = 'partiel';
-    } else {
-      statut = 'impaye';
+    if (appart == null || imm == null || tranche == null) {
+      return _err('Appartement ou tranche non assigné');
     }
 
-    // Mettre à jour le paiement existant
-    await _db
-        .from('paiements')
-        .update({
-      'montant_paye': nouveauMontant,
-      'statut': statut,
-      'date_paiement': DateTime.now().toIso8601String(),
-    })
-        .eq('resident_id', residentUserId)
-        .eq('annee', annee);
+    final int appartId  = appart['id']  as int;
+    final int trancheId = tranche['id'] as int;
+    final int nbApparts = (imm['nombre_appartements'] as int?) ?? 1;
 
-    // Ajouter dans l'historique
-    await _db.from('historique_paiements').insert({
-      'resident_id': residentUserId,
-      'montant': montantAjoute,
-      'date': DateTime.now().toIso8601String(),
-      'type': 'charges',
-      'description': 'Paiement charges $annee',
-    });
+    // 2. Toutes les dépenses de la tranche pour cette année
+    final depRows = await _db
+        .from('depenses')
+        .select('''
+          id, montant, date, mois, annee, facture_path,
+          categories ( id, nom, type )
+        ''')
+        .eq('tranche_id', trancheId)
+        .eq('annee', annee)
+        .order('mois', ascending: true);
+
+    // 3. Tous les paiements de l'appartement
+    final paiRows = await _db
+        .from('paiements')
+        .select('''
+          id, montant_total, montant_paye, statut, date_paiement,
+          depenses ( id, annee, mois )
+        ''')
+        .eq('appartement_id', appartId);
+
+    // Index paiements par depense_id
+    final Map<int, Map<String, dynamic>> paiByDep = {};
+    for (final p in paiRows as List) {
+      final d = p['depenses'] as Map<String, dynamic>?;
+      if (d != null && d['annee'] == annee) {
+        paiByDep[d['id'] as int] = Map<String, dynamic>.from(p as Map);
+      }
+    }
+
+    // 4. Construire la liste unifiée
+    final List<Map<String, dynamic>> charges = [];
+    for (final d in depRows as List) {
+      final cat     = d['categories']  as Map<String, dynamic>?;
+      final depId   = d['id']          as int;
+      final total   = (d['montant']    as num).toDouble();
+      final part    = total / nbApparts;
+      final pai     = paiByDep[depId];
+
+      final double paye   = (pai?['montant_paye'] as num?)?.toDouble() ?? 0.0;
+      final double reste  = (part - paye).clamp(0.0, double.infinity);
+      final String statut = (pai?['statut']        as String?) ?? 'impaye';
+
+      charges.add({
+        'depense_id'     : depId,
+        'paiement_id'    : pai?['id'],
+        'categorie'      : cat?['nom']  ?? 'Divers',
+        'type'           : cat?['type'] ?? 'individuelle',
+        'mois'           : d['mois']   as int?,
+        'date'           : d['date']   as String?,
+        'montant_tranche': total,
+        'nb_apparts'     : nbApparts,
+        'votre_part'     : part,
+        'montant_paye'   : paye,
+        'montant_reste'  : reste,
+        'statut'         : statut,
+        'date_paiement'  : pai?['date_paiement'] as String?,
+        'facture_path'   : d['facture_path']     as String?,
+      });
+    }
+
+    // 5. Calculs globaux
+    double totalAnnee = 0, payeAnnee = 0;
+    int nbImpaye = 0, nbPartiel = 0;
+    for (final c in charges) {
+      totalAnnee += c['votre_part']   as double;
+      payeAnnee  += c['montant_paye'] as double;
+      if (c['statut'] == 'impaye')  nbImpaye++;
+      if (c['statut'] == 'partiel') nbPartiel++;
+    }
+
+    return {
+      'resident': {
+        'num_appart'  : appart['numero']?.toString() ?? '—',
+        'immeuble_nom': imm['nom']?.toString()       ?? '—',
+        'tranche_nom' : tranche['nom']?.toString()   ?? '—',
+        'nb_apparts'  : nbApparts,
+      },
+      'charges': charges,
+      'solde': {
+        'total_annee': totalAnnee,
+        'paye_annee' : payeAnnee,
+        'reste_annee': totalAnnee - payeAnnee,
+        'nb_impaye'  : nbImpaye,
+        'nb_partiel' : nbPartiel,
+      },
+    };
   }
 
-  // Supprimer un résident
-  Future<void> deleteResident(int userId) async {
-    await _db.from('users').delete().eq('id', userId);
+  // lib/services/resident_service.dart
+
+  Future<Map<String, dynamic>> getAnnoncesAndReunions(int userId) async {
+    try {
+      // 1. Trouver la tranche du résident
+      final resData = await _db.from('residents').select('appartement_id').eq('user_id', userId).single();
+      final appartData = await _db.from('appartements').select('immeuble_id').eq('id', resData['appartement_id']).single();
+      final immData = await _db.from('immeubles').select('tranche_id').eq('id', appartData['immeuble_id']).single();
+      final int trancheId = immData['tranche_id'];
+
+      // 2. Récupérer les annonces
+      final annonces = await _db.from('annonces').select().eq('tranche_id', trancheId).eq('statut', 'publiee');
+
+      // 3. Récupérer les réunions
+      final reunions = await _db.from('reunions').select().eq('tranche_id', trancheId).order('date', ascending: true);
+
+      return {
+        'annonces': annonces,
+        'reunions': reunions,
+        'tranche_id': trancheId,
+      };
+    } catch (e) {
+      print("Erreur Fetch: $e");
+      rethrow;
+    }
+  }
+  Future<Map<String, dynamic>> getTransparencyData(int userId, int mois, int annee) async {
+    // 1. Infos du résident et de son entourage
+    final res = await _db.from('residents')
+        .select('*, appartements(*, immeubles(*, tranches(*)))')
+        .eq('user_id', userId).single();
+
+    final int nbAppartsImmeuble = res['appartements']['immeubles']['nombre_appartements'] ?? 1;
+    final int nbAppartsTranche = res['appartements']['immeubles']['tranches']['nombre_appartements'] ?? 1;
+    final int immeubleId = res['appartements']['immeuble_id'];
+    final int trancheId = res['appartements']['immeubles']['tranche_id'];
+
+    // 2. Dépenses IMMEUBLE (ex: Nettoyage escalier)
+    final depImmeuble = await _db.from('depenses').select().eq('immeuble_id', immeubleId).eq('mois', mois).eq('annee', annee);
+
+    // 3. Dépenses TRANCHE (ex: Sécurité générale, Espace vert)
+    final depTranche = await _db.from('depenses').select().eq('tranche_id', trancheId).eq('mois', mois).eq('annee', annee);
+
+    // 4. Statut Paiement Personnel
+    final paiement = await _db.from('paiements').select().eq('resident_id', userId).eq('mois', mois).eq('annee', annee).maybeSingle();
+
+    return {
+      'immeuble_nom': res['appartements']['immeubles']['nom'],
+      'tranche_nom': res['appartements']['immeubles']['tranches']['nom'],
+      'paiement': paiement,
+      'dep_immeuble': depImmeuble,
+      'dep_tranche': depTranche,
+      'nb_immeuble': nbAppartsImmeuble,
+      'nb_tranche': nbAppartsTranche,
+    };
   }
 // lib/services/resident_service.dart
 
-  // lib/services/resident_service.dart
-  Future<Map<String, dynamic>> getFullChargesData(int userId, int annee, int mois) async {
+  Future<Map<String, dynamic>> getTrancheExpensesDetailed(int userId, int annee) async {
     try {
-      // 1. Récupérer le résident et son appartement
-      final residentResponse = await _db.from('residents')
-          .select('*, appartements(*, immeubles(*, tranches(*)))')
-          .eq('user_id', userId)
-          .maybeSingle();
+      // 1. Infos de base
+      final res = await _db.from('residents').select('appartement_id').eq('user_id', userId).maybeSingle();
+      final app = await _db.from('appartements').select('immeuble_id').eq('id', res?['appartement_id']).maybeSingle();
+      final imm = await _db.from('immeubles').select('tranche_id, nom').eq('id', app?['immeuble_id']).maybeSingle();
+      final tra = await _db.from('tranches').select('nom').eq('id', imm?['tranche_id']).maybeSingle();
 
-      if (residentResponse == null) throw "Résident introuvable.";
+      final int trancheId = imm?['tranche_id'] ?? 0;
 
-      final int? appartId = residentResponse['appartement_id'];
-      final immeuble = residentResponse['appartements']?['immeubles'] ?? {};
-      final tranche = immeuble['tranches'] ?? {};
-
-      // 2. Récupérer le paiement via l'appartement_id (plus sûr)
-      final paiement = (appartId != null)
-          ? await _db.from('paiements').select().eq('appartement_id', appartId).eq('annee', annee).maybeSingle()
-          : null;
-
-      // 3. Récupérer les dépenses de l'immeuble
-      final List depensesImmeuble = (immeuble['id'] != null)
-          ? await _db.from('depenses').select().eq('immeuble_id', immeuble['id']).eq('annee', annee).eq('mois', mois)
-          : [];
-
-      // 4. Récupérer les dépenses de la tranche
-      final List depensesTranche = (tranche['id'] != null)
-          ? await _db.from('depenses').select().eq('tranche_id', tranche['id']).eq('annee', annee).eq('mois', mois)
-          : [];
-
-      // 5. Historique
-      final historique = await _db.from('historique_paiements')
-          .select()
-          .eq('resident_id', userId)
+      // 2. Toutes les dépenses de la tranche
+      final List depenses = await _db
+          .from('depenses')
+          .select('*, categories(*)')
+          .eq('tranche_id', trancheId)
+          .eq('annee', annee)
           .order('date', ascending: false);
 
-      return {
-        'appart_info': "Appartement ${residentResponse['appartements']?['numero'] ?? 'N/A'} - ${immeuble['nom'] ?? 'N/A'}",
-        'immeuble_nom': immeuble['nom'] ?? "Immeuble",
-        'tranche_nom': tranche['nom'] ?? "Tranche",
-        'paiement': paiement,
-        'depenses_immeuble': depensesImmeuble,
-        'depenses_tranche': depensesTranche,
-        'historique': historique,
-        'total_tranche': depensesTranche.fold(0.0, (sum, item) => sum + (double.tryParse(item['montant'].toString()) ?? 0.0)),
-      };
-    } catch (e) {
-      print('❌ ERREUR FINALE : $e');
-      rethrow;
-    }
-  } Future<Map<String, dynamic>> getResidentDashboardData(int userId) async {
-    try {
-      // 1. Récupérer l'utilisateur
-      final user = await _db.from('users').select().eq('id', userId).single();
-
-      // 2. Récupérer le résident ET toutes ses infos liées (Appart, Immeuble, Tranche)
-      // On utilise une seule grosse requête simplifiée
-      final residentResponse = await _db
-          .from('residents')
-          .select('*, appartements(*, immeubles(*, tranches(*)))')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-      // 3. Stats (Annonces et Notifs)
-      final notifs = await _db.from('notifications').select().eq('user_id', userId).eq('lu', false);
-
-      // On essaie de récupérer l'id de la tranche pour les annonces
-      int trancheId = residentResponse?['appartements']?['immeubles']?['tranche_id'] ?? 0;
-      final annonces = await _db.from('annonces').select().eq('tranche_id', trancheId);
-
-      // 4. Notifications récentes
-      final recentNotifs = await _db.from('notifications').select().eq('user_id', userId).limit(2);
+      // 3. Calculs pour les cartes
+      double total = 0;
+      double payees = 0;
+      for (var d in depenses) {
+        double m = (double.tryParse(d['montant'].toString()) ?? 0.0);
+        total += m;
+        if (d['facture_path'] != null) payees += m; // Logique métier : facture présente = payée
+      }
 
       return {
-        'profile': user,
-        'resident': residentResponse, // On renvoie tout l'objet
-        'stats': {
-          'notifs': notifs.length,
-          'annonces': annonces.length,
-          'reunions': 0,
-        },
-        'recentNotifs': recentNotifs,
+        'tranche_nom': tra?['nom'] ?? "Tranche A - Les Jardins",
+        'depenses': depenses,
+        'total': total,
+        'payees': payees,
+        'attente': total - payees,
       };
     } catch (e) {
-      print('❌ ERREUR SUPABASE : $e');
-      rethrow;
+      return Future.error(e);
     }
   }
+  // lib/services/resident_service.dart
+
+  // 1. Récupérer toutes les notifications d'un utilisateur
+  Future<List<Map<String, dynamic>>> getNotifications(int userId) async {
+    final response = await _db
+        .from('notifications')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  // 2. Marquer une notification comme lue
+  Future<void> markAsRead(int notifId) async {
+    await _db.from('notifications').update({'lu': true}).eq('id', notifId);
+  }
+
+  // 3. Tout marquer comme lu
+  Future<void> markAllAsRead(int userId) async {
+    await _db.from('notifications').update({'lu': true}).eq('user_id', userId);
+  }
+
+  // 4. Supprimer une notification
+  Future<void> deleteNotification(int notifId) async {
+    await _db.from('notifications').delete().eq('id', notifId);
+  }
+  // --- CONFIRMER LA PRÉSENCE À UNE RÉUNION ---
+  Future<void> updateMeetingAttendance(int userId, int reunionId, String status) async {
+    try {
+      // On utilise upsert : si ça existe on modifie, sinon on crée
+      await _db.from('reunion_resident').upsert({
+        'reunion_id': reunionId,
+        'resident_id': userId,
+        'confirmation': status, // 'confirme' ou 'absent'
+      });
+    } catch (e) {
+      print("Erreur participation: $e");
+    }
+  }
+
+  // Récupérer le statut actuel de l'utilisateur pour une réunion
+  Future<String> getMyAttendance(int userId, int reunionId) async {
+    final response = await _db
+        .from('reunion_resident')
+        .select('confirmation')
+        .eq('reunion_id', reunionId)
+        .eq('resident_id', userId)
+        .maybeSingle();
+    return response?['confirmation'] ?? 'en_attente';
+  }
+  // ═══════════════════════════════════════════════════════════════════
+  // getResidentDashboardData
+  // ═══════════════════════════════════════════════════════════════════
+  Future<Map<String, dynamic>> getResidentDashboardData(int userId) async {
+    final annee = DateTime.now().year;
+
+    final userRow = await _db.from('users')
+        .select('nom, prenom').eq('id', userId).maybeSingle();
+
+    final resRow = await _db.from('residents').select('''
+      id,
+      appartements (
+        id, numero,
+        immeubles ( id, nom, tranches ( id, nom ) )
+      )
+    ''').eq('user_id', userId).maybeSingle();
+
+    if (resRow == null) return {
+      'nom':'—','prenom':'—','num_appart':'—','immeuble_nom':'—','tranche_nom':'—',
+      'solde_du':0.0,'nb_annonces':0,'nb_reunions':0,
+      'nb_reclamations_ouvertes':0,'notifications_non_lues':0,
+    };
+
+    final appart    = resRow['appartements'] as Map<String, dynamic>?;
+    final imm       = appart?['immeubles']   as Map<String, dynamic>?;
+    final tranche   = imm?['tranches']       as Map<String, dynamic>?;
+    final appartId  = appart?['id']          as int?;
+    final trancheId = tranche?['id']         as int?;
+
+    double soldeDu = 0.0;
+    if (appartId != null) {
+      final pais = await _db.from('paiements')
+          .select('montant_total, montant_paye, depenses(annee)')
+          .eq('appartement_id', appartId)
+          .inFilter('statut', ['impaye', 'partiel']);
+      for (final p in pais) {
+        final d = p['depenses'] as Map<String, dynamic>?;
+        if (d?['annee'] == annee) {
+          soldeDu += ((p['montant_total'] as num) - (p['montant_paye'] as num)).toDouble();
+        }
+      }
+    }
+
+    int nbAnn = 0, nbReu = 0;
+    if (trancheId != null) {
+      final a = await _db.from('annonces').select('id')
+          .eq('tranche_id', trancheId).eq('statut', 'publiee');
+      nbAnn = (a as List).length;
+      final r = await _db.from('reunions').select('id')
+          .eq('tranche_id', trancheId)
+          .inFilter('statut', ['planifiee', 'confirmee']);
+      nbReu = (r as List).length;
+    }
+
+    final rec  = await _db.from('reclamations').select('id')
+        .eq('resident_id', userId).eq('statut', 'en_cours');
+    final nots = await _db.from('notifications').select('id')
+        .eq('user_id', userId).eq('lu', false);
+
+    return {
+      'nom'                     : userRow?['nom']?.toString()    ?? '—',
+      'prenom'                  : userRow?['prenom']?.toString() ?? '—',
+      'num_appart'              : appart?['numero']?.toString()  ?? '—',
+      'immeuble_nom'            : imm?['nom']?.toString()        ?? '—',
+      'tranche_nom'             : tranche?['nom']?.toString()    ?? '—',
+      'solde_du'                : soldeDu,
+      'nb_annonces'             : nbAnn,
+      'nb_reunions'             : nbReu,
+      'nb_reclamations_ouvertes': (rec  as List).length,
+      'notifications_non_lues'  : (nots as List).length,
+    };
+  }
+// 1. Récupérer les réunions avec le statut actuel du résident (Ahmed)
+  Future<List<Map<String, dynamic>>> getReunionsWithStatus(int userId) async {
+    try {
+      // On récupère d'abord l'appartement pour trouver la tranche
+      final resData = await _db.from('residents').select('appartement_id').eq('user_id', userId).single();
+      final int appartId = resData['appartement_id'];
+
+      final appartData = await _db.from('appartements').select('immeuble_id').eq('id', appartId).single();
+      final immData = await _db.from('immeubles').select('tranche_id').eq('id', appartData['immeuble_id']).single();
+      final int trancheId = immData['tranche_id'];
+
+      // On récupère les réunions de la tranche
+      final List reunionsRaw = await _db.from('reunions').select().eq('tranche_id', trancheId).order('date');
+
+      // On récupère les choix du résident
+      final List participationRaw = await _db.from('reunion_resident').select().eq('resident_id', userId);
+
+      // ✅ LA CORRECTION EST ICI : On force le type Map<String, dynamic>
+      return reunionsRaw.map((r) {
+        final Map<String, dynamic> reunion = Map<String, dynamic>.from(r);
+
+        // On cherche si une participation existe
+        final participation = participationRaw.firstWhere(
+                (p) => p['reunion_id'] == reunion['id'],
+            orElse: () => null
+        );
+
+        return {
+          ...reunion,
+          'mon_statut': participation != null ? participation['confirmation'] : 'en_attente',
+        };
+      }).toList().cast<Map<String, dynamic>>(); // On cast la liste finale
+
+    } catch (e) {
+      print("Erreur Fetch Réunions: $e");
+      return [];
+    }
+  }
+  Map<String, dynamic> _err(String msg) => {
+    'error'   : msg,
+    'resident': {'num_appart':'—','immeuble_nom':'—','tranche_nom':'—','nb_apparts':1},
+    'charges' : <Map>[],
+    'solde'   : {'total_annee':0.0,'paye_annee':0.0,'reste_annee':0.0,'nb_impaye':0,'nb_partiel':0},
+  };
 }
