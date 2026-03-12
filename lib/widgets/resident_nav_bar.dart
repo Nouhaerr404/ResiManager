@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../screens/resident/resident_dashboard_screen.dart';
 import '../screens/resident/resident_charges_screen.dart';
-// Importe les autres écrans quand ils seront créés
-// import '../screens/resident/resident_notifications_screen.dart';
+import '../screens/resident/resident_annonces_screen.dart';
+import '../screens/resident/resident_reunions_screen.dart';
 
 class ResidentNavBar extends StatelessWidget implements PreferredSizeWidget {
   final int currentIndex;
@@ -11,55 +11,53 @@ class ResidentNavBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Couleur orange de ta maquette
-    const Color brandColor = Color(0xFFFF6B4A);
+    const Color brandColor = Color(0xFFFF6B4A); // Orange de la maquette
 
     return AppBar(
       backgroundColor: Colors.white,
       elevation: 0.5,
-      toolbarHeight: 80, // Hauteur personnalisée pour correspondre au design
-      automaticallyImplyLeading: false, // Supprime le bouton retour auto
+      toolbarHeight: 80,
+      automaticallyImplyLeading: false, // Supprime la flèche retour
       title: Row(
         children: [
-          // LOGO ET TITRE
+          // --- LOGO ET TITRE ---
           const Icon(Icons.home_work, color: brandColor, size: 32),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: const [
               Text(
                 "ResiManager",
-                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 20),
+                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
               ),
               Text(
                 "Espace Résident",
-                style: TextStyle(color: Colors.grey, fontSize: 12),
+                style: TextStyle(color: Colors.grey, fontSize: 11),
               ),
             ],
           ),
 
           const SizedBox(width: 60), // Espace avant les onglets
 
-          // ONGLETS DE NAVIGATION
+          // --- ONGLETS DE NAVIGATION ---
           _buildNavItem(context, "Accueil", Icons.home_outlined, 0, ResidentDashboardScreen()),
-          _buildNavItem(context, "Mes Charges", Icons.receipt_long_outlined, 1, ResidentChargesScreen()),
-          _buildNavItem(context, "Notifications", Icons.notifications_none_outlined, 2, null, badge: "2"),
-          _buildNavItem(context, "Annonces", Icons.article_outlined, 3, null),
-          _buildNavItem(context, "Réunions", Icons.calendar_today_outlined, 4, null),
+          _buildNavItem(context, "Dépenses", Icons.receipt_long_outlined, 1, ResidentChargesScreen()),
+          _buildNavItem(context, "Annonces", Icons.article_outlined, 2, ResidentAnnoncesScreen()),
+          _buildNavItem(context, "Réunions", Icons.calendar_today_outlined, 3, ResidentReunionsScreen()),
 
           const Spacer(),
 
-          // BOUTON RETOUR ADMIN
+          // --- BOUTON RETOUR ADMIN ---
           TextButton.icon(
             onPressed: () {
-              // Ici tu peux rediriger vers le dashboard Super Admin si besoin
+              // Retourne à la première page (Sélecteur de rôle)
               Navigator.of(context).popUntil((route) => route.isFirst);
             },
-            icon: const Icon(Icons.logout, color: Colors.black54, size: 20),
+            icon: const Icon(Icons.logout, color: Colors.black54, size: 18),
             label: const Text(
               "Retour Admin",
-              style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+              style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600, fontSize: 14),
             ),
           ),
           const SizedBox(width: 10),
@@ -68,19 +66,19 @@ class ResidentNavBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
-  // Widget interne pour construire chaque élément du menu
-  Widget _buildNavItem(BuildContext context, String label, IconData icon, int index, Widget? destination, {String? badge}) {
+  // Widget interne pour construire chaque bouton du menu
+  Widget _buildNavItem(BuildContext context, String label, IconData icon, int index, Widget destination) {
     bool isActive = currentIndex == index;
     const Color brandColor = Color(0xFFFF6B4A);
 
     return InkWell(
       onTap: () {
-        if (!isActive && destination != null) {
+        if (!isActive) {
           Navigator.pushReplacement(
             context,
             PageRouteBuilder(
-              pageBuilder: (context, animation1, animation2) => destination,
-              transitionDuration: Duration.zero, // Transition instantanée comme un vrai site web
+              pageBuilder: (context, anim1, anim2) => destination,
+              transitionDuration: Duration.zero, // Transition instantanée style Web
             ),
           );
         }
@@ -102,7 +100,7 @@ class ResidentNavBar extends StatelessWidget implements PreferredSizeWidget {
             Icon(
               icon,
               color: isActive ? brandColor : Colors.grey,
-              size: 22,
+              size: 20,
             ),
             const SizedBox(width: 8),
             Text(
@@ -110,24 +108,9 @@ class ResidentNavBar extends StatelessWidget implements PreferredSizeWidget {
               style: TextStyle(
                 color: isActive ? brandColor : Colors.grey,
                 fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-                fontSize: 15,
+                fontSize: 14,
               ),
             ),
-            // AFFICHAGE DU BADGE (POINT ROUGE)
-            if (badge != null) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.all(5),
-                decoration: const BoxDecoration(
-                  color: brandColor,
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  badge,
-                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ]
           ],
         ),
       ),
