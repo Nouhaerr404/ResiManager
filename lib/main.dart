@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/supabase_config.dart';
+import 'screens/role_selector_screen.dart';
 import 'screens/inter_syndic/tranches_list_screen.dart';
 import 'screens/inter_syndic/apartments/apartments_screen.dart';
 import 'screens/syndic_general/residence_selection_screen.dart';
@@ -10,7 +11,6 @@ import 'screens/syndic_general/residence_selection_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialisation Supabase
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
     anonKey: SupabaseConfig.supabaseAnonKey,
@@ -53,12 +53,11 @@ class ResiManagerApp extends StatelessWidget {
       title: 'ResiManager',
       debugShowCheckedModeBanner: false,
       theme: theme,
-      home: const HomePage(),
-      // Routes (optionnel) — tu peux ajouter d'autres écrans ici
+      home: const RoleSelectorScreen(), // Point d'entrée de Wiam
       routes: {
+        '/home': (context) => const HomePage(),
         '/apartments': (context) => const ApartmentsListScreen(),
         '/tranches': (context) => const TranchesListScreen(),
-        // residence_selection nécessite un param -> on peut naviguer en push directement
       },
     );
   }
@@ -83,7 +82,7 @@ class HomePage extends StatelessWidget {
         title: const Text('ResiManager'),
         centerTitle: true,
       ),
-      drawer: const _AppDrawer(), // navigation drawer pour tous les espaces
+      drawer: const _AppDrawer(),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -127,7 +126,6 @@ class _AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Drawer simple pour naviguer entre les espaces
     return Drawer(
       child: SafeArea(
         child: Column(
