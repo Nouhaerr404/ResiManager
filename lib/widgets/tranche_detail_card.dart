@@ -6,16 +6,19 @@ class TrancheDetailCard extends StatelessWidget {
   final TrancheModel tranche;
   final TrancheService service;
   final VoidCallback onAssignTap;
+  final VoidCallback onEditTap;
 
   const TrancheDetailCard({
     Key? key,
     required this.tranche,
     required this.service,
-    required this.onAssignTap
+    required this.onAssignTap,
+    required this.onEditTap,
   }) : super(key: key);
 
   final Color primaryOrange = const Color(0xFFFF6F4A);
   final Color darkGrey = const Color(0xFF2C2C2C);
+
 
   @override
   Widget build(BuildContext context) {
@@ -35,8 +38,10 @@ class TrancheDetailCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(child: Text(tranche.nom, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: darkGrey))),
-              IconButton(onPressed: () {}, icon: Icon(Icons.edit_outlined, color: Colors.blue.shade300, size: 18)),
-            ],
+              IconButton(
+                onPressed: onEditTap, // <--- ON UTILISE L'ACTION ICI
+                icon: Icon(Icons.edit_outlined, color: Colors.blue.shade300, size: 18)
+              )  ],
           ),
           if (tranche.description != null)
             Text(tranche.description!, style: const TextStyle(color: Colors.grey, fontSize: 12)),
@@ -114,4 +119,5 @@ class TrancheDetailCard extends StatelessWidget {
       child: Text(name, style: TextStyle(fontSize: 10, color: darkGrey)),
     );
   }
+
 }

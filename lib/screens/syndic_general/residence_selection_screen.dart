@@ -35,45 +35,109 @@ class _ResidenceSelectionScreenState extends State<ResidenceSelectionScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Nouvelle Résidence"),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
+        title: const Text(
+          "Nouvelle Résidence",
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Color(0xFF2C2C2C)),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // --- CHAMP NOM ---
+            _buildFieldLabel("Nom de la résidence"),
             TextField(
               controller: nomController,
-              decoration: const InputDecoration(labelText: "Nom de la résidence"),
+              decoration: _buildInputDecoration("Ex: Résidence Les Jardins"),
             ),
+            const SizedBox(height: 20),
+
+            // --- CHAMP ADRESSE ---
+            _buildFieldLabel("Adresse complète"),
             TextField(
               controller: adrController,
-              decoration: const InputDecoration(labelText: "Adresse complète"),
+              maxLines: 2,
+              decoration: _buildInputDecoration("Ex: Avenue de la mer, Tétouan"),
             ),
           ],
         ),
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F4A)),
-            onPressed: () async {
-              if (nomController.text.isNotEmpty) {
-                await _service.createResidence(
-                    nomController.text,
-                    adrController.text,
-                    widget.syndicGeneralId
-                );
-                Navigator.pop(context);
-                _refreshResidences();
-              }
-            },
-            child: const Text('Créer', style: TextStyle(color: Colors.white)),
+          Row(
+            children: [
+              // BOUTON ANNULER
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: Colors.grey.shade300),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text("Annuler", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(width: 15),
+              // BOUTON CRÉER (ORANGE)
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    if (nomController.text.isNotEmpty) {
+                      await _service.createResidence(
+                          nomController.text,
+                          adrController.text,
+                          widget.syndicGeneralId
+                      );
+                      Navigator.pop(context);
+                      _refreshResidences();
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF6F4A),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text("Créer", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
+  // --- PETITS HELPERS POUR LE DESIGN (À ajouter en bas de la classe) ---
+
+  Widget _buildFieldLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF4A4E69)),
+      ),
+    );
+  }
+
+  InputDecoration _buildInputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+      filled: true,
+      fillColor: const Color(0xFFF8F9FA), // Un fond très légèrement gris
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFFF6F4A), width: 1.5),
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(

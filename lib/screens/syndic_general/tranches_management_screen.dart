@@ -250,7 +250,8 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 final tranches = snapshot.data ?? [];
-                if (tranches.isEmpty) return const Center(child: Text("Aucune tranche trouvée."));
+                if (tranches.isEmpty)
+                  return const Center(child: Text("Aucune tranche trouvée."));
 
                 return GridView.builder(
                   shrinkWrap: true,
@@ -260,18 +261,27 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
                     crossAxisCount: isMobile ? 1 : 3,
                     crossAxisSpacing: 20,
                     mainAxisSpacing: 20,
-                    mainAxisExtent: isMobile ? 320 : 380, // HAUTEUR COMPACTE
+                    mainAxisExtent: isMobile
+                        ? 320
+                        : 380, // Hauteur que tu as choisie
                   ),
-                  itemBuilder: (context, index) => TrancheDetailCard(
-                    tranche: tranches[index],
-                    service: _service,
-                    // APPEL DE LA FONCTION MAINTENANT DISPONIBLE
-                    onAssignTap: () => _showAssignSyndicDialog(tranches[index], _loadTranches),
-                  ),
+                  itemBuilder: (context, index) {
+                    final tranche = tranches[index]; // On récupère la tranche actuelle
+
+                    return TrancheDetailCard(
+                      tranche: tranche,
+                      service: _service,
+                      onAssignTap: () =>
+                          _showAssignSyndicDialog(tranche, _loadTranches),
+                      onEditTap: () =>
+                          _showEditTrancheDialog(
+                              tranche), // Action pour le bouton modifier
+                    );
+                  },
                 );
-              },
-            ),
-          ],
+              }
+            )
+          ]
         ),
       ),
     );
@@ -357,4 +367,122 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
       ]),
     );
   }
-}
+
+  void _showEditTrancheDialog(TrancheModel tranche) {
+    // On pré-remplit les contrôleurs avec les données actuelles de la tranche
+    final nomController = TextEditingController(text: tranche.nom);
+    final nbImmController = TextEditingController(text: tranche.nombreImmeubles.toString());
+    final nbAppController = TextEditingController(text: tranche.nombreAppartements.toString());
+    final nbParkController = TextEditingController(text: tranche.nombreParkings.toString());
+    final nbGarController = TextEditingController(text: tranche.nombreGarages.toString());
+    final nbBoxController = TextEditingController(text: tranche.nombreBoxes.toString());
+    int? selectedSyndicId = tranche.interSyndicId;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: Colors.white,
+          title: Text(
+            "Modifier ${tranche.nom}",
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Color(0xFF2C2C2C)),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildFieldLabel("Nom de la tranche"),
+                TextField(controller: nomController, decoration: _buildInputDecoration("Nom")),
+                const SizedBox(height: 15),
+
+                _buildFieldLabel("Syndic Affecté"),
+                FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _service.getAvailableInterSyndics(),
+                  builder: (context, snapshot) {
+                    final syndics = snapshot.data ?? [];
+                    return DropdownButtonFormField<int>(
+                      value: selectedSyndicId,
+                      isExpanded: true,
+                      decoration: _buildInputDecoration("Sélectionner"),
+                      items: syndics.map((s) => DropdownMenuItem<int>(
+                        value: s['id'],
+                        child: Text("${s['prenom']} ${s['nom']}"),
+                      )).toList(),
+                      onChanged: (val) => setDialogState(() => selectedSyndicId = val),
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                const Divider(),
+                const SizedBox(height: 10),
+
+                // LES COMPTEURS EN GRILLE (Design Premium)
+                Row(
+                  children: [
+                    Expanded(child: _buildCounterField("Immeubles", nbImmController)),
+                    const SizedBox(width: 10),
+                    Expanded(child: _buildCounterField("Appartements", nbAppController)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _buildCounterField("Parkings", nbParkController)),
+                    const SizedBox(width: 10),
+                    Expanded(child: _buildCounterField("Garages", nbGarController)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _buildCounterField("Boxes", nbBoxController),
+              ],
+            ),
+          ),
+          actionsPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          actions: [
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.grey.shade300),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text("Annuler", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      await _service.updateTrancheComplet(
+                        tranche.id,
+                        nomController.text,
+                        selectedSyndicId,
+                        int.tryParse(nbImmController.text) ?? 0,
+                        int.tryParse(nbAppController.text) ?? 0,
+                        int.tryParse(nbParkController.text) ?? 0,
+                        int.tryParse(nbGarController.text) ?? 0,
+                        int.tryParse(nbBoxController.text) ?? 0,
+                      );
+                      Navigator.pop(context);
+                      _loadTranches();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF6F4A),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text("Enregistrer", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }}
