@@ -18,7 +18,20 @@ class ResidenceService {
       'nom': nom,
       'adresse': adresse,
       'syndic_general_id': syndicGeneralId,
-      // Les compteurs sont à 0 par défaut
     });
   }
-}
+
+  // Met à jour une résidence
+
+  Future<void> updateResidence(int id, String nom, String adresse) async {
+    await _db.from('residences').update({
+      'nom': nom,
+      'adresse': adresse,
+    }).eq('id', id);
+  }
+
+  // Supprime une résidence
+  Future<void> deleteResidence(int id) async {
+    await _db.from('residences').delete().eq('id', id);
+  }
+}

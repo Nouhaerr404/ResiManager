@@ -1,8 +1,10 @@
 // lib/screens/inter_syndic/finance/finance_dashboard_screen.dart
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../../../services/finance_service.dart';
 import '../../../widgets/kpi_card.dart';
 import 'add_tranche_expense_screen.dart';
+import 'manage_categories_screen.dart';
 
 class FinanceDashboardScreen extends StatefulWidget {
   final int residenceId;
@@ -31,6 +33,48 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
     setState(() {
       _financesFuture = _service.getInterSyndicFinances(widget.interSyndicId, widget.residenceId);
     });
+  }
+
+  void _editExpense(Map<String, dynamic> expense) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddTrancheExpenseScreen(
+          residenceId: widget.residenceId,
+          interSyndicId: widget.interSyndicId,
+          expense: expense,
+        ),
+      ),
+    ).then((_) => _refresh());
+  }
+
+  void _deleteExpense(Map<String, dynamic> expense) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Supprimer la dépense"),
+        content: const Text("Êtes-vous sûr de vouloir supprimer cette dépense ?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+          TextButton(
+            onPressed: () async {
+              try {
+                await _service.deleteInterSyndicExpense(
+                  expenseId: expense['id'],
+                  montant: double.parse(expense['montant'].toString()),
+                  trancheId: expense['tranche_id'],
+                );
+                Navigator.pop(context);
+                _refresh();
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur: $e")));
+              }
+            },
+            child: const Text("Supprimer", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -76,11 +120,11 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildKpiGrid(data),
+                             _buildKpiGrid(data),
                             const SizedBox(height: 30),
-                            _buildChartsSection(data),
+                            _buildChartsRow(data),
                             const SizedBox(height: 30),
-                            _buildRecentActions(),
+                            _buildRecentActionsList(),
                           ],
                         ),
                       );
@@ -104,14 +148,25 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
           Row(
             children: [
               IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
-              const Text("Tableau de Bord Financier", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+              const Text("Finances des Tranches", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
             ],
           ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F4A), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddTrancheExpenseScreen(residenceId: widget.residenceId, interSyndicId: widget.interSyndicId))).then((_) => _refresh()),
-            icon: const Icon(Icons.add, color: Colors.white),
-            label: const Text("Nouvelle Dépense", style: TextStyle(color: Colors.white)),
+          Row(
+            children: [
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageCategoriesScreen())),
+                icon: const Icon(Icons.settings, color: Colors.white, size: 18),
+                label: const Text("Catégories", style: TextStyle(color: Colors.white)),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF6F4A), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddTrancheExpenseScreen(residenceId: widget.residenceId, interSyndicId: widget.interSyndicId))).then((_) => _refresh()),
+                icon: const Icon(Icons.add, color: Colors.white),
+                label: const Text("Dépense Tranche", style: TextStyle(color: Colors.white)),
+              ),
+            ],
           ),
         ],
       ),
@@ -124,14 +179,14 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
       runSpacing: 15,
       children: [
         KpiCard(
-          title: 'Solde Total',
+          title: 'Budget Restant',
           value: '${data['solde']?.toStringAsFixed(0) ?? 0}',
           icon: Icons.account_balance_wallet,
           iconColor: Colors.blue,
           isCurrency: true,
         ),
         KpiCard(
-          title: 'Total Revenus',
+          title: 'Total Budget (Dotation)',
           value: '${data['total_revenus']?.toStringAsFixed(0) ?? 0}',
           icon: Icons.trending_up,
           iconColor: Colors.green,
@@ -148,7 +203,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
     );
   }
 
-  Widget _buildChartsSection(Map<String, dynamic> data) {
+  Widget _buildChartsRow(Map<String, dynamic> data) {
     List<dynamic> depByTranche = data['depenses_par_tranche'] ?? [];
     return Container(
       padding: const EdgeInsets.all(20),
@@ -156,63 +211,112 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Dépenses par Tranche", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          const Text("Répartition du Budget par Tranche", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           const SizedBox(height: 20),
           if (depByTranche.isEmpty)
             const Center(child: Text("Aucune donnée à afficher"))
           else
-            Column(
-              children: depByTranche.map((t) {
-                double total = data['total_depenses'] > 0 ? (t['montant'] / data['total_depenses']) : 0;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 15),
+            Row(
+              children: [
+                Expanded(
+                  flex: 1,
+                  child: SizedBox(
+                    height: 150,
+                    child: PieChart(
+                      PieChartData(
+                        sectionsSpace: 2,
+                        centerSpaceRadius: 30,
+                        sections: depByTranche.asMap().entries.map((entry) {
+                          final i = entry.key;
+                          final t = entry.value;
+                          final colors = [Colors.blue, Colors.orange, Colors.green, Colors.red, Colors.purple, Colors.cyan];
+                          return PieChartSectionData(
+                            color: colors[i % colors.length],
+                            value: t['montant'] > 0 ? t['montant'] : 1, // fallback to 1 for visual
+                            title: '',
+                            radius: 40,
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  flex: 1,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(t['nom'], style: const TextStyle(fontWeight: FontWeight.w600)),
-                          Text('${t['montant'].toStringAsFixed(0)} DH', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                      const SizedBox(height: 5),
-                      Stack(
-                        children: [
-                          Container(height: 8, decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(4))),
-                          FractionallySizedBox(
-                            widthFactor: total.clamp(0, 1),
-                            child: Container(height: 8, decoration: BoxDecoration(color: const Color(0xFFFF6F4A), borderRadius: BorderRadius.circular(4))),
-                          ),
-                        ],
-                      ),
-                    ],
+                    children: depByTranche.map((t) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 5),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(t['nom'], style: const TextStyle(fontSize: 12)),
+                            Text('${t['montant'].toStringAsFixed(0)} DH', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      );
+                    }).toList(),
                   ),
-                );
-              }).toList(),
+                ),
+              ],
             ),
         ],
       ),
     );
   }
 
-  Widget _buildRecentActions() {
+  Widget _buildRecentActionsList() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), borderRadius: BorderRadius.circular(20)),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Répartition par Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          SizedBox(height: 15),
-          Row(
-            children: [
-              _LegendItem(color: Color(0xFFFF6F4A), label: "Dépenses Spécifiques"),
-              SizedBox(width: 20),
-              _LegendItem(color: Colors.blue, label: "Dépenses Globales"),
-            ],
+          const Text("Dernières Dépenses (Spécifiques & Diffusées)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          const SizedBox(height: 15),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: _service.getInterSyndicRecentExpenses(widget.interSyndicId),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              final expenses = snapshot.data!;
+              if (expenses.isEmpty) return const Center(child: Text("Aucune dépense enregistrée"));
+
+              return Column(
+                children: expenses.map((e) {
+                  bool isDiffused = e['description']?.toString().contains('réf: #') ?? false;
+                  bool isEditable = e['inter_syndic_id'] != null;
+
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      backgroundColor: isDiffused ? Colors.blue.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                      child: Icon(isDiffused ? Icons.share : Icons.receipt_long, color: isDiffused ? Colors.blue : Colors.orange, size: 20),
+                    ),
+                    title: Text(e['categories']?['nom'] ?? 'Sans Catégorie', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text('${e['tranches']?['nom']} • ${e['date'].toString().substring(0, 10)}'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('${e['montant']} DH', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                        if (isEditable) ...[
+                          IconButton(
+                            icon: const Icon(Icons.edit, size: 18, color: Colors.blue),
+                            onPressed: () => _editExpense(e),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                            onPressed: () => _deleteExpense(e),
+                          ),
+                        ]
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+            },
           ),
-          // Placeholder for more detailed stats
         ],
       ),
     );

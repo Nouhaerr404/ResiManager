@@ -227,12 +227,14 @@ class ResidentService {
 
       await _db.from('paiements').insert({
         'appartement_id': appartementId,
-        'depense_id': 1,
         'inter_syndic_id': 1,
+        'residence_id': 1, // Fallback residence_id
         'montant_total': montantTotal,
         'montant_paye': 0,
         'type_paiement': 'charges',
         'statut': 'impaye',
+        'annee': DateTime.now().year,
+        'mois': DateTime.now().month,
       });
 
       print('>>> Résident ajouté');
@@ -394,21 +396,21 @@ class ResidentService {
         .eq('annee', annee)
         .order('mois', ascending: true);
 
-    // 3. Tous les paiements de l'appartement
+    // 3. Tous les paiements de l'appartement pour cette année
     final paiRows = await _db
         .from('paiements')
         .select('''
-          id, montant_total, montant_paye, statut, date_paiement,
-          depenses ( id, annee, mois )
+          id, montant_total, montant_paye, statut, date_paiement, annee, mois
         ''')
-        .eq('appartement_id', appartId);
+        .eq('appartement_id', appartId)
+        .eq('annee', annee);
 
-    // Index paiements par depense_id
-    final Map<int, Map<String, dynamic>> paiByDep = {};
+    // Index paiements par mois (car depense_id n'existe plus)
+    final Map<int, Map<String, dynamic>> paiByMonth = {};
     for (final p in paiRows as List) {
-      final d = p['depenses'] as Map<String, dynamic>?;
-      if (d != null && d['annee'] == annee) {
-        paiByDep[d['id'] as int] = Map<String, dynamic>.from(p as Map);
+      final int? m = p['mois'] as int?;
+      if (m != null) {
+        paiByMonth[m] = Map<String, dynamic>.from(p as Map);
       }
     }
 
@@ -417,9 +419,12 @@ class ResidentService {
     for (final d in depRows as List) {
       final cat   = d['categories'] as Map<String, dynamic>?;
       final depId = d['id']         as int;
+      final int? dMois = d['mois']  as int?;
       final total = (d['montant']   as num).toDouble();
       final part  = total / nbApparts;
-      final pai   = paiByDep[depId];
+      
+      // Matcher le paiement par mois
+      final pai = dMois != null ? paiByMonth[dMois] : null;
 
       final double paye  = (pai?['montant_paye'] as num?)?.toDouble() ?? 0.0;
       final double reste = (part - paye).clamp(0.0, double.infinity);
@@ -765,15 +770,13 @@ class ResidentService {
     if (appartId != null) {
       final pais = await _db
           .from('paiements')
-          .select('montant_total, montant_paye, depenses(annee)')
+          .select('montant_total, montant_paye, annee')
           .eq('appartement_id', appartId)
+          .eq('annee', annee)
           .inFilter('statut', ['impaye', 'partiel']);
       for (final p in pais) {
-        final d = p['depenses'] as Map<String, dynamic>?;
-        if (d?['annee'] == annee) {
-          soldeDu += ((p['montant_total'] as num) -
-              (p['montant_paye'] as num)).toDouble();
-        }
+        soldeDu += ((p['montant_total'] as num) -
+            (p['montant_paye'] as num)).toDouble();
       }
     }
 

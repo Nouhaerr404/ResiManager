@@ -88,8 +88,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 runSpacing: 20,
                 children: [
                   KpiCard(
-                      title: 'Syndics Actifs',
+                      title: 'Inter-Syndics Actifs',
                       value: data.syndicsActifs.toString(),
+
                       icon: Icons.people,
                       iconColor: const Color(0xFF2C2C2C) // Gris Foncé
                   ),

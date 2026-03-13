@@ -4,19 +4,23 @@ import 'package:file_picker/file_picker.dart';
 import '../../../services/finance_service.dart';
 import '../../../services/tranche_service.dart';
 import '../../../models/tranche_model.dart';
+import 'manage_categories_screen.dart';
 
 class AddTrancheExpenseScreen extends StatefulWidget {
   final int residenceId;
   final int interSyndicId;
+  final Map<String, dynamic>? expense;
   const AddTrancheExpenseScreen({
-    Key? key,
+    super.key,
     required this.residenceId,
-    required this.interSyndicId
-  }) : super(key: key);
+    required this.interSyndicId,
+    this.expense
+  });
 
   @override
   _AddTrancheExpenseScreenState createState() => _AddTrancheExpenseScreenState();
 }
+
 
 class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
   final FinanceService _financeService = FinanceService();
@@ -30,7 +34,6 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
   PlatformFile? _pickedFile;
   bool _isUploading = false;
   List<TrancheModel> _myTranches = [];
-  bool _isLoadingTranches = true;
 
   final Color primaryOrange = const Color(0xFFFF6F4A);
   final Color darkGrey = const Color(0xFF2C2C2C);
@@ -39,6 +42,15 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.expense != null) {
+      _selectedCategoryId = widget.expense!['categorie_id'];
+      _selectedTrancheId = widget.expense!['tranche_id'];
+      _montantController.text = widget.expense!['montant'].toString();
+      _descController.text = widget.expense!['description'] ?? "";
+      if (widget.expense!['date'] != null) {
+        _selectedDate = DateTime.parse(widget.expense!['date']);
+      }
+    }
     _loadTranches();
   }
 
@@ -46,7 +58,9 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
     final tranches = await _trancheService.getTranchesOfInterSyndic(widget.interSyndicId);
     setState(() {
       _myTranches = tranches;
-      _isLoadingTranches = false;
+      if (_selectedTrancheId == null && tranches.isNotEmpty) {
+        _selectedTrancheId = tranches.first.id;
+      }
     });
   }
 
@@ -76,12 +90,21 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
                         _buildSectionTitle("Type de dépense *"),
                         const SizedBox(height: 20),
                         
-                        // Sélection Globale vs Spécifique
-                        _buildTypeSelector(),
-                        
-                        const SizedBox(height: 30),
-                        _buildSectionTitle("Catégorie de dépense *"),
-                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _buildSectionTitle("Catégorie de dépense *"),
+                            TextButton.icon(
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const ManageCategoriesScreen()),
+                              ).then((_) => setState(() {})),
+                              icon: const Icon(Icons.edit, size: 16),
+                              label: const Text("Gérer"),
+                            )
+                          ],
+                        ),
+                        const SizedBox(height: 10),
                         _buildCategoryGrid(isWeb),
 
                         const SizedBox(height: 40),
@@ -114,12 +137,12 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
             onPressed: () => Navigator.pop(context),
           ),
           const SizedBox(width: 10),
-          const Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text("Nouvelle Dépense",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black)),
-              Text("Espace Inter-Syndic",
+              Text(widget.expense == null ? "Nouvelle Dépense" : "Modifier la Dépense",
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black)),
+              const Text("Espace Inter-Syndic",
                   style: TextStyle(fontSize: 14, color: Colors.grey)),
             ],
           ),
@@ -132,59 +155,10 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
     return Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkGrey));
   }
 
-  Widget _buildTypeSelector() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildTypeItem(
-            label: "Globale",
-            subtitle: "Toutes mes tranches",
-            isSelected: _selectedTrancheId == null,
-            onTap: () => setState(() => _selectedTrancheId = null),
-          ),
-        ),
-        const SizedBox(width: 15),
-        Expanded(
-          child: _buildTypeItem(
-            label: "Spécifique",
-            subtitle: "Une seule tranche",
-            isSelected: _selectedTrancheId != null,
-            onTap: () {
-              if (_myTranches.isNotEmpty) {
-                setState(() => _selectedTrancheId = _myTranches.first.id);
-              }
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTypeItem({required String label, required String subtitle, required bool isSelected, required VoidCallback onTap}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(15),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: isSelected ? primaryOrange : Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
-          border: Border.all(color: isSelected ? primaryOrange : Colors.grey.shade200),
-        ),
-        child: Column(
-          children: [
-            Text(label, style: TextStyle(color: isSelected ? Colors.white : darkGrey, fontWeight: FontWeight.bold, fontSize: 16)),
-            Text(subtitle, style: TextStyle(color: isSelected ? Colors.white70 : Colors.grey, fontSize: 12)),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildCategoryGrid(bool isWeb) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _financeService.getAllCategories(),
+      future: _financeService.getCategories('individuelle'),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final categories = snapshot.data!;
@@ -233,15 +207,15 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 20)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 20)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_selectedTrancheId != null) ...[
+          if (_myTranches.isNotEmpty) ...[
             _buildFieldLabel("Tranche concernée"),
             DropdownButtonFormField<int>(
-              value: _selectedTrancheId,
+              initialValue: _selectedTrancheId,
               decoration: _inputStyle("Sélectionner la tranche"),
               items: _myTranches.map((t) => DropdownMenuItem(value: t.id, child: Text(t.nom))).toList(),
               onChanged: (val) => setState(() => _selectedTrancheId = val),
@@ -306,7 +280,8 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
         onPressed: _isUploading ? null : _submitForm,
         child: _isUploading
             ? const CircularProgressIndicator(color: Colors.white)
-            : const Text("Enregistrer la dépense", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            : Text(widget.expense == null ? "Enregistrer la dépense" : "Mettre à jour la dépense", 
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -337,17 +312,31 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
     setState(() => _isUploading = true);
 
     try {
-      await _financeService.addInterSyndicExpense(
-        residenceId: widget.residenceId,
-        interSyndicId: widget.interSyndicId,
-        montant: double.parse(_montantController.text.replaceAll(',', '.')),
-        categorieId: _selectedCategoryId!,
-        date: _selectedDate,
-        trancheId: _selectedTrancheId,
-        description: _descController.text,
-      );
+      if (widget.expense == null) {
+        await _financeService.addInterSyndicExpense(
+          residenceId: widget.residenceId,
+          interSyndicId: widget.interSyndicId,
+          montant: double.parse(_montantController.text.replaceAll(',', '.')),
+          categorieId: _selectedCategoryId!,
+          date: _selectedDate,
+          trancheId: _selectedTrancheId!,
+          description: _descController.text,
+        );
+      } else {
+        await _financeService.updateInterSyndicExpense(
+          expenseId: widget.expense!['id'],
+          oldMontant: double.parse(widget.expense!['montant'].toString()),
+          newMontant: double.parse(_montantController.text.replaceAll(',', '.')),
+          categorieId: _selectedCategoryId!,
+          date: _selectedDate,
+          trancheId: _selectedTrancheId!,
+          description: _descController.text,
+        );
+      }
       Navigator.pop(context);
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint("Error: $e");
+      debugPrint("Stack trace: $stack");
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : $e")));
     } finally {
       setState(() => _isUploading = false);

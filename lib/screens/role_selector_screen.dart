@@ -5,7 +5,9 @@ import 'syndic_general/dashboard_screen.dart';
 import 'inter_syndic/tranche_dashboard_screen.dart';
 import 'inter_syndic/apartments/apartments_screen.dart';
 import 'inter_syndic/tranches_list_screen.dart';
+import 'inter_syndic/inter_syndic_selection_screen.dart';
 import '../models/tranche_model.dart';
+
 
 class RoleSelectorScreen extends StatelessWidget {
   const RoleSelectorScreen({super.key});
@@ -56,19 +58,9 @@ class RoleSelectorScreen extends StatelessWidget {
                     "Inter-Syndic",
                     Icons.dashboard_customize,
                     const Color(0xFF4CAF82), // Mint
-                    TrancheDashboardScreen(
-                      tranche: TrancheModel(
-                        id: 1,
-                        nom: "Tranche A (Demo)",
-                        residenceId: 1,
-                        nombreImmeubles: 5,
-                        nombreAppartements: 120,
-                        nombreParkings: 80,
-                        nombreGarages: 20,
-                        nombreBoxes: 10,
-                      ),
-                    ),
+                    const InterSyndicSelectionScreen(),
                   ),
+
                   _roleButton(
                     context,
                     "Résident (Ahmed)",

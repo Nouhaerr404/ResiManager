@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import '../screens/syndic_general/dashboard_screen.dart';
+
 import '../screens/syndic_general/tranches_management_screen.dart';
 import '../screens/syndic_general/residence_finances_screen.dart';
+import '../screens/syndic_general/inter_syndics/inter_syndics_screen.dart';
+import '../screens/syndic_general/residences/residences_management_screen.dart';
+
 
 
 
@@ -51,7 +55,12 @@ class SyndicSidebar extends StatelessWidget {
           _buildMenuItem(context, Icons.dashboard_outlined, 'Tableau de bord', true, () {
             Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const DashboardScreen(residenceId: 1)));
           }),
-          _buildMenuItem(context, Icons.people_outline, 'Syndics', false, () {}),
+          _buildMenuItem(context, Icons.people_outline, 'Inter-Syndics', false, () {
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const InterSyndicsScreen()));
+          }),
+          _buildMenuItem(context, Icons.business, 'Résidences', false, () {
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const ResidencesManagementScreen(syndicGeneralId: 1)));
+          }),
           _buildMenuItem(context, Icons.domain, 'Tranches', false, () {
             Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const TranchesManagementScreen(residenceId: 1)));
           }),
@@ -63,6 +72,7 @@ class SyndicSidebar extends StatelessWidget {
           }),
           _buildMenuItem(context, Icons.apartment, 'Immeubles', false, () {}),
           _buildMenuItem(context, Icons.local_parking, 'Parkings', false, () {}),
+
 
           const Spacer(),
 

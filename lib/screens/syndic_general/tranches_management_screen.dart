@@ -84,6 +84,81 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
     );
   }
 
+
+  // --- FORMULAIRE DE MODIFICATION DE TRANCHE ---
+  void _showEditTrancheDialog(TrancheModel tranche) {
+    final nomController = TextEditingController(text: tranche.nom);
+    final descController = TextEditingController(text: tranche.description);
+    final nbImmController = TextEditingController(text: tranche.nombreImmeubles.toString());
+    final nbAppController = TextEditingController(text: tranche.nombreAppartements.toString());
+    final nbParkController = TextEditingController(text: tranche.nombreParkings.toString());
+    final nbGarController = TextEditingController(text: tranche.nombreGarages.toString());
+    final nbBoxController = TextEditingController(text: tranche.nombreBoxes.toString());
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Modifier la Tranche'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nomController, decoration: const InputDecoration(labelText: 'Nom')),
+              TextField(controller: descController, decoration: const InputDecoration(labelText: 'Description')),
+              TextField(controller: nbImmController, decoration: const InputDecoration(labelText: 'Nombre Immeubles'), keyboardType: TextInputType.number),
+              TextField(controller: nbAppController, decoration: const InputDecoration(labelText: 'Nombre Appartements'), keyboardType: TextInputType.number),
+              TextField(controller: nbParkController, decoration: const InputDecoration(labelText: 'Nombre Parkings'), keyboardType: TextInputType.number),
+              TextField(controller: nbGarController, decoration: const InputDecoration(labelText: 'Nombre Garages'), keyboardType: TextInputType.number),
+              TextField(controller: nbBoxController, decoration: const InputDecoration(labelText: 'Nombre Boxes'), keyboardType: TextInputType.number),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: primaryOrange),
+            onPressed: () async {
+              if (nomController.text.isNotEmpty) {
+                await _service.updateTrancheComplet(
+                  tranche.id, nomController.text, descController.text,
+                  int.tryParse(nbImmController.text) ?? 0, int.tryParse(nbAppController.text) ?? 0,
+                  int.tryParse(nbParkController.text) ?? 0, int.tryParse(nbGarController.text) ?? 0,
+                  int.tryParse(nbBoxController.text) ?? 0,
+                );
+                Navigator.pop(context);
+                _refreshTranches();
+              }
+            },
+            child: const Text('Enregistrer', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteTranche(TrancheModel tranche) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmer la suppression'),
+        content: Text('Voulez-vous vraiment supprimer la tranche ${tranche.nom} ?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+          ElevatedButton(
+            onPressed: () async {
+              await _service.deleteTranche(tranche.id);
+              Navigator.pop(context);
+              _refreshTranches();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Supprimer', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+
   // --- FORMULAIRE D'ASSIGNATION ---
   void _showAssignSyndicDialog(TrancheModel tranche, VoidCallback onAssigned) {
     showDialog(
@@ -164,7 +239,10 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
                             tranche: tranches[index],
                             service: _service,
                             onAssignTap: () => _showAssignSyndicDialog(tranches[index], _refreshTranches),
+                            onEditTap: () => _showEditTrancheDialog(tranches[index]),
+                            onDeleteTap: () => _confirmDeleteTranche(tranches[index]),
                           ),
+
                         );
                       },
                     );

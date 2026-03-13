@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:resimanager/widgets/main_layout.dart';
 import '../../services/finance_service.dart';
 import '../../screens/syndic_general/add_global_expense_screen.dart';
@@ -15,49 +16,6 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
   final FinanceService _service = FinanceService();
   int _selectedAnnee = DateTime.now().year;
   int _selectedMois = DateTime.now().month;
-
-  void _showAddExpenseDialog() async {
-    final cats = await _service.getCategories('globale');
-    final montantController = TextEditingController();
-    int? selectedCatId;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Ajouter une dépense globale"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: montantController, decoration: const InputDecoration(labelText: "Montant (DH)"), keyboardType: TextInputType.number),
-            DropdownButtonFormField<int>(
-              items: cats.map((c) => DropdownMenuItem(value: c['id'] as int, child: Text(c['nom']))).toList(),
-              onChanged: (val) => selectedCatId = val,
-              decoration: const InputDecoration(labelText: "Catégorie"),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
-          ElevatedButton(
-            onPressed: () async {
-              if (selectedCatId != null && montantController.text.isNotEmpty) {
-                await _service.addGlobalExpense(
-                  residenceId: widget.residenceId,
-                  montant: double.parse(montantController.text),
-                  categorieId: selectedCatId!,
-                  date: DateTime.now(),
-                  syndicId: 1, // À remplacer par l'ID de l'user connecté
-                );
-                Navigator.pop(context);
-                setState(() {}); // Rafraîchir le tableau
-              }
-            },
-            child: const Text("Enregistrer"),
-          )
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,10 +43,7 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
                       MaterialPageRoute(
                         builder: (context) => AddGlobalExpenseScreen(residenceId: widget.residenceId),
                       ),
-                    ).then((_) {
-                      setState(() {
-                      });
-                    });
+                    ).then((_) => setState(() {}));
                   },
                   icon: const Icon(Icons.add, color: Colors.white),
                   label: const Text("Dépense Globale", style: TextStyle(color: Colors.white)),
@@ -97,11 +52,17 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
               ],
             ),
             const SizedBox(height: 20),
+            
+            // ZONE GRAPHIQUE
+            _buildChartsRow(),
+
+            const SizedBox(height: 20),
+
             // TABLEAU
             Expanded(
               child: Container(
                 width: double.infinity,
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]),
                 child: FutureBuilder<List<Map<String, dynamic>>>(
                   future: _service.getResidenceExpenses(residenceId: widget.residenceId, mois: _selectedMois, annee: _selectedAnnee),
                   builder: (context, snapshot) {
@@ -130,6 +91,71 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildChartsRow() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _service.getResidenceExpenseStats(widget.residenceId),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+        final stats = snapshot.data!;
+        if (stats.isEmpty) return Container(height: 100, child: const Center(child: Text("Aucune donnée pour les graphiques")));
+
+        return Container(
+          height: 250,
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 1,
+                child: PieChart(
+                  PieChartData(
+                    sectionsSpace: 2,
+                    centerSpaceRadius: 40,
+                    sections: stats.asMap().entries.map((entry) {
+                      final i = entry.key;
+                      final s = entry.value;
+                      final colors = [Colors.blue, Colors.orange, Colors.green, Colors.red, Colors.purple, Colors.cyan];
+                      return PieChartSectionData(
+                        color: colors[i % colors.length],
+                        value: s['amount'],
+                        title: '${s['amount'].toStringAsFixed(0)}',
+                        radius: 50,
+                        titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                flex: 1,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: stats.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final s = entry.value;
+                    final colors = [Colors.blue, Colors.orange, Colors.green, Colors.red, Colors.purple, Colors.cyan];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Container(width: 12, height: 12, color: colors[i % colors.length]),
+                          const SizedBox(width: 8),
+                          Text(s['category'], style: const TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              )
+            ],
+          ),
+        );
+      },
     );
   }
 

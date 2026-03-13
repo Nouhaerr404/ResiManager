@@ -12,7 +12,7 @@ class TrancheService {
 
       final res = await _db
           .from('tranches')
-          .select('*')
+          .select('*, users(nom, prenom)')
           .eq('inter_syndic_id', interSyndicId)
           .timeout(const Duration(seconds: 10));
 
@@ -147,6 +147,24 @@ class TrancheService {
     });
   }
 
+  Future<void> updateTrancheComplet(
+      int trancheId, String nom, String description,
+      int nbImm, int nbApp, int nbPark, int nbGar, int nbBox) async {
+    await _db.from('tranches').update({
+      'nom': nom,
+      'description': description,
+      'nombre_immeubles': nbImm,
+      'nombre_appartements': nbApp,
+      'nombre_parkings': nbPark,
+      'nombre_garages': nbGar,
+      'nombre_boxes': nbBox,
+    }).eq('id', trancheId);
+  }
+
+  Future<void> deleteTranche(int trancheId) async {
+    await _db.from('tranches').delete().eq('id', trancheId);
+  }
+
   // Récupère la liste des inter-syndics disponibles
   Future<List<Map<String, dynamic>>> getAvailableInterSyndics() async {
     final response = await _db
@@ -165,4 +183,4 @@ class TrancheService {
         .eq('id', trancheId);
   }
 
-}
+}

@@ -3,6 +3,9 @@ import '../../services/resident_service.dart';
 import '../../widgets/resident_nav_bar.dart';
 
 class ResidentChargesScreen extends StatefulWidget {
+  final int userId;
+  const ResidentChargesScreen({Key? key, this.userId = 3}) : super(key: key);
+
   @override
   _ResidentChargesScreenState createState() => _ResidentChargesScreenState();
 }
@@ -11,22 +14,30 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
   final ResidentService _service = ResidentService();
   String _searchQuery = "";
   String _filter = "Toutes";
+  int _selectedYear = DateTime.now().year;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF9F8F6),
-      appBar: const ResidentNavBar(currentIndex: 1), // Index 2 correspond à l'onglet Dépenses
+      appBar: const ResidentNavBar(currentIndex: 1), 
       body: FutureBuilder<Map<String, dynamic>>(
-        future: _service.getTrancheExpensesDetailed(3, 2026),
+        future: _service.getTrancheExpensesDetailed(widget.userId, _selectedYear),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: Color(0xFFFF6B4A)));
           }
-          if (snapshot.hasError) return Center(child: Text("Erreur : ${snapshot.error}"));
+          if (snapshot.hasError) return Center(child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 60, color: Colors.red),
+              const SizedBox(height: 10),
+              Text("Erreur : ${snapshot.error}"),
+            ],
+          ));
 
-          final data = snapshot.data!;
-          final List allDeps = data['depenses'];
+          final data = snapshot.data ?? {};
+          final List allDeps = data['depenses'] ?? [];
 
           // Filtrage interactif (Recherche + Status)
           final filteredDeps = allDeps.where((d) {
@@ -97,14 +108,17 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
       child: Row(
-        children: const [
-          Icon(Icons.calendar_today, size: 18, color: Colors.grey),
-          SizedBox(width: 15),
-          Text("Année", style: TextStyle(color: Colors.black87)),
-          SizedBox(width: 20),
-          Text("2026", style: TextStyle(fontWeight: FontWeight.bold)),
-          Spacer(),
-          Icon(Icons.keyboard_arrow_down, color: Colors.grey),
+        children: [
+          const Icon(Icons.calendar_today, size: 18, color: Colors.grey),
+          const SizedBox(width: 15),
+          const Text("Année", style: TextStyle(color: Colors.black87)),
+          const SizedBox(width: 20),
+          DropdownButton<int>(
+            value: _selectedYear,
+            underline: const SizedBox(),
+            items: [2024, 2025, 2026, 2027].map((y) => DropdownMenuItem(value: y, child: Text("$y"))).toList(),
+            onChanged: (val) => setState(() => _selectedYear = val!),
+          ),
         ],
       ),
     );
@@ -283,11 +297,12 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
       padding: const EdgeInsets.all(25),
       decoration: BoxDecoration(color: const Color(0xFFFDF7E7), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange.shade100)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
-        Text("ℹ️ INFORMATION SUR LES CHARGES", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.brown, fontSize: 13)),
+        Text("ℹ️ INFORMATION SUR LES CHARGES ET DÉPENSES", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.brown, fontSize: 13)),
         SizedBox(height: 10),
-        Text("• Cotisation annuelle : Montant fixe que chaque résident doit payer par an.", style: TextStyle(fontSize: 12, color: Colors.brown)),
-        Text("• Dépenses de la tranche : Géré par le Syndic Général pour toute la tranche.", style: TextStyle(fontSize: 12, color: Colors.brown)),
-        Text("• Factures : Documents justificatifs officiels fournis par le Syndic.", style: TextStyle(fontSize: 12, color: Colors.brown)),
+        Text("• Cotisation annuelle : Montant fixe payé par chaque résident.", style: TextStyle(fontSize: 12, color: Colors.brown)),
+        Text("• Dépenses Communes : Dépenses globales de la résidence divisées équitablement entre les tranches.", style: TextStyle(fontSize: 12, color: Colors.brown, fontWeight: FontWeight.bold)),
+        Text("• Dépenses de Tranche : Frais spécifiques à votre tranche (maintenance, petits travaux).", style: TextStyle(fontSize: 12, color: Colors.brown)),
+        Text("• Note : Les résidents voient uniquement la part de dépense globale affectée à leur tranche.", style: TextStyle(fontSize: 12, color: Colors.brown, fontStyle: FontStyle.italic)),
       ]),
     );
   }

@@ -318,8 +318,6 @@ CREATE TABLE paiements (
         FOREIGN KEY (resident_id)     REFERENCES users(id)        ON DELETE RESTRICT,
     CONSTRAINT fk_paiement_appartement
         FOREIGN KEY (appartement_id)  REFERENCES appartements(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_paiement_depense
-        FOREIGN KEY (depense_id)      REFERENCES depenses(id)     ON DELETE RESTRICT,
     CONSTRAINT fk_paiement_intersyndic
         FOREIGN KEY (inter_syndic_id) REFERENCES users(id)        ON DELETE RESTRICT,
     CONSTRAINT fk_paiement_residence
