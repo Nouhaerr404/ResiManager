@@ -7,28 +7,27 @@ import 'residents/residents_screen.dart';
 import 'reunions/reunions_screen.dart';
 import 'finance/finance_dashboard_screen.dart';
 
-// -- Brand palette (unified with garage/resident screens)
+// ── Brand palette — aligned with ResiManager desktop app
 class _C {
-  static const mint        = Color(0xFF4CAF82);
-  static const mintLight   = Color(0xFFE8F5EE);
-  static const mintMid     = Color(0xFFB2EADA);
-  static const coral       = Color(0xFFFF6B4A);
-  static const coralLight  = Color(0xFFFFEDE9);
-  static const cream       = Color(0xFFF4F6F8);
-  static const dark        = Color(0xFF1C1C1E);
-  static const gray        = Color(0xFF718096);
-  static const divider     = Color(0xFFE2E8F0);
+  static const coral       = Color(0xFFE8603C);
+  static const coralLight  = Color(0xFFFFF0EB);
+  static const bg          = Color(0xFFF2F3F5);
   static const white       = Color(0xFFFFFFFF);
-  static const amber       = Color(0xFFF59E0B);
-  static const amberLight  = Color(0xFFFFF7E6);
-  static const blue        = Color(0xFF3B82F6);
-  static const blueLight   = Color(0xFFEFF6FF);
-  static const purple      = Color(0xFF8B5CF6);
-  static const purpleLight = Color(0xFFF5F3FF);
-  static const green       = Color(0xFF16A34A);
-  static const greenLight  = Color(0xFFF0FDF4);
-  static const red         = Color(0xFFDC2626);
-  static const redLight    = Color(0xFFFEF2F2);
+  static const dark        = Color(0xFF1A1A1A);
+  static const textMid     = Color(0xFF5A5A6A);
+  static const textLight   = Color(0xFF9A9AAF);
+  static const divider     = Color(0xFFE8E8F0);
+  static const iconBg      = Color(0xFFEDEDED);
+  static const blue        = Color(0xFF4B6BFB);
+  static const blueLight   = Color(0xFFEEF1FF);
+  static const amber       = Color(0xFFF5A623);
+  static const amberLight  = Color(0xFFFFF8EC);
+  static const green       = Color(0xFF34C98B);
+  static const greenLight  = Color(0xFFEBFAF4);
+  static const purple      = Color(0xFF7C5CFC);
+  static const purpleLight = Color(0xFFF3F0FF);
+  static const red         = Color(0xFFE04444);
+  static const redLight    = Color(0xFFFFF0F0);
 }
 
 class TrancheDashboardScreen extends StatefulWidget {
@@ -76,7 +75,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _C.cream,
+      backgroundColor: _C.bg,
       body: Column(
         children: [
           _buildHeader(),
@@ -84,125 +83,160 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
             child: _loading
                 ? _buildLoader()
                 : FadeTransition(
-                    opacity: _fadeAnim,
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
-                      children: [
-                        _buildFinanceBanner(),
-                        const SizedBox(height: 24),
-                        _buildSectionLabel('Modules'),
-                        const SizedBox(height: 14),
-                        _buildModulesGrid(),
-                        const SizedBox(height: 20),
-                        _buildResume(),
-                      ],
-                    ),
-                  ),
+              opacity: _fadeAnim,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+                children: [
+                  _buildPageTitle(),
+                  const SizedBox(height: 20),
+                  _buildFinanceBanner(),
+                  const SizedBox(height: 32),
+                  _buildSectionLabel('Modules'),
+                  const SizedBox(height: 14),
+                  _buildModulesGrid(),
+                  const SizedBox(height: 24),
+                  _buildResume(),
+                ],
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  // -- Loader
+  // ── Loader
   Widget _buildLoader() => const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(color: _C.mint, strokeWidth: 3),
-            SizedBox(height: 14),
-            Text('Chargement...',
-                style: TextStyle(color: _C.gray, fontSize: 13)),
-          ],
-        ),
-      );
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircularProgressIndicator(color: _C.coral, strokeWidth: 2.5),
+        SizedBox(height: 16),
+        Text('Chargement...',
+            style: TextStyle(
+                color: _C.textLight,
+                fontSize: 13,
+                fontWeight: FontWeight.w500)),
+      ],
+    ),
+  );
 
-  // -- Header
+  // ── Header — white top bar with back button
   Widget _buildHeader() {
+    final top = MediaQuery.of(context).padding.top;
     return Container(
       color: _C.white,
       padding: EdgeInsets.only(
-          top: MediaQuery.of(context).padding.top + 12,
-          bottom: 16,
-          left: 20,
-          right: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+          top: top + 14, bottom: 14, left: 16, right: 16),
+      child: Row(
         children: [
-          Row(
+          // Back button
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                  color: _C.bg,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _C.divider)),
+              child: const Icon(Icons.arrow_back_ios_new_rounded,
+                  size: 14, color: _C.dark),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // App logo pill
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: _C.coral,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child:
+            const Icon(Icons.grid_view_rounded, color: _C.white, size: 20),
+          ),
+          const SizedBox(width: 10),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                      color: _C.cream,
-                      borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.arrow_back_ios_new_rounded,
-                      size: 14, color: _C.dark),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(widget.tranche.nom,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 18,
-                            color: _C.dark)),
-                    const Text('Mohammed Benali - Syndic',
-                        style: TextStyle(color: _C.gray, fontSize: 12)),
-                  ],
-                ),
-              ),
-              // Refresh button
-              GestureDetector(
-                onTap: _loadStats,
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                      color: _C.mintLight,
-                      borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.refresh_rounded,
-                      size: 16, color: _C.mint),
-                ),
-              ),
+              Text('ResiManager',
+                  style: TextStyle(
+                      color: _C.dark,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      letterSpacing: -0.2)),
+              Text('inter_syndic',
+                  style: TextStyle(
+                      color: _C.textLight,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500)),
             ],
           ),
-          const SizedBox(height: 14),
-          // Quick-stat pills
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              _pill(Icons.business_rounded,
-                  '${widget.tranche.nombreImmeubles} immeubles',
-                  _C.mintLight, _C.mint),
-              _pill(Icons.door_front_door_rounded,
-                  '${widget.tranche.nombreAppartements} appts',
-                  _C.blueLight, _C.blue),
-              _pill(Icons.local_parking_rounded,
-                  '${widget.tranche.nombreParkings} parkings',
-                  _C.amberLight, _C.amber),
-            ],
+          const Spacer(),
+          // Refresh
+          GestureDetector(
+            onTap: _loadStats,
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                  color: _C.bg,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _C.divider)),
+              child:
+              const Icon(Icons.refresh_rounded, size: 18, color: _C.dark),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _pill(IconData icon, String label, Color bg, Color fg) {
+  // ── Page title + quick-stat chips
+  Widget _buildPageTitle() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(widget.tranche.nom,
+            style: const TextStyle(
+                color: _C.dark,
+                fontWeight: FontWeight.w800,
+                fontSize: 24,
+                letterSpacing: -0.5)),
+        const SizedBox(height: 4),
+        const Text('Mohammed Benali · Syndic',
+            style: TextStyle(
+                color: _C.textMid,
+                fontSize: 13,
+                fontWeight: FontWeight.w400)),
+        const SizedBox(height: 14),
+        // Chips row
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _chip(Icons.business_rounded,
+                '${widget.tranche.nombreImmeubles} immeubles',
+                _C.iconBg, _C.dark),
+            _chip(Icons.door_front_door_rounded,
+                '${widget.tranche.nombreAppartements} appts',
+                _C.coralLight, _C.coral),
+            _chip(Icons.local_parking_rounded,
+                '${widget.tranche.nombreParkings} parkings',
+                _C.iconBg, _C.dark),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _chip(IconData icon, String label, Color bg, Color fg) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: fg.withValues(alpha: 0.2)),
-      ),
+          color: bg, borderRadius: BorderRadius.circular(8)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -210,13 +244,13 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
           const SizedBox(width: 5),
           Text(label,
               style: TextStyle(
-                  color: fg, fontSize: 11, fontWeight: FontWeight.w600)),
+                  color: fg, fontSize: 12, fontWeight: FontWeight.w600)),
         ],
       ),
     );
   }
 
-  // -- Finance Banner
+  // ── Finance Banner — matches app's "Résumé Financier" section
   Widget _buildFinanceBanner() {
     final solde    = _stats!['solde']    ?? 0;
     final revenus  = _stats!['revenus']  ?? 0;
@@ -233,14 +267,17 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
         ),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Solde card — full width hero
+          _buildSectionLabel('Résumé Financier'),
+          const SizedBox(height: 14),
+          // Solde hero card — dark like app
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(22),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: _C.dark,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
               children: [
@@ -248,10 +285,10 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                      color: _C.mint,
-                      borderRadius: BorderRadius.circular(14)),
+                      color: _C.coral,
+                      borderRadius: BorderRadius.circular(12)),
                   child: const Icon(Icons.account_balance_wallet_rounded,
-                      color: _C.white, size: 24),
+                      color: _C.white, size: 22),
                 ),
                 const SizedBox(width: 16),
                 Column(
@@ -271,25 +308,28 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
                               text: '$solde ',
                               style: const TextStyle(
                                   color: _C.white,
-                                  fontSize: 30,
+                                  fontSize: 28,
                                   fontWeight: FontWeight.w800,
                                   height: 1)),
                           const TextSpan(
                               text: 'DH',
                               style: TextStyle(
                                   color: Colors.white38,
-                                  fontSize: 16,
+                                  fontSize: 15,
                                   fontWeight: FontWeight.w600)),
                         ],
                       ),
                     ),
                   ],
                 ),
+                const Spacer(),
+                const Icon(Icons.chevron_right_rounded,
+                    color: Colors.white24, size: 22),
               ],
             ),
           ),
           const SizedBox(height: 12),
-          // Revenus + Depenses side by side
+          // Revenus + Dépenses
           Row(
             children: [
               Expanded(
@@ -297,9 +337,10 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
                   icon: Icons.trending_up_rounded,
                   iconBg: _C.greenLight,
                   iconColor: _C.green,
-                  label: 'Revenus',
-                  value: '+$revenus DH',
-                  valueColor: _C.green,
+                  label: 'Revenus Parkings',
+                  value: '${revenus.toStringAsFixed(2)} DH',
+                  sub: 'par mois',
+                  valueColor: _C.dark,
                 ),
               ),
               const SizedBox(width: 12),
@@ -308,9 +349,10 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
                   icon: Icons.trending_down_rounded,
                   iconBg: _C.coralLight,
                   iconColor: _C.coral,
-                  label: 'Depenses',
-                  value: '-$depenses DH',
-                  valueColor: _C.coral,
+                  label: 'Charges Totales',
+                  value: '${depenses.toStringAsFixed(2)} DH',
+                  sub: 'par mois',
+                  valueColor: _C.dark,
                 ),
               ),
             ],
@@ -326,69 +368,66 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
     required Color iconColor,
     required String label,
     required String value,
+    required String sub,
     required Color valueColor,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _C.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _C.divider),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 38,
-            height: 38,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-                color: iconBg, borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, color: iconColor, size: 18),
+                color: iconBg, borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: iconColor, size: 20),
           ),
           const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: const TextStyle(color: _C.gray, fontSize: 11)),
-              const SizedBox(height: 2),
-              Text(value,
-                  style: TextStyle(
-                      color: valueColor,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14)),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: const TextStyle(
+                        color: _C.textLight,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500)),
+                const SizedBox(height: 3),
+                Text(value,
+                    style: TextStyle(
+                        color: valueColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        letterSpacing: -0.3)),
+                Text(sub,
+                    style: const TextStyle(
+                        color: _C.textLight, fontSize: 10)),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  // -- Section label
+  // ── Section label — matches app's bold section headers
   Widget _buildSectionLabel(String text) {
-    return Row(
-      children: [
-        Container(
-            width: 4,
-            height: 16,
-            decoration: BoxDecoration(
-                color: _C.mint, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(width: 10),
-        Text(text,
-            style: const TextStyle(
-                color: _C.dark,
-                fontWeight: FontWeight.w700,
-                fontSize: 15)),
-      ],
+    return Text(
+      text,
+      style: const TextStyle(
+          color: _C.dark,
+          fontWeight: FontWeight.w700,
+          fontSize: 18,
+          letterSpacing: -0.3),
     );
   }
 
-  // -- Modules Grid
+  // ── Modules Grid
   Widget _buildModulesGrid() {
     final modules = _buildModuleList();
     return GridView.builder(
@@ -398,7 +437,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 3.9,
+        childAspectRatio: 3.6,
       ),
       itemCount: modules.length,
       itemBuilder: (_, i) => _buildModuleCard(modules[i]),
@@ -406,204 +445,163 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
   }
 
   List<_ModuleData> _buildModuleList() => [
-        _ModuleData(
-          label: 'Residents',
-          value: '${_stats!['nbResidents']}',
-          sub: 'residents actifs',
-          icon: Icons.people_rounded,
-          iconBg: _C.mintLight,
-          valueColor: _C.mint,
-          interactive: true,
-          accentColor: _C.mint,
-          onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) =>
-                      ResidentsScreen(trancheId: widget.tranche.id))),
-        ),
-        _ModuleData(
-          label: 'Appartements',
-          value: '${widget.tranche.nombreAppartements}',
-          sub: 'unites',
-          icon: Icons.home_rounded,
-          iconBg: _C.blueLight,
-          valueColor: _C.blue,
-        ),
-        _ModuleData(
-          label: 'Personnel',
-          value: '${_stats!['nbPersonnel']}',
-          sub: 'employes',
-          icon: Icons.badge_rounded,
-          iconBg: _C.purpleLight,
-          valueColor: _C.purple,
-        ),
-        _ModuleData(
-          label: 'Parkings',
-          value: '${_stats!['nbParkings']}',
-          sub: 'places',
-          icon: Icons.local_parking_rounded,
-          iconBg: _C.coralLight,
-          valueColor: _C.coral,
-          interactive: true,
-          accentColor: _C.coral,
-        ),
-        _ModuleData(
-          label: 'Garages',
-          value: '${_stats!['nbGarages']}',
-          sub: 'places',
-          icon: Icons.garage_rounded,
-          iconBg: _C.amberLight,
-          valueColor: _C.amber,
-          interactive: true,
-          accentColor: _C.amber,
-          onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) =>
-                      GaragesScreen(trancheId: widget.tranche.id))),
-        ),
-        _ModuleData(
-          label: 'Box',
-          value: '${_stats!['nbBoxes']}',
-          sub: 'unites',
-          icon: Icons.inventory_2_rounded,
-          iconBg: _C.greenLight,
-          valueColor: _C.green,
-        ),
-        _ModuleData(
-          label: 'Réunions',
-          value: '${_stats!['nbReunions'] ?? 0}',
-          sub: 'planifiées',
-          icon: Icons.event_rounded,
-          iconBg: _C.purpleLight,
-          valueColor: _C.purple,
-          interactive: true,
-          accentColor: _C.purple,
-          onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) =>
-                      ReunionsScreen(trancheId: widget.tranche.id))),
-        ),
-      ];
+    _ModuleData(
+      label: 'Residents',
+      value: '${_stats!['nbResidents']}',
+      sub: 'residents actifs',
+      icon: Icons.people_rounded,
+      iconBg: _C.coralLight,
+      valueColor: _C.coral,
+      interactive: true,
+      accentColor: _C.coral,
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) =>
+                  ResidentsScreen(trancheId: widget.tranche.id))),
+    ),
+    _ModuleData(
+      label: 'Appartements',
+      value: '${widget.tranche.nombreAppartements}',
+      sub: 'unites',
+      icon: Icons.home_outlined,
+      iconBg: _C.iconBg,
+      valueColor: _C.dark,
+    ),
+    _ModuleData(
+      label: 'Personnel',
+      value: '${_stats!['nbPersonnel']}',
+      sub: 'employes',
+      icon: Icons.badge_outlined,
+      iconBg: _C.purpleLight,
+      valueColor: _C.purple,
+    ),
+    _ModuleData(
+      label: 'Parkings',
+      value: '${_stats!['nbParkings']}',
+      sub: 'places',
+      icon: Icons.local_parking_rounded,
+      iconBg: _C.coralLight,
+      valueColor: _C.coral,
+      interactive: true,
+      accentColor: _C.coral,
+    ),
+    _ModuleData(
+      label: 'Garages',
+      value: '${_stats!['nbGarages']}',
+      sub: 'places',
+      icon: Icons.garage_outlined,
+      iconBg: _C.amberLight,
+      valueColor: _C.amber,
+      interactive: true,
+      accentColor: _C.amber,
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) =>
+                  GaragesScreen(trancheId: widget.tranche.id))),
+    ),
+    _ModuleData(
+      label: 'Box',
+      value: '${_stats!['nbBoxes']}',
+      sub: 'unites',
+      icon: Icons.inventory_2_outlined,
+      iconBg: _C.greenLight,
+      valueColor: _C.green,
+    ),
+    _ModuleData(
+      label: 'Réunions',
+      value: '${_stats!['nbReunions'] ?? 0}',
+      sub: 'planifiées',
+      icon: Icons.event_outlined,
+      iconBg: _C.blueLight,
+      valueColor: _C.blue,
+      interactive: true,
+      accentColor: _C.blue,
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) =>
+                  ReunionsScreen(trancheId: widget.tranche.id))),
+    ),
+  ];
 
   Widget _buildModuleCard(_ModuleData m) {
     return GestureDetector(
       onTap: m.onTap,
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: _C.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-              color: m.interactive
-                  ? m.accentColor.withValues(alpha: 0.15)
-                  : _C.divider),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 3)),
-          ],
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _C.divider),
         ),
-        child: Stack(
+        child: Row(
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: m.iconBg,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(m.icon, color: m.valueColor, size: 16),
-                ),
-                const SizedBox(height: 8),
-                Text(m.label,
-                    style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: _C.dark)),
-                const SizedBox(height: 1),
-                Text(m.value,
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: m.valueColor,
-                        height: 1.1)),
-                Text(m.sub,
-                    style: const TextStyle(fontSize: 9, color: _C.gray)),
-              ],
-            ),
-            // Interactive arrow indicator
-            if (m.interactive)
-              Positioned(
-                top: 0,
-                right: 0,
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: m.accentColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.arrow_forward_ios_rounded,
-                      size: 11, color: m.accentColor),
-                ),
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: m.iconBg,
+                borderRadius: BorderRadius.circular(10),
               ),
+              child: Icon(m.icon, color: m.valueColor, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(m.label,
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _C.textMid)),
+                  const SizedBox(height: 1),
+                  Text(m.value,
+                      style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          color: _C.dark,
+                          letterSpacing: -0.5,
+                          height: 2.9)),
+                ],
+              ),
+            ),
+            if (m.interactive)
+              Icon(Icons.chevron_right_rounded,
+                  size: 18, color: _C.textLight),
           ],
         ),
       ),
     );
   }
 
-  // -- Resume
+  // ── Resume
   Widget _buildResume() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: _C.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _C.divider),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 4,
-                height: 16,
-                decoration: BoxDecoration(
-                    color: _C.mint, borderRadius: BorderRadius.circular(2)),
-              ),
-              const SizedBox(width: 10),
-              const Text('Résumé de la Tranche',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: _C.dark)),
-            ],
-          ),
+          _buildSectionLabel('Résumé de la Tranche'),
           const SizedBox(height: 16),
           _resumeRow(
             _resumeItem(Icons.business_rounded, 'Immeubles',
                 '${widget.tranche.nombreImmeubles}', _C.blue, _C.blueLight),
-            _resumeItem(Icons.home_rounded, 'Appartements',
-                '${widget.tranche.nombreAppartements}', _C.mint, _C.mintLight),
+            _resumeItem(Icons.home_outlined, 'Appartements',
+                '${widget.tranche.nombreAppartements}', _C.coral, _C.coralLight),
           ),
           Container(
               height: 1,
               color: _C.divider,
-              margin: const EdgeInsets.symmetric(vertical: 12)),
+              margin: const EdgeInsets.symmetric(vertical: 14)),
           _resumeRow(
             _resumeItem(Icons.trending_up_rounded, 'Revenus',
                 '+${_stats!['revenus']} DH', _C.green, _C.greenLight),
@@ -634,22 +632,25 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
     return Row(
       children: [
         Container(
-          width: 32,
-          height: 32,
+          width: 34,
+          height: 34,
           decoration: BoxDecoration(
               color: bg, borderRadius: BorderRadius.circular(9)),
-          child: Icon(icon, color: color, size: 15),
+          child: Icon(icon, color: color, size: 16),
         ),
         const SizedBox(width: 10),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(label,
-                style: const TextStyle(color: _C.gray, fontSize: 10)),
+                style: const TextStyle(
+                    color: _C.textLight,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500)),
             const SizedBox(height: 2),
             Text(value,
-                style: TextStyle(
-                    color: color,
+                style: const TextStyle(
+                    color: _C.dark,
                     fontWeight: FontWeight.w700,
                     fontSize: 14)),
           ],
@@ -659,7 +660,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
   }
 }
 
-// -- Module data model
+// ── Module data model
 class _ModuleData {
   final String label, value, sub;
   final IconData icon;
@@ -676,7 +677,7 @@ class _ModuleData {
     required this.iconBg,
     required this.valueColor,
     this.interactive = false,
-    this.accentColor = const Color(0xFF4CAF82),
+    this.accentColor = const Color(0xFFE8603C),
     this.onTap,
   });
 }
