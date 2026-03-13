@@ -8,6 +8,7 @@ import 'reunions/reunions_screen.dart';
 import 'finance/finance_dashboard_screen.dart';
 import 'apartments/apartments_screen.dart';
 import 'parkings/parkings_screen.dart';
+import 'boxes/boxes_screen.dart';
 
 // ── Brand palette — aligned with ResiManager desktop app
 class _C {
@@ -79,7 +80,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       backgroundColor: _C.bg,
       body: Column(
         children: [
-          _buildHeader(),
+          if (_selectedView != 'apartments') _buildHeader(),
           Expanded(
             child: _loading
                 ? _buildLoader()
@@ -516,8 +517,15 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       value: '${_stats!['nbBoxes']}',
       sub: 'unites',
       icon: Icons.inventory_2_outlined,
-      iconBg: _C.greenLight,
-      valueColor: _C.green,
+      iconBg: _C.coralLight,
+      valueColor: _C.coral,
+      interactive: true,
+      accentColor: _C.coral,
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) =>
+                  BoxesScreen(trancheId: widget.tranche.id))),
     ),
     _ModuleData(
       label: 'Réunions',
