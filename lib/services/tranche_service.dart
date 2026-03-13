@@ -132,13 +132,16 @@ class TrancheService {
   }
 
   Future<void> createTrancheComplet(
-      int residenceId, String nom, String description,
+      int residenceId,
+      String nom,
+      String description,
+      int? interSyndicId, // <--- AJOUT ICI
       int nbImm, int nbApp, int nbPark, int nbGar, int nbBox) async {
 
     await _db.from('tranches').insert({
       'residence_id': residenceId,
       'nom': nom,
-      'description': description,
+      'inter_syndic_id': interSyndicId, // <--- AJOUT ICI
       'nombre_immeubles': nbImm,
       'nombre_appartements': nbApp,
       'nombre_parkings': nbPark,
@@ -163,6 +166,17 @@ class TrancheService {
         .from('tranches')
         .update({'inter_syndic_id': interSyndicId})
         .eq('id', trancheId);
+  }
+
+  // Récupérer les noms des immeubles pour une tranche spécifique
+
+  Future<List<String>> getImmeubleNames(int trancheId) async {
+    final response = await _db
+        .from('immeubles')
+        .select('nom')
+        .eq('tranche_id', trancheId);
+
+    return (response as List).map((i) => i['nom'] as String).toList();
   }
 
 }
