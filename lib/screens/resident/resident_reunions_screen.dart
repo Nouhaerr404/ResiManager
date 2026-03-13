@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/resident_service.dart';
 import '../../widgets/resident_nav_bar.dart';
+import 'resident_dashboard_screen.dart';
 
 class ResidentReunionsScreen extends StatefulWidget {
   @override
@@ -205,76 +206,81 @@ class _ResidentReunionsScreenState extends State<ResidentReunionsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F7FF),
-      appBar: const ResidentNavBar(currentIndex: 3),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _future,
-        builder: (context, snapshot) {
-          // Pas encore initialisé (résolution residentId en cours)
-          if (_future == null || snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: Color(0xFF7C3AED)),
-            );
-          }
-
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                const SizedBox(height: 12),
-                Text("Erreur : ${snapshot.error}", textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                ElevatedButton(onPressed: _init, child: const Text("Réessayer")),
-              ]),
-            );
-          }
-
-          final reunions = snapshot.data ?? [];
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Header ──
-                Row(children: [
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF7C3AED), Color(0xFF4F46E5)],
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(Icons.groups_rounded, color: Colors.white, size: 28),
-                  ),
-                  const SizedBox(width: 18),
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text("Réunions",
-                        style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: Color(0xFF1E1B4B))),
-                    Text(
-                      "${reunions.length} réunion${reunions.length > 1 ? 's' : ''} programmée${reunions.length > 1 ? 's' : ''}",
-                      style: const TextStyle(color: Color(0xFF6B7280), fontSize: 14),
-                    ),
-                  ]),
-                ]),
-                const SizedBox(height: 32),
-
-                if (reunions.isEmpty)
-                  Center(child: Column(children: [
-                    const SizedBox(height: 60),
-                    Icon(Icons.event_busy_rounded, size: 64, color: Colors.grey.shade300),
-                    const SizedBox(height: 16),
-                    const Text("Aucune réunion prévue.",
-                        style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 16)),
-                  ])),
-
-                ...reunions.map((r) => _buildCard(r)).toList(),
-              ],
-            ),
-          );
-        },
+      backgroundColor: const Color(0xFFFAF9F6),
+      appBar: AppBar(
+        title: const Text("Réunions", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Color(0xFFFF6B4A)),
       ),
+// ✅ CORRIGÉ
+      drawer: ResidentMobileDrawer(currentIndex: 3),      body: FutureBuilder<List<Map<String, dynamic>>>(
+      future: _future,
+      builder: (context, snapshot) {
+        // Pas encore initialisé (résolution residentId en cours)
+        if (_future == null || snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFF7C3AED)),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 12),
+              Text("Erreur : ${snapshot.error}", textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              ElevatedButton(onPressed: _init, child: const Text("Réessayer")),
+            ]),
+          );
+        }
+
+        final reunions = snapshot.data ?? [];
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Header ──
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF7C3AED), Color(0xFF4F46E5)],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(Icons.groups_rounded, color: Colors.white, size: 28),
+                ),
+                const SizedBox(width: 18),
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text("Réunions",
+                      style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: Color(0xFF1E1B4B))),
+                  Text(
+                    "${reunions.length} réunion${reunions.length > 1 ? 's' : ''} programmée${reunions.length > 1 ? 's' : ''}",
+                    style: const TextStyle(color: Color(0xFF6B7280), fontSize: 14),
+                  ),
+                ]),
+              ]),
+              const SizedBox(height: 32),
+
+              if (reunions.isEmpty)
+                Center(child: Column(children: [
+                  const SizedBox(height: 60),
+                  Icon(Icons.event_busy_rounded, size: 64, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  const Text("Aucune réunion prévue.",
+                      style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 16)),
+                ])),
+
+              ...reunions.map((r) => _buildCard(r)).toList(),
+            ],
+          ),
+        );
+      },
+    ),
     );
   }
 
