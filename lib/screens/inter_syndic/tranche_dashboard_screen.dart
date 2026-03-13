@@ -7,6 +7,7 @@ import 'residents/residents_screen.dart';
 import 'reunions/reunions_screen.dart';
 import 'finance/finance_dashboard_screen.dart';
 import 'apartments/apartments_screen.dart';
+import 'parkings/parkings_screen.dart';
 
 // ── Brand palette — aligned with ResiManager desktop app
 class _C {
@@ -489,6 +490,11 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       valueColor: _C.coral,
       interactive: true,
       accentColor: _C.coral,
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) =>
+                  ParkingsScreen(trancheId: widget.tranche.id))),
     ),
     _ModuleData(
       label: 'Garages',
