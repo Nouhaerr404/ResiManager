@@ -440,10 +440,8 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
       double montant = double.parse(_montantController.text.replaceAll(',', '.'));
       String? facturePath;
       if (_pickedFile != null) {
-        facturePath = await _financeService.uploadInvoice(
-          _pickedFile!.name,
-          kIsWeb ? _pickedFile!.bytes : _pickedFile!.path,
-        );
+        // Sauvegarde du nom de fichier uniquement, pour chargement depuis les assets
+        facturePath = _pickedFile!.name;
       }
 
       if (isEdit) {

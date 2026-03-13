@@ -318,10 +318,8 @@ class _AddGlobalExpenseScreenState extends State<AddGlobalExpenseScreen> {
     try {
       String? facturePath;
       if (_pickedFile != null) {
-        facturePath = await _service.uploadInvoice(
-          _pickedFile!.name,
-          kIsWeb ? _pickedFile!.bytes : _pickedFile!.path,
-        );
+        // Sauvegarde du nom de fichier uniquement, pour chargement depuis les assets
+        facturePath = _pickedFile!.name;
       }
 
       await _service.addGlobalExpense(

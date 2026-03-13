@@ -40,22 +40,6 @@ class FinanceService {
     return List<Map<String, dynamic>>.from(response);
   }
 
-  // 4. Pour l'upload de la facture
-  Future<String?> uploadInvoice(String fileName, dynamic fileBytesOrPath) async {
-    try {
-      final String path = 'factures/${DateTime.now().millisecondsSinceEpoch}_$fileName';
-      if (kIsWeb) {
-        await _db.storage.from('resimanager_bucket').uploadBinary(path, fileBytesOrPath);
-      } else {
-        await _db.storage.from('resimanager_bucket').upload(path, File(fileBytesOrPath));
-      }
-      return _db.storage.from('resimanager_bucket').getPublicUrl(path);
-    } catch (e) {
-      print("Erreur Upload: $e");
-      rethrow; // On relance pour que l'UI puisse l'afficher
-    }
-  }
-
   // 5. Pour enregistrer la dépense (Syndic Général)
   Future<void> addGlobalExpense({
     required int residenceId,

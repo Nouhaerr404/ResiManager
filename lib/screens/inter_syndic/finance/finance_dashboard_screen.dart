@@ -1,4 +1,5 @@
-// lib/screens/inter_syndic/finance/finance_dashboard_screen.dart
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../services/finance_service.dart';
 import '../../../widgets/kpi_card.dart';
@@ -366,14 +367,22 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      url,
-                      loadingBuilder: (context, child, progress) => progress == null ? child : const Center(child: CircularProgressIndicator()),
-                      errorBuilder: (context, error, stack) => const Center(child: Padding(
-                        padding: EdgeInsets.all(40.0),
-                        child: Text("Erreur de chargement de l'image"),
-                      )),
-                    ),
+                    child: url.startsWith('http')
+                      ? Image.network(
+                          url,
+                          loadingBuilder: (context, child, progress) => progress == null ? child : const Center(child: CircularProgressIndicator()),
+                          errorBuilder: (context, error, stack) => const Center(child: Padding(
+                            padding: EdgeInsets.all(40.0),
+                            child: Text("Erreur de chargement de l'image (Réseau)"),
+                          )),
+                        )
+                      : Image.asset(
+                          'assets/images/$url',
+                          errorBuilder: (context, error, stack) => Center(child: Padding(
+                            padding: const EdgeInsets.all(40.0),
+                            child: Text("Image introuvable dans assets/images/\nFichier: $url", textAlign: TextAlign.center, style: const TextStyle(color: Colors.black54)),
+                          )),
+                        ),
                   ),
                   const SizedBox(height: 10),
                   TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Fermer")),
