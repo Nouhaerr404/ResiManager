@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
-// Importe tes écrans ici
 import '../screens/syndic_general/dashboard_screen.dart';
 import '../screens/syndic_general/tranches_management_screen.dart';
 import '../screens/syndic_general/residence_finances_screen.dart';
 import '../screens/syndic_general/residence_selection_screen.dart';
+import '../screens/role_selector_screen.dart';
 
 class SyndicSidebar extends StatelessWidget {
+
   final String activePage; // Dashboard, Tranches, Finances, etc.
 
   const SyndicSidebar({Key? key, required this.activePage}) : super(key: key);
 
+
   final Color primaryOrange = const Color(0xFFFF6F4A);
   final Color darkGrey = const Color(0xFF2C2C2C);
+
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +47,25 @@ class SyndicSidebar extends StatelessWidget {
             _buildMenuItem(context, Icons.logout, 'Mes Résidences', false, () {
               Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const ResidenceSelectionScreen(syndicGeneralId: 1)));
             }),
+
+            const Divider(indent: 20, endIndent: 20),
+
+            _buildMenuItem(
+                context,
+                Icons.home_rounded, // Icône de maison pour l'accueil
+                'Accueil Principal',
+                false,
+                    () {
+                  // Cette commande efface tout et revient à la page de ton ami
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => const RoleSelectorScreen()),
+                        (route) => false,
+                  );
+                }
+            ),
+            const SizedBox(height: 20),
+
           ],
         ),
       ),
