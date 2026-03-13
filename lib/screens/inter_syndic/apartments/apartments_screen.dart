@@ -702,44 +702,91 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
               children: [
                 // En-tête personnalisé (Style Syndic Général)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 30),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Gestion des,",
-                            style: TextStyle(color: Colors.white70, fontSize: 18),
+                      // Bouton RETOUR
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white24, width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
-                          Text(
-                            "Appartements",
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold
-                            ),
-                          ),
-                        ],
+                          child: const Icon(Icons.chevron_left_rounded,
+                              color: Colors.black87, size: 24),
+                        ),
                       ),
-                      // Bouton d'ajout stylisé
+
+                      const SizedBox(width: 10),
+
+                      // Bouton GRILLE coral
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6F4A),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.apartment_rounded,
+                            color: Colors.white, size: 20),
+                      ),
+
+                      const SizedBox(width: 16),
+
+                      // Titre
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Gestion des',
+                              style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w400),
+                            ),
+                            Text(
+                              'Appartements',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.5,
+                                height: 1.1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Bouton AJOUTER (coral, reste inchangé)
                       GestureDetector(
                         onTap: _showAddApartmentDialog,
                         child: Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                              color: const Color(0xFFFF6F4A),
-                              borderRadius: BorderRadius.circular(15),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFFFF6F4A).withOpacity(0.4),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                )
-                              ]
+                            color: const Color(0xFFFF6F4A),
+                            borderRadius: BorderRadius.circular(15),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFF6F4A).withOpacity(0.4),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
-                          child: const Icon(Icons.add, color: Colors.white, size: 28),
+                          child: const Icon(Icons.add, color: Colors.white, size: 26),
                         ),
                       ),
                     ],

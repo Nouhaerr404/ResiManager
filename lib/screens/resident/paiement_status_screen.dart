@@ -1,8 +1,8 @@
-// lib/screens/resident/paiements/historique_paiements_screen.dart
+// lib/screens/resident/historique_paiements_screen.dart
 
 import 'package:flutter/material.dart';
-import '../../../services/resident_service.dart';
-import '../../../widgets/resident_nav_bar.dart';
+import '../../services/resident_service.dart';  // CHANGÉ : ../../ au lieu de ../../../
+import '../../widgets/resident_nav_bar.dart';   // CHANGÉ : ../../ au lieu de ../../../
 
 class HistoriquePaiementsScreen extends StatefulWidget {
   const HistoriquePaiementsScreen({super.key});
@@ -58,19 +58,18 @@ class _HistoriquePaiementsScreenState extends State<HistoriquePaiementsScreen>
 
   Future<void> _fetchHistory() async {
     setState(() => _loadingHistory = true);
-    final data = await _service.getHistoriquePaiements(userId);
+    final data = await _service.getHistoriquePaiementsComplet(userId); // CHANGÉ : Appel à la méthode renommée
     setState(() {
       _history       = data;
       _loadingHistory = false;
     });
   }
 
-  // ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
-      appBar: const ResidentNavBar(currentIndex: 1),
+      appBar: const ResidentNavBar(currentIndex: 2), // CHANGÉ : Index 2 pour paiements
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 36),
         child: Column(

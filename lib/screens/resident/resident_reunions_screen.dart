@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/resident_service.dart';
 import '../../widgets/resident_nav_bar.dart';
-import 'resident_dashboard_screen.dart';
+import '../../widgets/resident_mobile_drawer.dart';  // ← AJOUTEZ CET IMPORT
 
 class ResidentReunionsScreen extends StatefulWidget {
+  const ResidentReunionsScreen({super.key});  // ← AJOUTEZ const
+
   @override
   _ResidentReunionsScreenState createState() => _ResidentReunionsScreenState();
 }

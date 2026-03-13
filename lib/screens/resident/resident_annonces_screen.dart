@@ -4,6 +4,8 @@ import '../../widgets/resident_nav_bar.dart';
 import 'resident_dashboard_screen.dart';
 class ResidentAnnoncesScreen extends StatelessWidget {
   final ResidentService _service = ResidentService();
+   ResidentAnnoncesScreen({super.key});  // ← AJOUTEZ const
+
 
   @override
   Widget build(BuildContext context) {
@@ -14,7 +16,7 @@ class ResidentAnnoncesScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Color(0xFFFF6B4A)),
       ),
-      drawer: ResidentMobileDrawer(currentIndex: 2),
+      drawer: ResidentMobileDrawer(currentIndex: 3),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _service.getAnnoncesAndReunions(3),
         builder: (context, snapshot) {

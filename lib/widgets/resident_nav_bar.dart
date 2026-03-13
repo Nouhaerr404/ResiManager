@@ -1,8 +1,11 @@
+// lib/widgets/resident_nav_bar.dart
+
 import 'package:flutter/material.dart';
 import '../screens/resident/resident_dashboard_screen.dart';
 import '../screens/resident/resident_charges_screen.dart';
 import '../screens/resident/resident_annonces_screen.dart';
 import '../screens/resident/resident_reunions_screen.dart';
+import '../screens/resident/historique_paiements_screen.dart';  // PLUS DE DOSSIER paiements/
 
 class ResidentNavBar extends StatelessWidget implements PreferredSizeWidget {
   final int currentIndex;
@@ -11,16 +14,15 @@ class ResidentNavBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color brandColor = Color(0xFFFF6B4A); // Orange de la maquette
+    const Color brandColor = Color(0xFFFF6B4A);
 
     return AppBar(
       backgroundColor: Colors.white,
       elevation: 0.5,
       toolbarHeight: 80,
-      automaticallyImplyLeading: false, // Supprime la flèche retour
+      automaticallyImplyLeading: false,
       title: Row(
         children: [
-          // --- LOGO ET TITRE ---
           const Icon(Icons.home_work, color: brandColor, size: 32),
           const SizedBox(width: 12),
           Column(
@@ -38,20 +40,21 @@ class ResidentNavBar extends StatelessWidget implements PreferredSizeWidget {
             ],
           ),
 
-          const SizedBox(width: 60), // Espace avant les onglets
+          const SizedBox(width: 30),
 
           // --- ONGLETS DE NAVIGATION ---
+          // lib/widgets/resident_nav_bar.dart
+
+// --- ORDRE DES ONGLETS ---
           _buildNavItem(context, "Accueil", Icons.home_outlined, 0, ResidentDashboardScreen()),
           _buildNavItem(context, "Dépenses", Icons.receipt_long_outlined, 1, ResidentChargesScreen()),
-          _buildNavItem(context, "Annonces", Icons.article_outlined, 2, ResidentAnnoncesScreen()),
-          _buildNavItem(context, "Réunions", Icons.calendar_today_outlined, 3, ResidentReunionsScreen()),
-
+          _buildNavItem(context, "Paiements", Icons.payment_outlined, 2, HistoriquePaiementsScreen()),  // ← INDEX 2
+          _buildNavItem(context, "Annonces", Icons.article_outlined, 3, ResidentAnnoncesScreen()),
+          _buildNavItem(context, "Réunions", Icons.calendar_today_outlined, 4, ResidentReunionsScreen()), // ← INDEX 4
           const Spacer(),
 
-          // --- BOUTON RETOUR ADMIN ---
           TextButton.icon(
             onPressed: () {
-              // Retourne à la première page (Sélecteur de rôle)
               Navigator.of(context).popUntil((route) => route.isFirst);
             },
             icon: const Icon(Icons.logout, color: Colors.black54, size: 18),
@@ -66,7 +69,6 @@ class ResidentNavBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
-  // Widget interne pour construire chaque bouton du menu
   Widget _buildNavItem(BuildContext context, String label, IconData icon, int index, Widget destination) {
     bool isActive = currentIndex == index;
     const Color brandColor = Color(0xFFFF6B4A);
@@ -78,14 +80,14 @@ class ResidentNavBar extends StatelessWidget implements PreferredSizeWidget {
             context,
             PageRouteBuilder(
               pageBuilder: (context, anim1, anim2) => destination,
-              transitionDuration: Duration.zero, // Transition instantanée style Web
+              transitionDuration: Duration.zero,
             ),
           );
         }
       },
       child: Container(
         height: 80,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
@@ -102,7 +104,7 @@ class ResidentNavBar extends StatelessWidget implements PreferredSizeWidget {
               color: isActive ? brandColor : Colors.grey,
               size: 20,
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(

@@ -5,24 +5,24 @@ import '../../services/tranche_service.dart';
 import '../../utils/temp_session.dart';
 import 'tranche_dashboard_screen.dart';
 
-// ── Brand Colors (unified with garage/resident/dashboard screens)
+// ── Brand Colors — aligned with ResiManager desktop app
 class _C {
-  static const mint        = Color(0xFF4CAF82);
-  static const mintLight   = Color(0xFFE8F5EE);
-  static const mintMid     = Color(0xFFB2EADA);
-  static const coral       = Color(0xFFFF6B4A);
-  static const coralLight  = Color(0xFFFFEDE9);
-  static const cream       = Color(0xFFF4F6F8);
-  static const dark        = Color(0xFF1C1C1E);
-  static const gray        = Color(0xFF718096);
-  static const divider     = Color(0xFFE2E8F0);
+  static const coral       = Color(0xFFE8603C); // primary accent (orange-red)
+  static const coralLight  = Color(0xFFFFF0EB);
+  static const coralMid    = Color(0xFFFFD5C8);
+  static const bg          = Color(0xFFF2F3F5); // app background
   static const white       = Color(0xFFFFFFFF);
-  static const amber       = Color(0xFFF59E0B);
-  static const amberLight  = Color(0xFFFFF7E6);
-  static const blue        = Color(0xFF3B82F6);
-  static const blueLight   = Color(0xFFEFF6FF);
-  static const green       = Color(0xFF16A34A);
-  static const greenLight  = Color(0xFFF0FDF4);
+  static const dark        = Color(0xFF1A1A1A); // headings
+  static const textMid     = Color(0xFF5A5A6A); // secondary text
+  static const textLight   = Color(0xFF9A9AAF); // tertiary/labels
+  static const divider     = Color(0xFFE8E8F0);
+  static const blue        = Color(0xFF4B6BFB);
+  static const blueLight   = Color(0xFFEEF1FF);
+  static const amber       = Color(0xFFF5A623);
+  static const amberLight  = Color(0xFFFFF8EC);
+  static const green       = Color(0xFF34C98B);
+  static const greenLight  = Color(0xFFEBFAF4);
+  static const iconBg      = Color(0xFFEDEDED); // neutral icon backgrounds
 }
 
 class TranchesListScreen extends StatefulWidget {
@@ -43,7 +43,7 @@ class _TranchesListScreenState extends State<TranchesListScreen>
   void initState() {
     super.initState();
     _fadeCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 600));
+        vsync: this, duration: const Duration(milliseconds: 500));
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _loadTranches();
   }
@@ -73,7 +73,7 @@ class _TranchesListScreenState extends State<TranchesListScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _C.cream,
+      backgroundColor: _C.bg,
       body: Column(
         children: [
           _buildHeader(),
@@ -83,19 +83,18 @@ class _TranchesListScreenState extends State<TranchesListScreen>
                 : FadeTransition(
               opacity: _fadeAnim,
               child: RefreshIndicator(
-                color: _C.mint,
+                color: _C.coral,
                 onRefresh: _loadTranches,
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
                   children: [
-                    const SizedBox(height: 20),
-                    _buildHeroCard(),
+                    _buildPageTitle(),
                     const SizedBox(height: 24),
                     _buildStatsRow(),
-                    const SizedBox(height: 24),
-                    _buildSectionLabel('Vos Tranches'),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 32),
+                    _buildSectionLabel('Tranches'),
+                    const SizedBox(height: 14),
                     ..._tranches
                         .asMap()
                         .entries
@@ -115,71 +114,103 @@ class _TranchesListScreenState extends State<TranchesListScreen>
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        CircularProgressIndicator(color: _C.mint, strokeWidth: 3),
-        SizedBox(height: 14),
+        CircularProgressIndicator(color: _C.coral, strokeWidth: 2.5),
+        SizedBox(height: 16),
         Text('Chargement…',
-            style: TextStyle(color: _C.gray, fontSize: 13)),
+            style: TextStyle(
+                color: _C.textLight,
+                fontSize: 13,
+                fontWeight: FontWeight.w500)),
       ],
     ),
   );
 
-  // ── Header
+  // ── Header — mirrors app's top bar with logo + Espace Syndic button
+  // Remplace UNIQUEMENT la méthode _buildHeader() dans tranches_list_screen.dart
+
   Widget _buildHeader() {
+    final top = MediaQuery.of(context).padding.top;
     return Container(
       color: _C.white,
       padding: EdgeInsets.only(
-          top: MediaQuery.of(context).padding.top + 12,
-          bottom: 16,
-          left: 20,
-          right: 20),
+          top: top + 14, bottom: 14, left: 16, right: 16),
       child: Row(
         children: [
-          // Logo pill
-          Container(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: _C.dark,
-              borderRadius: BorderRadius.circular(40),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                      color: _C.mint, shape: BoxShape.circle),
-                ),
-                const SizedBox(width: 8),
-                const Text('ResiManager',
-                    style: TextStyle(
-                        color: _C.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        letterSpacing: 0.3)),
-              ],
+          // ── Bouton RETOUR (fond blanc, bordure grise)
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: _C.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _C.divider, width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.chevron_left_rounded,
+                  color: _C.dark, size: 24),
             ),
           ),
-          const Spacer(),
-          // Espace badge
+
+          const SizedBox(width: 10),
+
+          // ── Bouton GRILLE (fond coral)
           Container(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: _C.mintLight,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                  color: _C.mint.withValues(alpha: 0.2)),
+              color: _C.coral,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.grid_view_rounded,
+                color: _C.white, size: 20),
+          ),
+
+          const SizedBox(width: 12),
+
+          // ── Nom app + rôle
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text('ResiManager',
+                  style: TextStyle(
+                      color: _C.dark,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      letterSpacing: -0.2)),
+              Text('inter_syndic',
+                  style: TextStyle(
+                      color: _C.textLight,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500)),
+            ],
+          ),
+
+          const Spacer(),
+
+          // ── Bouton Espace Syndic
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: _C.dark,
+              borderRadius: BorderRadius.circular(24),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: const [
-                Icon(Icons.verified_rounded, size: 12, color: _C.mint),
-                SizedBox(width: 5),
+                Icon(Icons.work_outline_rounded, size: 13, color: _C.white),
+                SizedBox(width: 6),
                 Text('Espace Syndic',
                     style: TextStyle(
-                        color: _C.mint,
+                        color: _C.white,
                         fontWeight: FontWeight.w600,
                         fontSize: 12)),
               ],
@@ -190,102 +221,71 @@ class _TranchesListScreenState extends State<TranchesListScreen>
     );
   }
 
-  // ── Hero Banner
-  Widget _buildHeroCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: _C.dark,
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-                color: _C.mint, borderRadius: BorderRadius.circular(16)),
-            child: const Icon(Icons.holiday_village_rounded,
-                color: _C.white, size: 26),
-          ),
-          const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('TABLEAU DE BORD',
-                  style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.2)),
-              const SizedBox(height: 4),
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                        text: '${_tranches.length} ',
-                        style: const TextStyle(
-                            color: _C.white,
-                            fontSize: 32,
-                            fontWeight: FontWeight.w800,
-                            height: 1)),
-                    const TextSpan(
-                        text: 'tranches',
-                        style: TextStyle(
-                            color: Colors.white38,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 2),
-              const Text('affectées à votre compte',
-                  style: TextStyle(
-                      color: Colors.white38, fontSize: 11)),
-            ],
-          ),
-          const Spacer(),
-          Text('${DateTime.now().year}',
-              style: const TextStyle(
-                  color: Colors.white12,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600)),
-        ],
-      ),
+  // ── Page title — mirrors "Tableau de Bord / Vue d'ensemble" heading
+  Widget _buildPageTitle() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Tableau de Bord',
+            style: TextStyle(
+                color: _C.dark,
+                fontWeight: FontWeight.w800,
+                fontSize: 26,
+                letterSpacing: -0.5)),
+        const SizedBox(height: 4),
+        const Text("Vue d'ensemble de vos tranches",
+            style: TextStyle(
+                color: _C.textMid, fontSize: 13, fontWeight: FontWeight.w400)),
+      ],
     );
   }
 
-  // ── Stats Row (3 white cards like garage/resident screens)
+  // ── Stats Row — 4 cards like the app (Syndics Actifs / Tranches / Immeubles / Appts)
   Widget _buildStatsRow() {
     final totalAppts = _tranches.fold(0, (s, t) => s + t.nombreAppartements);
     final totalImm   = _tranches.fold(0, (s, t) => s + t.nombreImmeubles);
     final totalParks = _tranches.fold(0, (s, t) => s + t.nombreParkings);
 
-    return Row(
+    return Column(
       children: [
-        _statCard(
-          icon: Icons.business_rounded,
-          iconBg: _C.blueLight,
-          iconColor: _C.blue,
-          value: '$totalImm',
-          label: 'Immeubles',
+        Row(
+          children: [
+            _statCard(
+              icon: Icons.grid_view_rounded,
+              iconBg: _C.coralLight,
+              iconColor: _C.coral,
+              value: '${_tranches.length}',
+              label: 'Tranches',
+            ),
+            const SizedBox(width: 12),
+            _statCard(
+              icon: Icons.business_rounded,
+              iconBg: _C.iconBg,
+              iconColor: _C.dark,
+              value: '$totalImm',
+              label: 'Immeubles',
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        _statCard(
-          icon: Icons.home_rounded,
-          iconBg: _C.mintLight,
-          iconColor: _C.mint,
-          value: '$totalAppts',
-          label: 'Appts',
-        ),
-        const SizedBox(width: 12),
-        _statCard(
-          icon: Icons.local_parking_rounded,
-          iconBg: _C.amberLight,
-          iconColor: _C.amber,
-          value: '$totalParks',
-          label: 'Parkings',
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _statCard(
+              icon: Icons.home_outlined,
+              iconBg: _C.coralLight,
+              iconColor: _C.coral,
+              value: '$totalAppts',
+              label: 'Appartements',
+            ),
+            const SizedBox(width: 12),
+            _statCard(
+              icon: Icons.local_parking_rounded,
+              iconBg: _C.iconBg,
+              iconColor: _C.dark,
+              value: '$totalParks',
+              label: 'Parkings',
+            ),
+          ],
         ),
       ],
     );
@@ -300,64 +300,58 @@ class _TranchesListScreenState extends State<TranchesListScreen>
   }) =>
       Expanded(
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: _C.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: _C.divider),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2)),
-            ],
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _C.divider, width: 1),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
               Container(
-                width: 32,
-                height: 32,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                     color: iconBg,
-                    borderRadius: BorderRadius.circular(10)),
-                child: Icon(icon, color: iconColor, size: 16),
+                    borderRadius: BorderRadius.circular(12)),
+                child: Icon(icon, color: iconColor, size: 20),
               ),
-              const SizedBox(height: 10),
-              Text(value,
-                  style: const TextStyle(
-                      color: _C.dark,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18)),
-              Text(label,
-                  style:
-                  const TextStyle(color: _C.gray, fontSize: 10)),
+              const SizedBox(width: 14),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: const TextStyle(
+                          color: _C.textMid,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 2),
+                  Text(value,
+                      style: const TextStyle(
+                          color: _C.dark,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 22,
+                          letterSpacing: -0.5)),
+                ],
+              ),
             ],
           ),
         ),
       );
 
-  // ── Section label
+  // ── Section label — matches app's bold section headers
   Widget _buildSectionLabel(String text) {
-    return Row(
-      children: [
-        Container(
-            width: 4,
-            height: 16,
-            decoration: BoxDecoration(
-                color: _C.mint,
-                borderRadius: BorderRadius.circular(2))),
-        const SizedBox(width: 10),
-        Text(text,
-            style: const TextStyle(
-                color: _C.dark,
-                fontWeight: FontWeight.w700,
-                fontSize: 15)),
-      ],
+    return Text(
+      text,
+      style: const TextStyle(
+          color: _C.dark,
+          fontWeight: FontWeight.w700,
+          fontSize: 18,
+          letterSpacing: -0.3),
     );
   }
 
-  // ── Tranche Card
+  // ── Tranche Card — clean white card like app's stat cards
   Widget _buildTrancheCard(TrancheModel t, int index) {
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -369,28 +363,21 @@ class _TranchesListScreenState extends State<TranchesListScreen>
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: _C.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: _C.divider),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 3)),
-          ],
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _C.divider, width: 1),
         ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Icon
             Container(
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: _C.mintLight,
-                borderRadius: BorderRadius.circular(14),
+                color: _C.coralLight,
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.domain_rounded,
-                  color: _C.mint, size: 22),
+              child:
+              const Icon(Icons.grid_view_rounded, color: _C.coral, size: 22),
             ),
             const SizedBox(width: 14),
             // Content
@@ -401,47 +388,37 @@ class _TranchesListScreenState extends State<TranchesListScreen>
                   Text(t.nom,
                       style: const TextStyle(
                           color: _C.dark,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14)),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                          letterSpacing: -0.2)),
                   if (t.description != null) ...[
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(t.description!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            color: _C.gray, fontSize: 12)),
+                            color: _C.textLight, fontSize: 12)),
                   ],
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
+                  const SizedBox(height: 12),
+                  Row(
                     children: [
                       _chip(Icons.business_rounded,
-                          '${t.nombreImmeubles} imm.',
-                          _C.blueLight, _C.blue),
-                      _chip(Icons.home_rounded,
-                          '${t.nombreAppartements} appts',
-                          _C.mintLight, _C.mint),
+                          '${t.nombreImmeubles} imm.', _C.iconBg, _C.textMid),
+                      const SizedBox(width: 6),
+                      _chip(Icons.home_outlined,
+                          '${t.nombreAppartements} appts', _C.coralLight, _C.coral),
+                      const SizedBox(width: 6),
                       _chip(Icons.local_parking_rounded,
-                          '${t.nombreParkings} parks',
-                          _C.amberLight, _C.amber),
+                          '${t.nombreParkings} parks', _C.iconBg, _C.textMid),
                     ],
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 8),
-            // Arrow
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: _C.mintLight,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.arrow_forward_ios_rounded,
-                  size: 12, color: _C.mint),
-            ),
+            // Arrow chevron
+            const Icon(Icons.chevron_right_rounded,
+                size: 20, color: _C.textLight),
           ],
         ),
       ),
@@ -450,9 +427,9 @@ class _TranchesListScreenState extends State<TranchesListScreen>
 
   Widget _chip(IconData icon, String label, Color bg, Color fg) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-          color: bg, borderRadius: BorderRadius.circular(20)),
+          color: bg, borderRadius: BorderRadius.circular(8)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

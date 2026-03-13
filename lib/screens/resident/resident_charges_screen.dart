@@ -3,6 +3,8 @@ import '../../services/resident_service.dart';
 import '../../widgets/resident_nav_bar.dart';
 import 'resident_dashboard_screen.dart';
 class ResidentChargesScreen extends StatefulWidget {
+  const ResidentChargesScreen({super.key});  // ← AJOUTEZ const
+
   @override
   _ResidentChargesScreenState createState() => _ResidentChargesScreenState();
 }
