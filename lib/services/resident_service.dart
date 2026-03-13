@@ -122,6 +122,62 @@ class ResidentService {
   }
 
   // ─────────────────────────────────────────
+  // SEARCH résidents pour autocomplete
+  // ─────────────────────────────────────────
+  Future<List<ResidentModel>> searchResidents(String query) async {
+    if (query.isEmpty) return [];
+    try {
+      final q = query.toLowerCase().trim();
+      
+      // On cherche dans la table users par nom ou prénom ou email
+      final usersRes = await _db
+          .from('users')
+          .select('id, nom, prenom, email, telephone')
+          .or('nom.ilike.%$q%,prenom.ilike.%$q%,email.ilike.%$q%')
+          .limit(10);
+      
+      final users = usersRes as List;
+      if (users.isEmpty) return [];
+      
+      final userIds = users.map((u) => u['id'] as int).toList();
+      
+      // On récupère les entrées résidents correspondantes
+      final residentsRes = await _db
+          .from('residents')
+          .select('id, user_id, appartement_id, type, statut')
+          .inFilter('user_id', userIds);
+      
+      final residents = residentsRes as List;
+      if (residents.isEmpty) return [];
+
+      final List<ResidentModel> result = [];
+      for (final r in residents) {
+        final user = users.firstWhere((u) => u['id'] == r['user_id']);
+        
+        result.add(ResidentModel(
+          id: r['id'] as int,
+          userId: r['user_id'] as int,
+          appartementId: r['appartement_id'] as int?,
+          type: r['type'].toString(),
+          statut: r['statut'].toString(),
+          nom: user['nom']?.toString() ?? '',
+          prenom: user['prenom']?.toString() ?? '',
+          email: user['email']?.toString() ?? '',
+          telephone: user['telephone']?.toString(),
+          montantTotal: 0,
+          montantPaye: 0,
+          statutPaiement: '—',
+          anneePaiement: DateTime.now().year,
+        ));
+      }
+      return result;
+    } catch (e) {
+      print('>>> ERREUR searchResidents: $e');
+      return [];
+    }
+  }
+
+  // ─────────────────────────────────────────
   // GET appartements libres
   // ─────────────────────────────────────────
   Future<List<Map<String, dynamic>>> getAppartementsLibres(

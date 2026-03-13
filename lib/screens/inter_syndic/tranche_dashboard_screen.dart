@@ -6,6 +6,7 @@ import 'garages/garages_screen.dart';
 import 'residents/residents_screen.dart';
 import 'reunions/reunions_screen.dart';
 import 'finance/finance_dashboard_screen.dart';
+import 'apartments/apartments_screen.dart';
 
 // ── Brand palette — aligned with ResiManager desktop app
 class _C {
@@ -26,8 +27,6 @@ class _C {
   static const greenLight  = Color(0xFFEBFAF4);
   static const purple      = Color(0xFF7C5CFC);
   static const purpleLight = Color(0xFFF3F0FF);
-  static const red         = Color(0xFFE04444);
-  static const redLight    = Color(0xFFFFF0F0);
 }
 
 class TrancheDashboardScreen extends StatefulWidget {
@@ -46,6 +45,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
   bool _loading = true;
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
+  String _selectedView = 'dashboard'; // 'dashboard' or 'apartments'
 
   @override
   void initState() {
@@ -84,7 +84,9 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
                 ? _buildLoader()
                 : FadeTransition(
               opacity: _fadeAnim,
-              child: ListView(
+              child: _selectedView == 'apartments' 
+                ? ApartmentsListScreen(trancheId: widget.tranche.id, onBack: () => setState(() => _selectedView = 'dashboard'))
+                : ListView(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
                 children: [
                   _buildPageTitle(),
@@ -437,7 +439,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 3.6,
+        childAspectRatio: 2.3, // Increased to avoid overflow
       ),
       itemCount: modules.length,
       itemBuilder: (_, i) => _buildModuleCard(modules[i]),
@@ -467,6 +469,8 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       icon: Icons.home_outlined,
       iconBg: _C.iconBg,
       valueColor: _C.dark,
+      interactive: true,
+      onTap: () => setState(() => _selectedView = 'apartments'),
     ),
     _ModuleData(
       label: 'Personnel',
@@ -559,13 +563,13 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
                           fontWeight: FontWeight.w600,
                           color: _C.textMid)),
                   const SizedBox(height: 1),
-                  Text(m.value,
+                      Text(m.value,
                       style: TextStyle(
                           fontSize: 19,
                           fontWeight: FontWeight.w800,
                           color: _C.dark,
                           letterSpacing: -0.5,
-                          height: 2.9)),
+                          height: 1.2)), // Reduced height to avoid overflow
                 ],
               ),
             ),

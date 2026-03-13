@@ -316,13 +316,22 @@ class _AddGlobalExpenseScreenState extends State<AddGlobalExpenseScreen> {
     setState(() => _isUploading = true);
 
     try {
+      String? facturePath;
+      if (_pickedFile != null) {
+        facturePath = await _service.uploadInvoice(
+          _pickedFile!.name,
+          kIsWeb ? _pickedFile!.bytes : _pickedFile!.path,
+        );
+      }
+
       await _service.addGlobalExpense(
         residenceId: widget.residenceId,
         montant: double.parse(_montantController.text.replaceAll(',', '.')),
         categorieId: _selectedCategoryId!,
-        date: DateTime(_selectedAnnee, 1, 1), // On enregistre au 1er Janvier de l'année choisie
+        date: DateTime(_selectedAnnee, 1, 1),
         syndicId: 1,
         description: _descController.text,
+        facturePath: facturePath,
       );
       Navigator.pop(context);
     } catch (e) {

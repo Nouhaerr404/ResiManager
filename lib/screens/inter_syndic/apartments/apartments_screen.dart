@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/appartement_model.dart';
+import '../../../models/resident_model.dart';
+import '../../../services/resident_service.dart';
 import '../../../widgets/apartment_card.dart';
 import '../../../widgets/apartment_filters.dart';
 
 class ApartmentsListScreen extends StatefulWidget {
-  const ApartmentsListScreen({Key? key}) : super(key: key);
+  final int? trancheId;
+  final VoidCallback? onBack;
+
+  const ApartmentsListScreen({Key? key, this.trancheId, this.onBack}) : super(key: key);
 
   @override
   State<ApartmentsListScreen> createState() => _ApartmentsListScreenState();
@@ -13,6 +18,7 @@ class ApartmentsListScreen extends StatefulWidget {
 
 class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
   final _supabase = Supabase.instance.client;
+  final _residentService = ResidentService();
   List<AppartementModel> apartments = [];
   List<AppartementModel> filteredApartments = [];
   bool showFilters = false;
@@ -28,7 +34,14 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
   Future<void> _loadApartments() async {
     setState(() => loading = true);
     try {
-      final response = await _supabase.from('appartements').select().order('id', ascending: true) as List<dynamic>;
+      dynamic query = _supabase.from('appartements').select('*, immeubles!inner(id, nom, tranche_id)');
+      
+      if (widget.trancheId != null) {
+        query = query.eq('immeubles.tranche_id', widget.trancheId!);
+      }
+
+      final response = await query.order('id', ascending: true) as List<dynamic>;
+
       final list = response.map((e) => AppartementModel.fromJson(Map<String, dynamic>.from(e))).toList();
       setState(() {
         apartments = list;
@@ -296,15 +309,30 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                     ),
                     const SizedBox(height: 8),
                     if (status == StatutAppartEnum.occupe) ...[
-                      TextFormField(
-                        controller: residentController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Resident ID (entier positif)'),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) return 'Resident ID requis';
-                          final v = int.tryParse(value.trim());
-                          if (v == null || v <= 0) return 'Entrez un entier positif';
-                          return null;
+                      const SizedBox(height: 8),
+                      Autocomplete<ResidentModel>(
+                        displayStringForOption: (r) => '${r.prenom} ${r.nom} (${r.userId})',
+                        optionsBuilder: (textEditingValue) async {
+                          if (textEditingValue.text.isEmpty) return const Iterable<ResidentModel>.empty();
+                          return await _residentService.searchResidents(textEditingValue.text);
+                        },
+                        onSelected: (r) {
+                          residentController.text = r.userId.toString();
+                        },
+                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                          return TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            decoration: const InputDecoration(
+                              labelText: 'Chercher un résident (Nom/Prénom)',
+                              hintText: 'Commencez à taper...',
+                              prefixIcon: Icon(Icons.search),
+                            ),
+                            validator: (value) {
+                              if (residentController.text.isEmpty) return 'Veuillez sélectionner un résident';
+                              return null;
+                            },
+                          );
                         },
                       ),
                       const SizedBox(height: 8),
@@ -365,16 +393,35 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
         title: Text('Assigner un résident à ${apartment.numero}'),
         content: Form(
           key: _formKey,
-          child: TextFormField(
-            controller: residentController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Resident ID (entier positif)'),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) return 'Requis';
-              final v = int.tryParse(value.trim());
-              if (v == null || v <= 0) return 'Entrez un entier positif';
-              return null;
-            },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Autocomplete<ResidentModel>(
+                displayStringForOption: (r) => '${r.prenom} ${r.nom} (${r.userId})',
+                optionsBuilder: (textEditingValue) async {
+                  if (textEditingValue.text.isEmpty) return const Iterable<ResidentModel>.empty();
+                  return await _residentService.searchResidents(textEditingValue.text);
+                },
+                onSelected: (r) {
+                  residentController.text = r.userId.toString();
+                },
+                fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                  return TextFormField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    decoration: const InputDecoration(
+                      labelText: 'Chercher un résident (Nom/Prénom)',
+                      hintText: 'Commencez à taper...',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    validator: (value) {
+                      if (residentController.text.isEmpty) return 'Veuillez sélectionner un résident';
+                      return null;
+                    },
+                  );
+                },
+              ),
+            ],
           ),
         ),
         actions: [
@@ -480,17 +527,31 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                     ),
                     const SizedBox(height: 8),
                     if (status == StatutAppartEnum.occupe) ...[
-                      TextFormField(
-                        controller: residentController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Resident ID (laisser vide si vacant)'),
-                        validator: (value) {
-                          if (status == StatutAppartEnum.occupe) {
-                            if (value == null || value.trim().isEmpty) return 'Resident ID requis pour un appartement occupé';
-                            final v = int.tryParse(value.trim());
-                            if (v == null || v <= 0) return 'Entrez un entier positif';
-                          }
-                          return null;
+                      const SizedBox(height: 8),
+                      Autocomplete<ResidentModel>(
+                        displayStringForOption: (r) => '${r.prenom} ${r.nom} (${r.userId})',
+                        initialValue: TextEditingValue(text: apartment.residentNomComplet ?? (apartment.residentId?.toString() ?? '')),
+                        optionsBuilder: (textEditingValue) async {
+                          if (textEditingValue.text.isEmpty) return const Iterable<ResidentModel>.empty();
+                          return await _residentService.searchResidents(textEditingValue.text);
+                        },
+                        onSelected: (r) {
+                          residentController.text = r.userId.toString();
+                        },
+                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                          return TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            decoration: const InputDecoration(
+                              labelText: 'Chercher un résident (Nom/Prénom)',
+                              hintText: 'Commencez à taper...',
+                              prefixIcon: Icon(Icons.search),
+                            ),
+                            validator: (value) {
+                              if (residentController.text.isEmpty) return 'Sélection requise';
+                              return null;
+                            },
+                          );
                         },
                       ),
                       const SizedBox(height: 8),
@@ -707,7 +768,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                     children: [
                       // Bouton RETOUR
                       GestureDetector(
-                        onTap: () => Navigator.pop(context),
+                        onTap: widget.onBack ?? () => Navigator.pop(context),
                         child: Container(
                           width: 42,
                           height: 42,
