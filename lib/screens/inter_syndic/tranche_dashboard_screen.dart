@@ -87,7 +87,12 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
                 : FadeTransition(
               opacity: _fadeAnim,
               child: _selectedView == 'apartments' 
-                ? ApartmentsListScreen(trancheId: widget.tranche.id, onBack: () => setState(() => _selectedView = 'dashboard'))
+                ? ApartmentsListScreen(
+                    trancheId: widget.tranche.id, 
+                    residenceId: widget.tranche.residenceId,
+                    trancheName: widget.tranche.nom,
+                    residenceName: widget.tranche.residenceNom,
+                    onBack: () => setState(() => _selectedView = 'dashboard'))
                 : ListView(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
                 children: [

@@ -14,12 +14,15 @@ class AppartementModel {
   // Données jointes optionnelles
   final String? immeubleNom;
   final String? residentNomComplet;
+  final String? residenceNom; // Ajouté
+  final String? trancheNom; // Ajouté
 
   // Champs calculés depuis le numéro (R{res}-T{tranche}-Imm{imm}-{num})
-  int get residence => _parseNumeroPart(0, 'R');
-  int get tranche => _parseNumeroPart(1, 'T');
-  int get immeubleNum => _parseNumeroPart(2, 'Imm');
-  int get numeroAppartement => _parseNumeroPart(3, '');
+  // Retournent String pour accepter varchar comme demandé par l'utilisateur
+  String get residence => _parseNumeroPart(0, 'R');
+  String get tranche => _parseNumeroPart(1, 'T');
+  String get immeubleNum => _parseNumeroPart(2, 'Imm');
+  String get numeroAppartement => _parseNumeroPart(3, '');
 
   AppartementModel({
     required this.id,
@@ -31,9 +34,11 @@ class AppartementModel {
     this.updatedAt,
     this.immeubleNom,
     this.residentNomComplet,
+    this.residenceNom,
+    this.trancheNom,
   });
 
-  int _parseNumeroPart(int index, String prefix) {
+  String _parseNumeroPart(int index, String prefix) {
     try {
       final parts = numero.split('-');
       if (parts.length > index) {
@@ -41,10 +46,10 @@ class AppartementModel {
         if (prefix.isNotEmpty && part.startsWith(prefix)) {
           part = part.substring(prefix.length);
         }
-        return int.parse(part);
+        return part;
       }
     } catch (_) {}
-    return 0;
+    return '';
   }
 
   bool get estLibre => statut == StatutAppartEnum.libre;
@@ -52,9 +57,24 @@ class AppartementModel {
 
   String get statutLabel => estOccupe ? 'Occupé' : 'Libre';
 
+  /// Titre lisible qui remplace les IDs par les vrais noms si disponibles.
+  /// Ex: "RRésidence A-TTranche 1-ImmImmeuble A1-201"
+  String get titreAffichage {
+    final res = residenceNom ?? residence;
+    final tr  = trancheNom ?? tranche;
+    final imm = immeubleNom ?? immeubleNum;
+    final num = numeroAppartement;
+    if (res.isEmpty && tr.isEmpty) return numero; // fallback
+    return 'R$res-T$tr-Imm$imm-$num';
+  }
+
   factory AppartementModel.fromJson(Map<String, dynamic> j) {
     final immeuble = j['immeubles'] as Map<String, dynamic>?;
     final resident = j['users'] as Map<String, dynamic>?;
+    
+    // Noms joints via tranches et residences
+    final tranche = immeuble?['tranches'] as Map<String, dynamic>?;
+    final residence = tranche?['residences'] as Map<String, dynamic>?;
 
     // Gestion du statut (le format peut varier entre 'libre'/'occupe' et 'vacant'/'occupied')
     final statutRaw = (j['statut'] ?? '').toString().toLowerCase();
@@ -75,6 +95,8 @@ class AppartementModel {
       updatedAt: j['updated_at'] != null ? DateTime.tryParse(j['updated_at']) : null,
       immeubleNom: immeuble?['nom'],
       residentNomComplet: resident != null ? '${resident['prenom']} ${resident['nom']}' : null,
+      residenceNom: residence?['nom'],
+      trancheNom: tranche?['nom'],
     );
   }
 
@@ -86,7 +108,8 @@ class AppartementModel {
     if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
   };
 
-  static String generateNumero(int residence, int tranche, int immeuble, int numeroApt) {
+  // Changé immeuble et numeroApt en dynamic pour accepter String/int
+  static String generateNumero(dynamic residence, dynamic tranche, dynamic immeuble, dynamic numeroApt) {
     return "R$residence-T$tranche-Imm$immeuble-$numeroApt";
   }
 }

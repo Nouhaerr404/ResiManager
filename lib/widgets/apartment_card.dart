@@ -49,7 +49,7 @@ class ApartmentCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        apartment.numero,
+                        apartment.titreAffichage,
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -64,9 +64,9 @@ class ApartmentCard extends StatelessWidget {
               const SizedBox(height: 12),
 
               // Informations structurelles
-              _buildInfoRow(Icons.location_city, 'Résidence', 'Résidence ${apartment.residence}'),
+              _buildInfoRow(Icons.location_city, 'Résidence', apartment.residenceNom ?? 'Résidence ${apartment.residence}'),
               const SizedBox(height: 6),
-              _buildInfoRow(Icons.category, 'Tranche', 'Tranche ${apartment.tranche}'),
+              _buildInfoRow(Icons.category, 'Tranche', apartment.trancheNom ?? 'Tranche ${apartment.tranche}'),
               const SizedBox(height: 6),
               _buildInfoRow(Icons.business, 'Immeuble', 'Immeuble ${apartment.immeubleNum}'),
               const SizedBox(height: 6),
