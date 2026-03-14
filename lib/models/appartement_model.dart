@@ -16,10 +16,11 @@ class AppartementModel {
   final String? residentNomComplet;
 
   // Champs calculés depuis le numéro (R{res}-T{tranche}-Imm{imm}-{num})
-  int get residence => _parseNumeroPart(0, 'R');
-  int get tranche => _parseNumeroPart(1, 'T');
-  int get immeubleNum => _parseNumeroPart(2, 'Imm');
-  int get numeroAppartement => _parseNumeroPart(3, '');
+  // Retournent String pour accepter varchar comme demandé par l'utilisateur
+  String get residence => _parseNumeroPart(0, 'R');
+  String get tranche => _parseNumeroPart(1, 'T');
+  String get immeubleNum => _parseNumeroPart(2, 'Imm');
+  String get numeroAppartement => _parseNumeroPart(3, '');
 
   AppartementModel({
     required this.id,
@@ -33,7 +34,7 @@ class AppartementModel {
     this.residentNomComplet,
   });
 
-  int _parseNumeroPart(int index, String prefix) {
+  String _parseNumeroPart(int index, String prefix) {
     try {
       final parts = numero.split('-');
       if (parts.length > index) {
@@ -41,10 +42,10 @@ class AppartementModel {
         if (prefix.isNotEmpty && part.startsWith(prefix)) {
           part = part.substring(prefix.length);
         }
-        return int.parse(part);
+        return part;
       }
     } catch (_) {}
-    return 0;
+    return '';
   }
 
   bool get estLibre => statut == StatutAppartEnum.libre;
@@ -86,7 +87,8 @@ class AppartementModel {
     if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
   };
 
-  static String generateNumero(int residence, int tranche, int immeuble, int numeroApt) {
+  // Changé immeuble et numeroApt en dynamic pour accepter String/int
+  static String generateNumero(dynamic residence, dynamic tranche, dynamic immeuble, dynamic numeroApt) {
     return "R$residence-T$tranche-Imm$immeuble-$numeroApt";
   }
 }

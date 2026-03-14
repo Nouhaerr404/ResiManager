@@ -12,7 +12,7 @@ class TrancheService {
 
       final res = await _db
           .from('tranches')
-          .select('*')
+          .select('*, residences(*)')
           .eq('inter_syndic_id', interSyndicId)
           .timeout(const Duration(seconds: 10));
 
@@ -123,7 +123,7 @@ class TrancheService {
   Future<List<TrancheModel>> getTranchesByResidence(int residenceId) async {
     final response = await _db
         .from('tranches')
-        .select('*, users(nom, prenom)') // Jointure avec users pour le nom de l'inter-syndic
+        .select('*, residences(*), users(nom, prenom)') // Jointure avec users pour le nom de l'inter-syndic
         .eq('residence_id', residenceId);
 
     return (response as List)
@@ -168,8 +168,16 @@ class TrancheService {
         .eq('id', trancheId);
   }
 
-  // Récupérer les noms des immeubles pour une tranche spécifique
+  // Récupérer les immeubles pour une tranche spécifique (IDs et Noms)
+  Future<List<Map<String, dynamic>>> getImmeublesByTranche(int trancheId) async {
+    final response = await _db
+        .from('immeubles')
+        .select('id, nom')
+        .eq('tranche_id', trancheId);
 
+    return List<Map<String, dynamic>>.from(response);
+  }
+  // Récupérer les noms des immeubles pour une tranche spécifique (pour TrancheDetailCard)
   Future<List<String>> getImmeubleNames(int trancheId) async {
     final response = await _db
         .from('immeubles')

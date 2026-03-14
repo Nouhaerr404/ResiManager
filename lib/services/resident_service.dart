@@ -16,14 +16,13 @@ class ResidentService {
       print('>>> DEBUT tranche=$trancheId');
 
       final immeublesRes =
-      await _db.from('immeubles').select('id, nom, tranche_id');
-      final immeubles = (immeublesRes as List)
-          .where((i) => i['tranche_id'] == trancheId)
-          .toList();
-      print('>>> Immeubles: ${immeubles.length}');
+          await _db.from('immeubles').select('id, nom, tranche_id').eq('tranche_id', trancheId);
+      final immeubles = (immeublesRes as List);
+      print('>>> Immeubles filtered by tranche: ${immeubles.length}');
       if (immeubles.isEmpty) return [];
 
       final immeubleIds = immeubles.map((i) => i['id'] as int).toList();
+      print('>>> Immeuble IDs: $immeubleIds');
 
       final appartementsRes = await _db
           .from('appartements')
