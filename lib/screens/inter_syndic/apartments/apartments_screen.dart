@@ -1,11 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/appartement_model.dart';
+import '../../../models/resident_model.dart';
+import '../../../services/resident_service.dart';
 import '../../../widgets/apartment_card.dart';
 import '../../../widgets/apartment_filters.dart';
+import '../../../services/tranche_service.dart';
 
 class ApartmentsListScreen extends StatefulWidget {
-  const ApartmentsListScreen({Key? key}) : super(key: key);
+  final int? trancheId;
+  final int? residenceId;
+  final String? trancheName; // Ajouté
+  final String? residenceName; // Ajouté
+  final VoidCallback? onBack;
+
+  const ApartmentsListScreen({
+    Key? key, 
+    this.trancheId, 
+    this.residenceId, 
+    this.trancheName,
+    this.residenceName,
+    this.onBack
+  }) : super(key: key);
 
   @override
   State<ApartmentsListScreen> createState() => _ApartmentsListScreenState();
@@ -13,8 +29,13 @@ class ApartmentsListScreen extends StatefulWidget {
 
 class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
   final _supabase = Supabase.instance.client;
+  final _residentService = ResidentService();
+  final _trancheService = TrancheService();
+  
   List<AppartementModel> apartments = [];
   List<AppartementModel> filteredApartments = [];
+  List<Map<String, dynamic>> _immeublesDeLaTranche = []; // Liste des immeubles pour l'autocomplete
+  
   bool showFilters = false;
   final TextEditingController searchController = TextEditingController();
   bool loading = false;
@@ -23,12 +44,29 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
   void initState() {
     super.initState();
     _loadApartments();
+    _loadTrancheImmeubles();
+  }
+
+  Future<void> _loadTrancheImmeubles() async {
+    if (widget.trancheId != null) {
+      final list = await _trancheService.getImmeublesByTranche(widget.trancheId!);
+      setState(() {
+        _immeublesDeLaTranche = list;
+      });
+    }
   }
 
   Future<void> _loadApartments() async {
     setState(() => loading = true);
     try {
-      final response = await _supabase.from('appartements').select().order('id', ascending: true) as List<dynamic>;
+      dynamic query = _supabase.from('appartements').select('*, immeubles!inner(id, nom, tranche_id, tranches!inner(id, nom, residence_id, residences!inner(id, nom)))');
+      
+      if (widget.trancheId != null) {
+        query = query.eq('immeubles.tranche_id', widget.trancheId!);
+      }
+
+      final response = await query.order('id', ascending: true) as List<dynamic>;
+
       final list = response.map((e) => AppartementModel.fromJson(Map<String, dynamic>.from(e))).toList();
       setState(() {
         apartments = list;
@@ -53,8 +91,8 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
   }) {
     setState(() {
       filteredApartments = apartments.where((apt) {
-        if (tranche != null && apt.tranche != tranche) return false;
-        if (immeuble != null && apt.immeubleNum != immeuble) return false;
+        if (tranche != null && int.tryParse(apt.tranche) != tranche) return false;
+        if (immeuble != null && (int.tryParse(apt.immeubleNum) != immeuble)) return false;
         if (status != null && apt.statut != status) return false;
         return true;
       }).toList();
@@ -83,18 +121,20 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
   // -------------------------
 
   Future<void> _addApartmentToDb({
-    required int residence,
-    required int tranche,
-    required int immeuble,
-    required int numeroApt,
+    required dynamic residence,
+    required dynamic tranche,
+    required int immeubleId,
+    required dynamic immeubleLabel, // peut être varchar
+    required dynamic numeroApt,
     required StatutAppartEnum status,
     int? residentId,
   }) async {
-    final numero = AppartementModel.generateNumero(residence, tranche, immeuble, numeroApt);
+    // Le numero généré utilise le label de l'immeuble (ex: "A" ou "3")
+    final numero = AppartementModel.generateNumero(residence, tranche, immeubleLabel, numeroApt);
     final now = DateTime.now().toIso8601String();
     final row = {
       'numero': numero,
-      'immeuble_id': immeuble,
+      'immeuble_id': immeubleId,
       'statut': status == StatutAppartEnum.libre ? 'libre' : 'occupe',
       'resident_id': residentId,
       'created_at': now,
@@ -102,7 +142,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     };
 
     try {
-      final inserted = await _supabase.from('appartements').insert(row).select() as List<dynamic>;
+      final inserted = await _supabase.from('appartements').insert(row).select('*, immeubles!inner(id, nom, tranche_id, tranches!inner(id, nom, residence_id, residences!inner(id, nom)))') as List<dynamic>;
       if (inserted.isNotEmpty) {
         final ap = AppartementModel.fromJson(Map<String, dynamic>.from(inserted.first));
         setState(() {
@@ -123,18 +163,19 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
 
   Future<void> _updateApartmentInDb({
     required AppartementModel oldApartment,
-    required int residence,
-    required int tranche,
-    required int immeuble,
-    required int numeroApt,
+    required dynamic residence,
+    required dynamic tranche,
+    required int immeubleId,
+    required dynamic immeubleLabel,
+    required dynamic numeroApt,
     required StatutAppartEnum status,
     int? residentId,
   }) async {
-    final numero = AppartementModel.generateNumero(residence, tranche, immeuble, numeroApt);
+    final numero = AppartementModel.generateNumero(residence, tranche, immeubleLabel, numeroApt);
     final now = DateTime.now().toIso8601String();
     final row = {
       'numero': numero,
-      'immeuble_id': immeuble,
+      'immeuble_id': immeubleId,
       'statut': status == StatutAppartEnum.libre ? 'libre' : 'occupe',
       'resident_id': residentId,
       'updated_at': now,
@@ -145,7 +186,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
           .from('appartements')
           .update(row)
           .eq('id', oldApartment.id)
-          .select() as List<dynamic>;
+          .select('*, immeubles!inner(id, nom, tranche_id, tranches!inner(id, nom, residence_id, residences!inner(id, nom)))') as List<dynamic>;
       if (updated.isNotEmpty) {
         final ap = AppartementModel.fromJson(Map<String, dynamic>.from(updated.first));
         setState(() {
@@ -190,7 +231,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
           .from('appartements')
           .update({'resident_id': residentId, 'statut': 'occupe', 'updated_at': now})
           .eq('id', apartment.id)
-          .select() as List<dynamic>;
+          .select('*, immeubles!inner(id, nom, tranche_id, tranches!inner(id, nom, residence_id, residences!inner(id, nom)))') as List<dynamic>;
       if (updated.isNotEmpty) {
         final ap = AppartementModel.fromJson(Map<String, dynamic>.from(updated.first));
         setState(() {
@@ -216,9 +257,13 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
 
   void _showAddApartmentDialog() {
     final _formKey = GlobalKey<FormState>();
-    final residenceController = TextEditingController(text: '1');
-    final trancheController = TextEditingController();
-    final immeubleController = TextEditingController();
+    final residenceController = TextEditingController(text: widget.residenceName ?? widget.residenceId?.toString() ?? '1');
+    final trancheController = TextEditingController(text: widget.trancheName ?? widget.trancheId?.toString() ?? '');
+    
+    int? selectedImmeubleId;
+    String? selectedImmeubleNom;
+    final immeubleInputController = TextEditingController();
+
     final numeroController = TextEditingController();
     final residentController = TextEditingController();
     StatutAppartEnum status = StatutAppartEnum.libre;
@@ -237,50 +282,54 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                   children: [
                     TextFormField(
                       controller: residenceController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Résidence (ex: 1)'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
-                      },
+                      readOnly: true, // Désactivé modification
+                      decoration: const InputDecoration(labelText: 'Résidence', fillColor: Colors.black12, filled: true),
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: trancheController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Tranche (ex: 2)'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
-                      },
+                      readOnly: true, // Désactivé modification
+                      decoration: const InputDecoration(labelText: 'Tranche', fillColor: Colors.black12, filled: true),
                     ),
                     const SizedBox(height: 8),
-                    TextFormField(
-                      controller: immeubleController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Immeuble (ex: 3)'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
+                    
+                    // Autocomplete Immeuble
+                    Autocomplete<Map<String, dynamic>>(
+                      displayStringForOption: (i) => i['nom'],
+                      optionsBuilder: (textEditingValue) {
+                        return _immeublesDeLaTranche.where((i) => 
+                          i['nom'].toString().toLowerCase().contains(textEditingValue.text.toLowerCase())
+                        );
+                      },
+                      onSelected: (i) {
+                        setStateDialog(() {
+                          selectedImmeubleId = i['id'];
+                          selectedImmeubleNom = i['nom'];
+                        });
+                      },
+                      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                        return TextFormField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: const InputDecoration(
+                            labelText: 'Immeuble (Autocomplétion)',
+                            hintText: 'Sélectionnez un immeuble...',
+                            prefixIcon: Icon(Icons.business_rounded),
+                          ),
+                          validator: (value) {
+                            if (selectedImmeubleId == null) return 'Sélectionnez un immeuble';
+                            return null;
+                          },
+                        );
                       },
                     ),
+                    
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: numeroController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'N° Appartement (ex: 201)'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
-                      },
+                      keyboardType: TextInputType.text, // Changé en text pour varchar
+                      decoration: const InputDecoration(labelText: 'N° Appartement (ex: 201 ou A1)'),
+                      validator: (value) => (value == null || value.isEmpty) ? 'Requis' : null,
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<StatutAppartEnum>(
@@ -296,15 +345,30 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                     ),
                     const SizedBox(height: 8),
                     if (status == StatutAppartEnum.occupe) ...[
-                      TextFormField(
-                        controller: residentController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Resident ID (entier positif)'),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) return 'Resident ID requis';
-                          final v = int.tryParse(value.trim());
-                          if (v == null || v <= 0) return 'Entrez un entier positif';
-                          return null;
+                      const SizedBox(height: 8),
+                      Autocomplete<ResidentModel>(
+                        displayStringForOption: (r) => '${r.prenom} ${r.nom} (${r.userId})',
+                        optionsBuilder: (textEditingValue) async {
+                          if (textEditingValue.text.isEmpty) return const Iterable<ResidentModel>.empty();
+                          return await _residentService.searchResidents(textEditingValue.text);
+                        },
+                        onSelected: (r) {
+                          residentController.text = r.userId.toString();
+                        },
+                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                          return TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            decoration: const InputDecoration(
+                              labelText: 'Chercher un résident (Nom/Prénom)',
+                              hintText: 'Commencez à taper...',
+                              prefixIcon: Icon(Icons.search),
+                            ),
+                            validator: (value) {
+                              if (residentController.text.isEmpty) return 'Veuillez sélectionner un résident';
+                              return null;
+                            },
+                          );
                         },
                       ),
                       const SizedBox(height: 8),
@@ -318,14 +382,18 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
               ElevatedButton(
                 onPressed: () async {
                   if (!_formKey.currentState!.validate()) return;
-                  final residence = int.parse(residenceController.text.trim());
-                  final tranche = int.parse(trancheController.text.trim());
-                  final immeuble = int.parse(immeubleController.text.trim());
-                  final numeroApt = int.parse(numeroController.text.trim());
+                  
+                  final residenceStr = widget.residenceId?.toString() ?? residenceController.text.trim();
+                  final trancheStr = widget.trancheId?.toString() ?? trancheController.text.trim();
+                  final immId = selectedImmeubleId!;
+                  final immLabel = selectedImmeubleNom!;
+                  final numAptStr = numeroController.text.trim();
+                  
                   final residentId = (status == StatutAppartEnum.occupe && residentController.text.trim().isNotEmpty)
                       ? int.parse(residentController.text.trim())
                       : null;
-                  final newNumero = AppartementModel.generateNumero(residence, tranche, immeuble, numeroApt);
+                  
+                  final newNumero = AppartementModel.generateNumero(residenceStr, trancheStr, immLabel, numAptStr);
 
                   final exists = apartments.any((a) => a.numero == newNumero);
                   if (exists) {
@@ -335,10 +403,11 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
 
                   Navigator.pop(context);
                   await _addApartmentToDb(
-                    residence: residence,
-                    tranche: tranche,
-                    immeuble: immeuble,
-                    numeroApt: numeroApt,
+                    residence: residenceStr,
+                    tranche: trancheStr,
+                    immeubleId: immId,
+                    immeubleLabel: immLabel,
+                    numeroApt: numAptStr,
                     status: status,
                     residentId: residentId,
                   );
@@ -365,16 +434,35 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
         title: Text('Assigner un résident à ${apartment.numero}'),
         content: Form(
           key: _formKey,
-          child: TextFormField(
-            controller: residentController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Resident ID (entier positif)'),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) return 'Requis';
-              final v = int.tryParse(value.trim());
-              if (v == null || v <= 0) return 'Entrez un entier positif';
-              return null;
-            },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Autocomplete<ResidentModel>(
+                displayStringForOption: (r) => '${r.prenom} ${r.nom} (${r.userId})',
+                optionsBuilder: (textEditingValue) async {
+                  if (textEditingValue.text.isEmpty) return const Iterable<ResidentModel>.empty();
+                  return await _residentService.searchResidents(textEditingValue.text);
+                },
+                onSelected: (r) {
+                  residentController.text = r.userId.toString();
+                },
+                fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                  return TextFormField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    decoration: const InputDecoration(
+                      labelText: 'Chercher un résident (Nom/Prénom)',
+                      hintText: 'Commencez à taper...',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    validator: (value) {
+                      if (residentController.text.isEmpty) return 'Veuillez sélectionner un résident';
+                      return null;
+                    },
+                  );
+                },
+              ),
+            ],
           ),
         ),
         actions: [
@@ -395,10 +483,13 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
 
   void _showEditApartmentDialog(AppartementModel apartment) {
     final _formKey = GlobalKey<FormState>();
-    final residenceController = TextEditingController(text: apartment.residence.toString());
-    final trancheController = TextEditingController(text: apartment.tranche.toString());
-    final immeubleController = TextEditingController(text: apartment.immeubleNum.toString());
-    final numeroController = TextEditingController(text: apartment.numeroAppartement.toString());
+    final residenceController = TextEditingController(text: widget.residenceName ?? apartment.residence);
+    final trancheController = TextEditingController(text: widget.trancheName ?? apartment.tranche);
+    
+    int? selectedImmeubleId = apartment.immeubleId;
+    String? selectedImmeubleNom = apartment.immeubleNum; // C'est le label du numéro
+    
+    final numeroController = TextEditingController(text: apartment.numeroAppartement);
     final residentController = TextEditingController(text: apartment.residentId?.toString() ?? '');
     StatutAppartEnum status = apartment.statut;
 
@@ -416,50 +507,52 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                   children: [
                     TextFormField(
                       controller: residenceController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Résidence'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
-                      },
+                      readOnly: true,
+                      decoration: const InputDecoration(labelText: 'Résidence', fillColor: Colors.black12, filled: true),
                     ),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: trancheController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Tranche'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
-                      },
+                      readOnly: true,
+                      decoration: const InputDecoration(labelText: 'Tranche', fillColor: Colors.black12, filled: true),
                     ),
                     const SizedBox(height: 8),
-                    TextFormField(
-                      controller: immeubleController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Immeuble'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
+                    
+                    Autocomplete<Map<String, dynamic>>(
+                      displayStringForOption: (i) => i['nom'],
+                      initialValue: TextEditingValue(text: apartment.immeubleNom ?? apartment.immeubleNum),
+                      optionsBuilder: (textEditingValue) {
+                        return _immeublesDeLaTranche.where((i) => 
+                          i['nom'].toString().toLowerCase().contains(textEditingValue.text.toLowerCase())
+                        );
+                      },
+                      onSelected: (i) {
+                        setStateDialog(() {
+                          selectedImmeubleId = i['id'];
+                          selectedImmeubleNom = i['nom'];
+                        });
+                      },
+                      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                        return TextFormField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: const InputDecoration(
+                            labelText: 'Immeuble (Autocomplétion)',
+                            prefixIcon: Icon(Icons.business_rounded),
+                          ),
+                          validator: (value) {
+                            if (selectedImmeubleId == null) return 'Sélection requise';
+                            return null;
+                          },
+                        );
                       },
                     ),
+                    
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: numeroController,
-                      keyboardType: TextInputType.number,
                       decoration: const InputDecoration(labelText: 'N° Appartement'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) return 'Requis';
-                        final v = int.tryParse(value.trim());
-                        if (v == null || v <= 0) return 'Entrez un entier positif';
-                        return null;
-                      },
+                      validator: (value) => (value == null || value.isEmpty) ? 'Requis' : null,
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<StatutAppartEnum>(
@@ -480,17 +573,31 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                     ),
                     const SizedBox(height: 8),
                     if (status == StatutAppartEnum.occupe) ...[
-                      TextFormField(
-                        controller: residentController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Resident ID (laisser vide si vacant)'),
-                        validator: (value) {
-                          if (status == StatutAppartEnum.occupe) {
-                            if (value == null || value.trim().isEmpty) return 'Resident ID requis pour un appartement occupé';
-                            final v = int.tryParse(value.trim());
-                            if (v == null || v <= 0) return 'Entrez un entier positif';
-                          }
-                          return null;
+                      const SizedBox(height: 8),
+                      Autocomplete<ResidentModel>(
+                        displayStringForOption: (r) => '${r.prenom} ${r.nom} (${r.userId})',
+                        initialValue: TextEditingValue(text: apartment.residentNomComplet ?? (apartment.residentId?.toString() ?? '')),
+                        optionsBuilder: (textEditingValue) async {
+                          if (textEditingValue.text.isEmpty) return const Iterable<ResidentModel>.empty();
+                          return await _residentService.searchResidents(textEditingValue.text);
+                        },
+                        onSelected: (r) {
+                          residentController.text = r.userId.toString();
+                        },
+                        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                          return TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            decoration: const InputDecoration(
+                              labelText: 'Chercher un résident (Nom/Prénom)',
+                              hintText: 'Commencez à taper...',
+                              prefixIcon: Icon(Icons.search),
+                            ),
+                            validator: (value) {
+                              if (residentController.text.isEmpty) return 'Sélection requise';
+                              return null;
+                            },
+                          );
                         },
                       ),
                       const SizedBox(height: 8),
@@ -505,29 +612,32 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                 onPressed: () async {
                   if (!_formKey.currentState!.validate()) return;
 
-                  final residence = int.parse(residenceController.text.trim());
-                  final tranche = int.parse(trancheController.text.trim());
-                  final immeuble = int.parse(immeubleController.text.trim());
-                  final numeroApt = int.parse(numeroController.text.trim());
+                  final resStr = widget.residenceId?.toString() ?? residenceController.text.trim();
+                  final traStr = widget.trancheId?.toString() ?? trancheController.text.trim();
+                  final immId = selectedImmeubleId!;
+                  final immLabel = selectedImmeubleNom!;
+                  final numAptStr = numeroController.text.trim();
+                  
                   final residentId = (status == StatutAppartEnum.occupe && residentController.text.trim().isNotEmpty)
                       ? int.parse(residentController.text.trim())
                       : null;
 
-                  final newNumero = AppartementModel.generateNumero(residence, tranche, immeuble, numeroApt);
+                  final newNumero = AppartementModel.generateNumero(resStr, traStr, immLabel, numAptStr);
 
                   final exists = apartments.any((a) => a.numero == newNumero && a.id != apartment.id);
                   if (exists) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Le numéro $newNumero existe déjà pour un autre appartement.')));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Le numéro $newNumero existe déjà.')));
                     return;
                   }
 
                   Navigator.pop(context);
                   await _updateApartmentInDb(
                     oldApartment: apartment,
-                    residence: residence,
-                    tranche: tranche,
-                    immeuble: immeuble,
-                    numeroApt: numeroApt,
+                    residence: resStr,
+                    tranche: traStr,
+                    immeubleId: immId,
+                    immeubleLabel: immLabel,
+                    numeroApt: numAptStr,
                     status: status,
                     residentId: residentId,
                   );
@@ -586,11 +696,11 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
               children: [
                 Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
                 const SizedBox(height: 24),
-                Row(children: [Icon(Icons.home, size: 32, color: Theme.of(context).primaryColor), const SizedBox(width: 12), Text(apartment.numero, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold))]),
+                Row(children: [Icon(Icons.home, size: 32, color: Theme.of(context).primaryColor), const SizedBox(width: 12), Expanded(child: Text(apartment.titreAffichage, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis))]),
                 const SizedBox(height: 24),
                 _buildDetailRow('Résidence', 'Résidence ${apartment.residence}', Icons.location_city),
                 _buildDetailRow('Tranche', 'Tranche ${apartment.tranche}', Icons.category),
-                _buildDetailRow('Immeuble', 'Immeuble ${apartment.immeubleNum}', Icons.business),
+                _buildDetailRow('Immeuble', 'Immeuble ${apartment.immeubleNom ?? apartment.immeubleNum}', Icons.business),
                 _buildDetailRow('N° Appartement', '${apartment.numeroAppartement}', Icons.meeting_room),
                 _buildDetailRow('Statut', apartment.statut == StatutAppartEnum.occupe ? 'Occupé' : 'Libre', Icons.info_outline),
                 if (apartment.statut == StatutAppartEnum.occupe) ...[
@@ -707,7 +817,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                     children: [
                       // Bouton RETOUR
                       GestureDetector(
-                        onTap: () => Navigator.pop(context),
+                        onTap: widget.onBack ?? () => Navigator.pop(context),
                         child: Container(
                           width: 42,
                           height: 42,

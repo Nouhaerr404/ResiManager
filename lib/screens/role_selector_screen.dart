@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'super_admin/super_admin_dashboard_screen.dart';
 import 'resident/resident_dashboard_screen.dart';
 import 'syndic_general/dashboard_screen.dart';
+import 'inter_syndic/intersyndic_selection_screen.dart';
 import 'inter_syndic/tranches_list_screen.dart';
 import 'inter_syndic/apartments/apartments_screen.dart';
 
@@ -209,7 +210,7 @@ class RoleSelectorScreen extends StatelessWidget {
                         color: const Color(0xFF4CAF82),
                         onTap: () => Navigator.push(context,
                             MaterialPageRoute(
-                                builder: (_) => const TranchesListScreen())),
+                                builder: (_) => const InterSyndicSelectionScreen())),
                       ),
                       _RoleCard(
                         icon: Icons.business_center_outlined,
@@ -262,7 +263,7 @@ class RoleSelectorScreen extends StatelessWidget {
                           label: 'Tranches',
                           onTap: () => Navigator.push(context,
                               MaterialPageRoute(
-                                  builder: (_) => const TranchesListScreen())),
+                                  builder: (_) => const InterSyndicSelectionScreen())),
                         ),
                       ),
                     ],
