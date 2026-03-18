@@ -34,8 +34,8 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
     bool isMobile = screenWidth < 700;
 
     return MainLayout(
-      activePage: 'Dashboard',
       title: isMobile ? 'Finances' : '',
+      activePage: 'Finances',
       body: SingleChildScrollView(
         padding: EdgeInsets.only(
             left: isMobile ? 15 : 30,
