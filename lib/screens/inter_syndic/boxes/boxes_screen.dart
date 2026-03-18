@@ -27,7 +27,17 @@ class _C {
 
 class BoxesScreen extends StatefulWidget {
   final int trancheId;
-  const BoxesScreen({super.key, required this.trancheId});
+  final int? residenceId;
+  final String? trancheName;
+  final String? residenceName;
+
+  const BoxesScreen({
+    super.key, 
+    required this.trancheId,
+    this.residenceId,
+    this.trancheName,
+    this.residenceName,
+  });
 
   @override
   State<BoxesScreen> createState() => _BoxesScreenState();
@@ -669,8 +679,8 @@ class _BoxesScreenState extends State<BoxesScreen>
   }
 
   void _showAddBoxDialog() async {
-    final resIdCtrl = TextEditingController();
-    final trancheIdCtrl = TextEditingController();
+    final resIdCtrl = TextEditingController(text: widget.residenceName ?? '');
+    final trancheIdCtrl = TextEditingController(text: widget.trancheName ?? '');
     final boxIdCtrl = TextEditingController();
     final prixCtrl = TextEditingController(text: '800');
     
@@ -680,13 +690,7 @@ class _BoxesScreenState extends State<BoxesScreen>
     bool estOccupe = false;
     ResidentModel? selectedResident;
 
-    // Prefill Tranche
-    try {
-      final trancheData = await TrancheService().getTranchesOfInterSyndic(1);
-      final currentTranche = trancheData.firstWhere((t) => t.id == widget.trancheId);
-      final tMatch = RegExp(r'\d+').firstMatch(currentTranche.nom);
-      if (tMatch != null) trancheIdCtrl.text = tMatch.group(0)!;
-    } catch (_) {}
+
 
     if (!mounted) return;
 
@@ -710,11 +714,11 @@ class _BoxesScreenState extends State<BoxesScreen>
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Expanded(child: _field(resIdCtrl, 'R (ex: A)', prefix: 'R')),
+                    Expanded(child: _field(resIdCtrl, 'Résidence', prefix: 'R', readOnly: true)),
                     const SizedBox(width: 8),
-                    Expanded(child: _field(trancheIdCtrl, 'T (ex: 2)', prefix: '-T')),
+                    Expanded(child: _field(trancheIdCtrl, 'Tranche', prefix: '-T', readOnly: true)),
                     const SizedBox(width: 8),
-                    Expanded(child: _field(boxIdCtrl, 'B (ex: 05)', prefix: '-B')),
+                    Expanded(child: _field(boxIdCtrl, 'Box (ex: 05)', prefix: '-B')),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -764,14 +768,16 @@ class _BoxesScreenState extends State<BoxesScreen>
                       }
 
                       setDialog(() { saving = true; errorMsg = null; });
-                      final numero = 'R${resIdCtrl.text}-T${trancheIdCtrl.text}-B${boxIdCtrl.text}';
+                      final resPart = widget.residenceId?.toString() ?? resIdCtrl.text.trim();
+                      final traPart = widget.trancheId.toString();
+                      final numero = 'R$resPart-T$traPart-B${boxIdCtrl.text.trim()}';
                       
                       String? err;
                       if (estOccupe) {
                         err = await _service.addBoxWithAssignment(
                           numero: numero,
                           trancheId: widget.trancheId,
-                          residenceId: 1, // To be dynamic
+                          residenceId: widget.residenceId ?? 1, // Dynamic residenceId
                           prixAnnuel: double.tryParse(prixCtrl.text) ?? 0,
                           nom: selectedResident!.nom,
                           prenom: selectedResident!.prenom,
@@ -781,7 +787,7 @@ class _BoxesScreenState extends State<BoxesScreen>
                         err = await _service.addBox(
                           numero: numero,
                           trancheId: widget.trancheId,
-                          residenceId: 1,
+                          residenceId: widget.residenceId ?? 1,
                           prixAnnuel: double.tryParse(prixCtrl.text) ?? 0,
                         );
                       }
@@ -813,19 +819,21 @@ class _BoxesScreenState extends State<BoxesScreen>
   }
 
   void _showEditBoxDialog(BoxModel p) {
-    final resIdParts = p.numero.split('-');
-    String resId = '';
-    String tId = '';
-    String bId = '';
-    if (resIdParts.length >= 3) {
-      resId = resIdParts[0].replaceAll('R', '');
-      tId = resIdParts[1].replaceAll('T', '');
-      bId = resIdParts[2].replaceAll('B', '');
+    // Try to parse R[res]-T[tra]-B[num]
+    String res = '';
+    String tra = '';
+    String num = p.numero;
+
+    final match = RegExp(r'^R(.*?)-T(.*?)-B(.*)$').firstMatch(p.numero);
+    if (match != null) {
+      res = match.group(1) ?? '';
+      tra = match.group(2) ?? '';
+      num = match.group(3) ?? '';
     }
 
-    final resIdCtrl = TextEditingController(text: resId);
-    final trancheIdCtrl = TextEditingController(text: tId);
-    final boxIdCtrl = TextEditingController(text: bId);
+    final resIdCtrl = TextEditingController(text: res.isEmpty ? (widget.residenceName ?? '') : res);
+    final trancheIdCtrl = TextEditingController(text: tra.isEmpty ? (widget.trancheName ?? '') : tra);
+    final boxIdCtrl = TextEditingController(text: num);
     final prixCtrl = TextEditingController(text: p.prixAnnuel.toInt().toString());
 
     String? errorMsg;
@@ -833,10 +841,11 @@ class _BoxesScreenState extends State<BoxesScreen>
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialog) => Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -849,11 +858,11 @@ class _BoxesScreenState extends State<BoxesScreen>
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Expanded(child: _field(resIdCtrl, 'R', prefix: 'R')),
+                    Expanded(child: _field(resIdCtrl, 'Résidence', prefix: 'R', readOnly: true)),
                     const SizedBox(width: 8),
-                    Expanded(child: _field(trancheIdCtrl, 'T', prefix: '-T')),
+                    Expanded(child: _field(trancheIdCtrl, 'Tranche', prefix: '-T', readOnly: true)),
                     const SizedBox(width: 8),
-                    Expanded(child: _field(boxIdCtrl, 'B', prefix: '-B')),
+                    Expanded(child: _field(boxIdCtrl, 'Box (ex: 05)', prefix: '-B')),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -866,7 +875,9 @@ class _BoxesScreenState extends State<BoxesScreen>
                   child: ElevatedButton(
                     onPressed: saving ? null : () async {
                       setDialog(() { saving = true; errorMsg = null; });
-                      final numero = 'R${resIdCtrl.text}-T${trancheIdCtrl.text}-B${boxIdCtrl.text}';
+                      final resPart = widget.residenceId?.toString() ?? resIdCtrl.text.trim();
+                      final traPart = widget.trancheId.toString();
+                      final numero = 'R$resPart-T$traPart-B${boxIdCtrl.text.trim()}';
                       final err = await _service.updateBox(
                         boxId: p.id,
                         numero: numero,
@@ -1009,11 +1020,12 @@ class _BoxesScreenState extends State<BoxesScreen>
   // ── Helper Widgets
   Widget _label(String t) => Text(t, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _C.textMid));
 
-  Widget _field(TextEditingController ctrl, String hint, {TextInputType? inputType, String? prefix}) {
+  Widget _field(TextEditingController ctrl, String hint, {TextInputType? inputType, String? prefix, bool readOnly = false}) {
     return Container(
-      decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(color: readOnly ? Colors.black12 : _C.bg, borderRadius: BorderRadius.circular(10)),
       child: TextField(
         controller: ctrl,
+        readOnly: readOnly,
         keyboardType: inputType,
         style: const TextStyle(fontSize: 14, color: _C.dark, fontWeight: FontWeight.w600),
         decoration: InputDecoration(

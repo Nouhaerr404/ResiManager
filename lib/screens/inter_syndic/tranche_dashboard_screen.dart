@@ -561,7 +561,12 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
           valueColor: _C.coral,
           interactive: true,
           onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => ParkingsScreen(trancheId: widget.tranche.id))),
+              MaterialPageRoute(builder: (_) => ParkingsScreen(
+                trancheId: widget.tranche.id,
+                residenceId: widget.tranche.residenceId,
+                trancheName: widget.tranche.nom,
+                residenceName: widget.tranche.residenceNom,
+              ))),
         ),
         _ModuleData(
           label: 'Garages',
@@ -579,11 +584,16 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
           value: '${_num(_stats?['nbBoxes'] ?? 0)}',
           sub: 'unites',
           icon: Icons.inventory_2_outlined,
-          iconBg: _C.coralLight,
+          iconBg: _C.iconBg,
           valueColor: _C.coral,
           interactive: true,
           onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => BoxesScreen(trancheId: widget.tranche.id))),
+              MaterialPageRoute(builder: (_) => BoxesScreen(
+                trancheId: widget.tranche.id,
+                residenceId: widget.tranche.residenceId,
+                trancheName: widget.tranche.nom,
+                residenceName: widget.tranche.residenceNom,
+              ))),
         ),
         _ModuleData(
           label: 'Réunions',

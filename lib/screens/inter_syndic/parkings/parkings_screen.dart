@@ -26,7 +26,17 @@ class _C {
 
 class ParkingsScreen extends StatefulWidget {
   final int trancheId;
-  const ParkingsScreen({super.key, required this.trancheId});
+  final int? residenceId;
+  final String? trancheName;
+  final String? residenceName;
+
+  const ParkingsScreen({
+    super.key, 
+    required this.trancheId,
+    this.residenceId,
+    this.trancheName,
+    this.residenceName,
+  });
 
   @override
   State<ParkingsScreen> createState() => _ParkingsScreenState();
@@ -699,8 +709,8 @@ class _ParkingsScreenState extends State<ParkingsScreen>
   );
 
   void _showAddParkingDialog() async {
-    final resIdCtrl = TextEditingController();
-    final trancheIdCtrl = TextEditingController(text: '1');
+    final resIdCtrl = TextEditingController(text: widget.residenceName ?? '');
+    final trancheIdCtrl = TextEditingController(text: widget.trancheName ?? '');
     final parkingIdCtrl = TextEditingController();
     final prixCtrl = TextEditingController(text: '600');
     final residentSearchCtrl = TextEditingController();
@@ -710,16 +720,7 @@ class _ParkingsScreenState extends State<ParkingsScreen>
     bool estOccupe = false;
     ResidentModel? selectedResident;
 
-    // Fetch Tranche Info for Default values
-    try {
-      final trancheData = await TrancheService().getTranchesOfInterSyndic(1); // Assume 1 for now or pull from context
-      final currentTranche = trancheData.firstWhere((t) => t.id == widget.trancheId);
-      
-      final tMatch = RegExp(r'\d+').firstMatch(currentTranche.nom);
-      if (tMatch != null) trancheIdCtrl.text = tMatch.group(0)!;
-    } catch (e) {
-      print('Autofill error: $e');
-    }
+
 
     if (!mounted) return;
 
@@ -745,9 +746,9 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Expanded(child: _field(resIdCtrl, 'Résidence (ex: A)', prefix: 'R')),
+                    Expanded(child: _field(resIdCtrl, 'Résidence', prefix: 'R', readOnly: true)),
                     const SizedBox(width: 8),
-                    Expanded(child: _field(trancheIdCtrl, 'Tranche (ex: 1)', prefix: '-T')),
+                    Expanded(child: _field(trancheIdCtrl, 'Tranche', prefix: '-T', readOnly: true)),
                     const SizedBox(width: 8),
                     Expanded(child: _field(parkingIdCtrl, 'Num (ex: 01)', prefix: '-P')),
                   ],
@@ -873,14 +874,16 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                       errorMsg = null;
                     });
                     
-                    final String theGeneratedNumber = 'R${resIdCtrl.text.trim()}-T${trancheIdCtrl.text.trim()}-P${parkingIdCtrl.text.trim()}';
+                    final String resPart = widget.residenceId?.toString() ?? resIdCtrl.text.trim();
+                    final String traPart = widget.trancheId.toString();
+                    final String theGeneratedNumber = 'R$resPart-T$traPart-P${parkingIdCtrl.text.trim()}';
 
                     String? err;
                     if (estOccupe && selectedResident != null) {
                        err = await _service.addParkingWithAssignment(
                         numero: theGeneratedNumber,
                         trancheId: widget.trancheId,
-                        residenceId: 1, // Defaulting to 1 for residenceId for now as in original
+                        residenceId: widget.residenceId ?? 1, // Use dynamic residenceId
                         prixAnnuel: double.tryParse(prixCtrl.text) ?? 600,
                         nom: selectedResident!.nom,
                         prenom: selectedResident!.prenom,
@@ -891,7 +894,7 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                         err = await _service.addParking(
                         numero: theGeneratedNumber,
                         trancheId: widget.trancheId,
-                        residenceId: 1,
+                        residenceId: widget.residenceId ?? 1,
                         prixAnnuel: double.tryParse(prixCtrl.text) ?? 600,
                       );
                     }
@@ -917,18 +920,34 @@ class _ParkingsScreenState extends State<ParkingsScreen>
   }
 
   void _showEditParkingDialog(ParkingModel p) {
-    final numeroCtrl = TextEditingController(text: p.numero);
-    final prixCtrl =
-    TextEditingController(text: p.prixAnnuel.toInt().toString());
+    // Try to parse R[res]-T[tra]-P[num]
+    String res = '';
+    String tra = '';
+    String num = p.numero;
+
+    final match = RegExp(r'^R(.*?)-T(.*?)-P(.*)$').firstMatch(p.numero);
+    if (match != null) {
+      res = match.group(1) ?? '';
+      tra = match.group(2) ?? '';
+      num = match.group(3) ?? '';
+    }
+
+    final resIdCtrl = TextEditingController(text: res.isEmpty ? (widget.residenceName ?? '') : res);
+    final trancheIdCtrl = TextEditingController(text: tra.isEmpty ? (widget.trancheName ?? '') : tra);
+    final parkingIdCtrl = TextEditingController(text: num);
+    final prixCtrl = TextEditingController(text: p.prixAnnuel.toInt().toString());
+    
+    String? errorMsg;
     bool saving = false;
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialog) => Dialog(
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20)),
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -937,11 +956,22 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                 _dialogHeader(ctx, 'Modifier Parking',
                     icon: Icons.edit_rounded, iconColor: _C.blue),
                 const SizedBox(height: 20),
-                _label('Numero'),
-                _field(numeroCtrl, ''),
+                if (errorMsg != null) _errorBanner(errorMsg!),
+                
+                _label('Codification du parking *'),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(child: _field(resIdCtrl, 'Résidence', prefix: 'R', readOnly: true)),
+                    const SizedBox(width: 8),
+                    Expanded(child: _field(trancheIdCtrl, 'Tranche', prefix: '-T', readOnly: true)),
+                    const SizedBox(width: 8),
+                    Expanded(child: _field(parkingIdCtrl, 'Num (ex: 01)', prefix: '-P')),
+                  ],
+                ),
                 const SizedBox(height: 14),
-                _label('Prix annuel (DH)'),
-                _field(prixCtrl, '',
+                _label('Prix annuel (DH) *'),
+                _field(prixCtrl, 'ex: 600',
                     inputType: TextInputType.number),
                 const SizedBox(height: 24),
                 _dialogActions(
@@ -950,16 +980,36 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                   confirmLabel: 'Enregistrer',
                   confirmColor: _C.blue,
                   onConfirm: () async {
-                    setDialog(() => saving = true);
-                    await _service.updateParking(
+                    if (parkingIdCtrl.text.trim().isEmpty) {
+                      setDialog(() => errorMsg = 'Le numéro de parking est obligatoire.');
+                      return;
+                    }
+
+                    setDialog(() {
+                      saving = true;
+                      errorMsg = null;
+                    });
+                    
+                    final String resPart = widget.residenceId?.toString() ?? resIdCtrl.text.trim();
+                    final String traPart = widget.trancheId.toString();
+                    final String theGeneratedNumber = 'R$resPart-T$traPart-P${parkingIdCtrl.text.trim()}';
+
+                    final err = await _service.updateParking(
                       parkingId: p.id,
-                      numero: numeroCtrl.text.trim(),
-                      prixAnnuel: double.tryParse(prixCtrl.text) ??
-                          p.prixAnnuel,
+                      numero: theGeneratedNumber,
+                      prixAnnuel: double.tryParse(prixCtrl.text) ?? p.prixAnnuel,
                     );
+                    
                     if (!ctx.mounted) return;
-                    Navigator.pop(ctx);
-                    _load();
+                    if (err != null) {
+                      setDialog(() {
+                        errorMsg = err;
+                        saving = false;
+                      });
+                    } else {
+                      Navigator.pop(ctx);
+                      _load();
+                    }
                   },
                 ),
               ],
@@ -1282,10 +1332,11 @@ class _ParkingsScreenState extends State<ParkingsScreen>
   );
 
   Widget _field(TextEditingController ctrl, String hint,
-      {TextInputType inputType = TextInputType.text, String? prefix}) =>
+      {TextInputType inputType = TextInputType.text, String? prefix, bool readOnly = false}) =>
       TextField(
         controller: ctrl,
         keyboardType: inputType,
+        readOnly: readOnly,
         style: const TextStyle(fontSize: 14, color: _C.dark),
         decoration: InputDecoration(
           hintText: hint,
@@ -1294,7 +1345,7 @@ class _ParkingsScreenState extends State<ParkingsScreen>
           hintStyle:
           const TextStyle(color: _C.textLight, fontSize: 13),
           filled: true,
-          fillColor: _C.bg,
+          fillColor: readOnly ? Colors.black12 : _C.bg,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide.none,
