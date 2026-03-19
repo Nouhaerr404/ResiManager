@@ -87,7 +87,6 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
   Future<void> _resetPassword() async {
     final newPass = _newPassCtrl.text;
     final confirmPass = _confirmPassCtrl.text;
-    final code = _codeCtrl.text.trim();
 
     if (newPass.isEmpty || confirmPass.isEmpty) {
       setState(() => _error = "Veuillez remplir tous les champs");
@@ -109,16 +108,15 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
       _error = null;
     });
 
+    // ✅ CORRECTION : Suppression du paramètre 'code' qui n'est plus requis par le service
     final result = await _authService.resetPasswordWithCode(
       email: widget.email,
-      code: code,
       newPassword: newPass,
     );
 
     setState(() => _loading = false);
 
     if (result['success'] == true) {
-      // Succès - montrer un message et retourner au login
       _showSuccessDialog();
     } else {
       setState(() => _error = result['error'] ?? "Erreur lors de la réinitialisation");
@@ -232,8 +230,6 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 20),
-
-              // Icône
               Center(
                 child: Container(
                   width: 100,
@@ -249,10 +245,7 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 30),
-
-              // Titre
               Center(
                 child: Text(
                   _codeVerified ? "Nouveau mot de passe" : "Vérification du code",
@@ -262,28 +255,22 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 10),
-
-              // Email
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: Text(
-                  widget.email,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w500,
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Text(
+                    widget.email,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                 ),
               ),
-
               const SizedBox(height: 30),
-
               if (!_codeVerified) ...[
-                // CODE NON VÉRIFIÉ
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -293,7 +280,6 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                   ),
                   child: Column(
                     children: [
-                      // Timer
                       if (!_showResend)
                         Container(
                           padding: const EdgeInsets.symmetric(vertical: 10),
@@ -304,117 +290,59 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                               const SizedBox(width: 8),
                               Text(
                                 "Code valide pendant : ${_formatTime(_secondsRemaining)}",
-                                style: const TextStyle(
-                                  color: Colors.grey,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                                style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500),
                               ),
                             ],
                           ),
                         ),
-
                       const SizedBox(height: 16),
-
-                      // Champ code
                       TextField(
                         controller: _codeCtrl,
                         keyboardType: TextInputType.number,
                         textAlign: TextAlign.center,
                         maxLength: 6,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          letterSpacing: 8,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: const TextStyle(fontSize: 24, letterSpacing: 8, fontWeight: FontWeight.bold),
                         decoration: InputDecoration(
                           hintText: "••••••",
-                          hintStyle: TextStyle(
-                            fontSize: 24,
-                            letterSpacing: 8,
-                            color: Colors.grey.shade300,
-                          ),
+                          hintStyle: TextStyle(fontSize: 24, letterSpacing: 8, color: Colors.grey.shade300),
                           filled: true,
                           fillColor: Colors.grey.shade50,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                           counterText: "",
                         ),
                       ),
-
                       const SizedBox(height: 16),
-
-                      // Message d'erreur
                       if (_error != null)
                         Container(
                           padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade50,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                          decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)),
                           child: Row(
                             children: [
                               Icon(Icons.error_outline, color: Colors.red.shade400, size: 18),
                               const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _error!,
-                                  style: TextStyle(color: Colors.red.shade700),
-                                ),
-                              ),
+                              Expanded(child: Text(_error!, style: TextStyle(color: Colors.red.shade700))),
                             ],
                           ),
                         ),
-
                       const SizedBox(height: 16),
-
-                      // Bouton vérifier
                       SizedBox(
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton(
                           onPressed: _loading ? null : _verifyCode,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _coral,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: _loading
-                              ? const SizedBox(
-                            height: 22,
-                            width: 22,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                              : const Text(
-                            "Vérifier le code",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          style: ElevatedButton.styleFrom(backgroundColor: _coral, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                          child: _loading ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text("Vérifier le code", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                         ),
                       ),
-
-                      // Lien renvoyer
                       if (_showResend)
                         TextButton(
                           onPressed: _loading ? null : _resendCode,
-                          child: const Text(
-                            "Renvoyer le code",
-                            style: TextStyle(color: _coral),
-                          ),
+                          child: const Text("Renvoyer le code", style: TextStyle(color: _coral)),
                         ),
                     ],
                   ),
                 ),
               ] else ...[
-                // CODE VÉRIFIÉ - SAISIE NOUVEAU MOT DE PASSE
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -424,99 +352,44 @@ class _VerifyCodeScreenState extends State<VerifyCodeScreen> {
                   ),
                   child: Column(
                     children: [
-                      // Champ nouveau mot de passe
                       Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
                         child: TextField(
                           controller: _newPassCtrl,
                           obscureText: true,
-                          decoration: const InputDecoration(
-                            hintText: "Nouveau mot de passe",
-                            prefixIcon: Icon(Icons.lock_outline, color: Colors.grey),
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(vertical: 16),
-                          ),
+                          decoration: const InputDecoration(hintText: "Nouveau mot de passe", prefixIcon: Icon(Icons.lock_outline, color: Colors.grey), border: InputBorder.none, contentPadding: EdgeInsets.symmetric(vertical: 16)),
                         ),
                       ),
-
                       const SizedBox(height: 16),
-
-                      // Champ confirmation
                       Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
                         child: TextField(
                           controller: _confirmPassCtrl,
                           obscureText: true,
-                          decoration: const InputDecoration(
-                            hintText: "Confirmer le mot de passe",
-                            prefixIcon: Icon(Icons.lock_outline, color: Colors.grey),
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(vertical: 16),
-                          ),
+                          decoration: const InputDecoration(hintText: "Confirmer le mot de passe", prefixIcon: Icon(Icons.lock_outline, color: Colors.grey), border: InputBorder.none, contentPadding: EdgeInsets.symmetric(vertical: 16)),
                         ),
                       ),
-
                       const SizedBox(height: 16),
-
-                      // Message d'erreur
                       if (_error != null)
                         Container(
                           padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade50,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                          decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)),
                           child: Row(
                             children: [
                               Icon(Icons.error_outline, color: Colors.red.shade400, size: 18),
                               const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _error!,
-                                  style: TextStyle(color: Colors.red.shade700),
-                                ),
-                              ),
+                              Expanded(child: Text(_error!, style: TextStyle(color: Colors.red.shade700))),
                             ],
                           ),
                         ),
-
                       const SizedBox(height: 16),
-
-                      // Bouton réinitialiser
                       SizedBox(
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton(
                           onPressed: _loading ? null : _resetPassword,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _coral,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: _loading
-                              ? const SizedBox(
-                            height: 22,
-                            width: 22,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                              : const Text(
-                            "Réinitialiser",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          style: ElevatedButton.styleFrom(backgroundColor: _coral, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                          child: _loading ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text("Réinitialiser", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
