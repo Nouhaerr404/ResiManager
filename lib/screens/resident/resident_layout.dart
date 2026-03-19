@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
+import '../auth/login_screen.dart';
 import 'resident_dashboard_screen.dart';
 import 'resident_charges_screen.dart';
 import 'resident_annonces_screen.dart';
@@ -21,6 +23,7 @@ class ResidentLayout extends StatefulWidget {
 
 class _ResidentLayoutState extends State<ResidentLayout> {
   late int _currentIndex;
+  final AuthService _authService = AuthService();
   static const _coral = Color(0xFFFF6B4A);
 
   @override
@@ -30,6 +33,15 @@ class _ResidentLayoutState extends State<ResidentLayout> {
   }
 
   void _goTo(int index) => setState(() => _currentIndex = index);
+
+  Future<void> _handleLogout() async {
+    await _authService.signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
 
   // ── Page affichée selon l'index ──
   Widget _buildPage() {
@@ -148,8 +160,7 @@ class _ResidentLayoutState extends State<ResidentLayout> {
             title: const Text('Déconnexion',
                 style: TextStyle(
                     color: Colors.redAccent, fontSize: 14)),
-            onTap: () =>
-                Navigator.of(context).popUntil((r) => r.isFirst),
+            onTap: _handleLogout,
           ),
           const SizedBox(height: 16),
         ],
@@ -221,8 +232,7 @@ class _ResidentLayoutState extends State<ResidentLayout> {
             leading: const Icon(Icons.logout, color: Colors.redAccent),
             title: const Text('Déconnexion',
                 style: TextStyle(color: Colors.redAccent)),
-            onTap: () =>
-                Navigator.of(context).popUntil((r) => r.isFirst),
+            onTap: _handleLogout,
           ),
           const SizedBox(height: 20),
         ],
