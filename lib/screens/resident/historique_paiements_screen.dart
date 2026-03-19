@@ -1,12 +1,15 @@
-// lib/screens/resident/historique_paiements_screen.dart
-
 import 'package:flutter/material.dart';
 import '../../services/resident_service.dart';
-import '../../widgets/resident_mobile_drawer.dart';
+import 'resident_dashboard_screen.dart';
 
 class HistoriquePaiementsScreen extends StatefulWidget {
-  const HistoriquePaiementsScreen({super.key});
-
+  final int userId;
+  final Function(int)? onNavigate;
+  const HistoriquePaiementsScreen({
+    super.key,
+    required this.userId,
+    this.onNavigate,
+  });
   @override
   State<HistoriquePaiementsScreen> createState() =>
       _HistoriquePaiementsScreenState();
@@ -16,7 +19,7 @@ class _HistoriquePaiementsScreenState extends State<HistoriquePaiementsScreen>
     with SingleTickerProviderStateMixin {
 
   final ResidentService _service = ResidentService();
-  final int userId = 3;
+  late int userId; // ← PAS de valeur fixe
 
   late TabController _tabController;
 
@@ -38,6 +41,7 @@ class _HistoriquePaiementsScreenState extends State<HistoriquePaiementsScreen>
   @override
   void initState() {
     super.initState();
+    userId = widget.userId; // ← dynamique
     _tabController = TabController(length: 2, vsync: this);
     _fetchOverview();
     _fetchHistory();
@@ -70,67 +74,68 @@ class _HistoriquePaiementsScreenState extends State<HistoriquePaiementsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final bool inLayout = widget.onNavigate != null; // ← AJOUT
+
+    final body = Column(children: [
+      // Info appartement
+      if (_overview != null)
+        Container(
+          width: double.infinity,
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Text(
+            'Appt ${_overview!['num_appart']} · ${_overview!['immeuble_nom']} · ${_overview!['tranche_nom']}',
+            style: const TextStyle(color: Colors.grey, fontSize: 13),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+
+      // TabBar
+      Container(
+        color: Colors.white,
+        child: TabBar(
+          controller: _tabController,
+          indicatorColor: _brand,
+          indicatorWeight: 3,
+          labelColor: _brand,
+          unselectedLabelColor: Colors.grey,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          tabs: const [
+            Tab(text: "Vue d'ensemble"),
+            Tab(text: 'Historique'),
+          ],
+        ),
+      ),
+
+      Expanded(
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildOverviewTab(),
+            _buildHistoryTab(),
+          ],
+        ),
+      ),
+    ]);
+
+    // ← Si dans layout : juste le body
+    if (inLayout) return body;
+
+    // ← Si standalone : Scaffold complet
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0.5,
-        title: const Text(
-          'Mon Paiement',
-          style: TextStyle(
-              color: Color(0xFF1C1C1E),
-              fontWeight: FontWeight.bold,
-              fontSize: 18),
-        ),
+        title: const Text('Mon Paiement',
+            style: TextStyle(color: Color(0xFF1C1C1E),
+                fontWeight: FontWeight.bold, fontSize: 18)),
         iconTheme: const IconThemeData(color: _brand),
       ),
-      drawer: const ResidentMobileDrawer(currentIndex: 2),
-      body: Column(children: [
-
-        // Info appartement
-        if (_overview != null)
-          Container(
-            width: double.infinity,
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              'Appt ${_overview!['num_appart']} · ${_overview!['immeuble_nom']} · ${_overview!['tranche_nom']}',
-              style: const TextStyle(color: Colors.grey, fontSize: 13),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-
-        // TabBar
-        Container(
-          color: Colors.white,
-          child: TabBar(
-            controller: _tabController,
-            indicatorColor: _brand,
-            indicatorWeight: 3,
-            labelColor: _brand,
-            unselectedLabelColor: Colors.grey,
-            labelStyle: const TextStyle(
-                fontWeight: FontWeight.bold, fontSize: 14),
-            tabs: const [
-              Tab(text: "Vue d'ensemble"),
-              Tab(text: 'Historique'),
-            ],
-          ),
-        ),
-
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildOverviewTab(),
-              _buildHistoryTab(),
-            ],
-          ),
-        ),
-      ]),
+      drawer: ResidentMobileDrawer(currentIndex: 2, userId: userId),
+      body: body,
     );
   }
-
   // ══════════════════════════════════════════════════════
   // ONGLET 1 — VUE D'ENSEMBLE
   // ══════════════════════════════════════════════════════
