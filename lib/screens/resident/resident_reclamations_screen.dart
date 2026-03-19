@@ -5,8 +5,8 @@ import '../../services/resident_service.dart';
 import 'resident_dashboard_screen.dart';
 
 class ResidentReclamationsScreen extends StatefulWidget {
-  final int userId;
-  final Function(int)? onNavigate; // ← AJOUT
+  final dynamic userId;
+  final Function(int)? onNavigate;
   const ResidentReclamationsScreen({
     super.key,
     this.userId = 3,
@@ -21,7 +21,7 @@ class ResidentReclamationsScreen extends StatefulWidget {
 class _ResidentReclamationsScreenState
     extends State<ResidentReclamationsScreen> {
   final ResidentService _service = ResidentService();
-  late int _userId;
+  late dynamic _userId;
   final _titreCtrl = TextEditingController();
   final _descCtrl  = TextEditingController();
   bool _loading = false;
@@ -44,16 +44,20 @@ class _ResidentReclamationsScreenState
   }
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
-      withData: true,
-    );
-    if (result != null && result.files.single.bytes != null) {
-      setState(() {
-        _fileBytes = result.files.single.bytes;
-        _fileName  = result.files.single.name;
-      });
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+        withData: true,
+      );
+      if (result != null && result.files.single.bytes != null) {
+        setState(() {
+          _fileBytes = result.files.single.bytes;
+          _fileName  = result.files.single.name;
+        });
+      }
+    } catch (e) {
+      _snack("Erreur lors du choix du fichier: $e", isError: true);
     }
   }
 
@@ -63,43 +67,85 @@ class _ResidentReclamationsScreenState
       return;
     }
     setState(() => _sending = true);
-    final err = await _service.envoyerReclamation(
-      residentUserId: _userId,
-      titre: _titreCtrl.text,
-      description: _descCtrl.text,
-      fichier: _fileBytes,
-      nomFichier: _fileName,
-    );
-    setState(() => _sending = false);
-    if (err == null) {
-      _titreCtrl.clear();
-      _descCtrl.clear();
-      setState(() { _fileBytes = null; _fileName = null; });
-      _snack('Réclamation envoyée avec succès');
-      _load();
-    } else {
-      _snack('Erreur : $err', isError: true);
+    try {
+      final err = await _service.envoyerReclamation(
+        residentUserId: _userId,
+        titre: _titreCtrl.text,
+        description: _descCtrl.text,
+        fichier: _fileBytes,
+        nomFichier: _fileName,
+      );
+      setState(() => _sending = false);
+      if (err == null) {
+        _titreCtrl.clear();
+        _descCtrl.clear();
+        setState(() { _fileBytes = null; _fileName = null; });
+        _snack('Réclamation envoyée avec succès');
+        _load();
+      } else {
+        _snack('Erreur : $err', isError: true);
+      }
+    } catch (e) {
+      setState(() => _sending = false);
+      _snack('Erreur inattendue : $e', isError: true);
     }
   }
 
   void _snack(String msg, {bool isError = false}) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
       backgroundColor: isError ? Colors.red : Colors.green,
     ));
   }
 
+  void _showImage(String url) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppBar(
+              title: const Text("Pièce jointe", style: TextStyle(fontSize: 16)),
+              backgroundColor: Colors.white,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.close, color: Colors.black),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Image.network(
+                  url,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return const Center(child: CircularProgressIndicator());
+                  },
+                  errorBuilder: (context, error, stackTrace) => const Center(
+                    child: Text("Impossible de charger l'image"),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const brand = Color(0xFFFF6B4A);
-    final bool inLayout = widget.onNavigate != null; // ← AJOUT
+    final bool inLayout = widget.onNavigate != null;
 
     final body = SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── FORMULAIRE
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -222,13 +268,11 @@ class _ResidentReclamationsScreenState
               ],
             ),
           ),
-
           const SizedBox(height: 24),
           const Text('Mes réclamations',
               style: TextStyle(
                   fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-
           _loading
               ? const Center(
               child: CircularProgressIndicator(color: brand))
@@ -255,10 +299,8 @@ class _ResidentReclamationsScreenState
       ),
     );
 
-    // ← Si dans layout : juste le body
     if (inLayout) return body;
 
-    // ← Si standalone : Scaffold complet
     return Scaffold(
       backgroundColor: const Color(0xFFF9F8F6),
       appBar: AppBar(
@@ -269,25 +311,34 @@ class _ResidentReclamationsScreenState
         elevation: 0.5,
         iconTheme: const IconThemeData(color: brand),
       ),
-      drawer: ResidentMobileDrawer(currentIndex: 5, userId: _userId),
+      drawer: ResidentMobileDrawer(currentIndex: 5, userId: _userId is int ? _userId : 3),
       body: body,
     );
   }
 
   Widget _buildCard(Map<String, dynamic> r) {
     const brand = Color(0xFFFF6B4A);
-    final statut = r['statut'] as String;
-    final color = statut == 'resolue'
+    final String statut = r['statut']?.toString() ?? 'en_cours';
+    final Color color = statut == 'resolue'
         ? Colors.green
         : statut == 'en_cours'
         ? Colors.orange
         : Colors.grey;
-    final label = statut == 'resolue'
+    final String label = statut == 'resolue'
         ? 'Résolue'
         : statut == 'en_cours'
         ? 'En cours'
         : 'Fermée';
-    final date = (r['created_at'] as String).substring(0, 10);
+    
+    String date = '—';
+    if (r['created_at'] != null) {
+      final String fullDate = r['created_at'].toString();
+      if (fullDate.length >= 10) {
+        date = fullDate.substring(0, 10);
+      }
+    }
+
+    final String? docUrl = r['document_url'];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -302,7 +353,7 @@ class _ResidentReclamationsScreenState
         children: [
           Row(children: [
             Expanded(
-              child: Text(r['titre'] ?? '',
+              child: Text(r['titre']?.toString() ?? 'Sans titre',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 14)),
             ),
@@ -310,7 +361,7 @@ class _ResidentReclamationsScreenState
               padding: const EdgeInsets.symmetric(
                   horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
+                color: color.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(label,
@@ -321,7 +372,7 @@ class _ResidentReclamationsScreenState
             ),
           ]),
           const SizedBox(height: 8),
-          Text(r['description'] ?? '',
+          Text(r['description']?.toString() ?? 'Pas de description',
               style:
               const TextStyle(color: Colors.grey, fontSize: 13),
               maxLines: 2,
@@ -334,12 +385,19 @@ class _ResidentReclamationsScreenState
             Text(date,
                 style: const TextStyle(
                     color: Colors.grey, fontSize: 11)),
-            if (r['document_path'] != null) ...[
+            if (docUrl != null) ...[
               const Spacer(),
-              const Icon(Icons.attach_file, size: 14, color: brand),
-              const SizedBox(width: 4),
-              const Text('Fichier joint',
-                  style: TextStyle(color: brand, fontSize: 11)),
+              GestureDetector(
+                onTap: () => _showImage(docUrl),
+                child: Row(
+                  children: [
+                    Icon(Icons.attach_file, size: 14, color: brand),
+                    const SizedBox(width: 4),
+                    const Text('Fichier joint',
+                        style: TextStyle(color: brand, fontSize: 11, decoration: TextDecoration.underline)),
+                  ],
+                ),
+              ),
             ],
           ]),
         ],
