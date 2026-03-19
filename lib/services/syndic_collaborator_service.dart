@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:math';
 
 class SyndicCollaboratorService {
   final _db = Supabase.instance.client;
@@ -35,5 +36,39 @@ class SyndicCollaboratorService {
   Future<void> toggleStatus(int id, String currentStatus) async {
     String newStatus = (currentStatus == 'actif') ? 'inactif' : 'actif';
     await _db.from('users').update({'statut': newStatus}).eq('id', id);
+  }
+
+  // 2. CRÉER ET PRÉPARER L'INVITATION
+  Future<Map<String, String>> createAndInviteSyndic({
+    required String nom,
+    required String prenom,
+    required String email,
+    required String telephone,
+  }) async {
+    // On génère un mot de passe temporaire complexe que personne ne retiendra
+    final String tempPassword = _generateRandomPassword();
+
+    await _db.from('users').insert({
+      'nom': nom,
+      'prenom': prenom,
+      'email': email,
+      'password': tempPassword, // L'utilisateur devra faire "Mot de passe oublié"
+      'telephone': telephone,
+      'role': 'inter_syndic',
+      'statut': 'actif',
+    });
+
+    // On retourne les infos pour que l'écran puisse préparer le message WhatsApp
+    return {
+      'nom': nom,
+      'prenom': prenom,
+      'email': email,
+      'telephone': telephone,
+    };
+  }
+
+  // Petit outil privé pour générer un code aléatoire
+  String _generateRandomPassword() {
+    return Random().nextInt(999999).toString().padLeft(6, '0') + "Resi!";
   }
 }
