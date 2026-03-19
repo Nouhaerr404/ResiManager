@@ -5,6 +5,9 @@ import 'syndic_general/dashboard_screen.dart';
 import 'inter_syndic/intersyndic_selection_screen.dart';
 import 'inter_syndic/tranches_list_screen.dart';
 import 'inter_syndic/apartments/apartments_screen.dart';
+import 'auth/login_screen.dart';
+import 'auth/register_screen.dart';
+
 
 const _coral = Color(0xFFFF6F4A);
 const _white = Colors.white;
@@ -82,9 +85,13 @@ class RoleSelectorScreen extends StatelessWidget {
                       ),
                       Row(
                         children: [
-                          _OutlineBtn(label: 'Se connecter', onTap: () {}),
+                          _OutlineBtn(label: 'Se connecter', onTap: () => Navigator.push(context,
+                              MaterialPageRoute(builder: (_) => const LoginScreen()))),
+
                           const SizedBox(width: 8),
-                          _FilledBtn(label: "S'inscrire", onTap: () {}),
+                          _FilledBtn(label: "S'inscrire", onTap: () => Navigator.push(context,
+                              MaterialPageRoute(builder: (_) => const RegisterScreen()))),
+
                         ],
                       ),
                     ],
