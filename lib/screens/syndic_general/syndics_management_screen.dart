@@ -36,7 +36,7 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
     bool isMobile = screenWidth < 700;
 
     return MainLayout(
-      title: '', // On vide le titre ici pour éviter le doublon
+      title: '', 
       activePage: 'Syndics',
       body: SingleChildScrollView(
         padding: EdgeInsets.only(
@@ -238,6 +238,7 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
 
   void _showForm({Map<String, dynamic>? syndic}) {
     final bool isEdit = syndic != null;
+    bool isLoading = false;
 
     final nomController = TextEditingController(text: isEdit ? syndic['nom'] : '');
     final prenomController = TextEditingController(text: isEdit ? syndic['prenom'] : '');
@@ -246,105 +247,129 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: Colors.white,
-        title: Text(
-          isEdit ? "Modifier le profil" : "Nouveau Syndic",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: darkGrey),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildFieldLabel("Prénom"),
-              TextField(
-                controller: prenomController,
-                decoration: _buildInputDecoration("Prénom de l'inter-syndic"),
-              ),
-              const SizedBox(height: 15),
-
-              _buildFieldLabel("Nom"),
-              TextField(
-                controller: nomController,
-                decoration: _buildInputDecoration("Nom de famille"),
-              ),
-              const SizedBox(height: 15),
-
-              if (!isEdit) ...[
-                _buildFieldLabel("Email professionnel"),
+      barrierDismissible: false, // Empêche de fermer en cliquant à côté pendant le chargement
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: Colors.white,
+          title: Text(
+            isEdit ? "Modifier le profil" : "Nouveau Syndic",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: darkGrey),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildFieldLabel("Prénom"),
                 TextField(
-                  controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: _buildInputDecoration("exemple@syndic.ma"),
+                  controller: prenomController,
+                  decoration: _buildInputDecoration("Prénom de l'inter-syndic"),
                 ),
                 const SizedBox(height: 15),
-              ],
 
-              _buildFieldLabel("Téléphone"),
-              TextField(
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: _buildInputDecoration("+212 6..."),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: Colors.grey.shade300),
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text("Annuler", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                _buildFieldLabel("Nom"),
+                TextField(
+                  controller: nomController,
+                  decoration: _buildInputDecoration("Nom de famille"),
                 ),
-              ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () async {
-                    if (nomController.text.isNotEmpty && prenomController.text.isNotEmpty) {
-                      if (isEdit) {
-                        await _service.updateInterSyndic(
-                            syndic['id'],
-                            nomController.text,
-                            prenomController.text,
-                            phoneController.text
+                const SizedBox(height: 15),
+
+                if (!isEdit) ...[
+                  _buildFieldLabel("Email professionnel"),
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: _buildInputDecoration("exemple@syndic.ma"),
+                  ),
+                  const SizedBox(height: 15),
+                ],
+
+                _buildFieldLabel("Téléphone"),
+                TextField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: _buildInputDecoration("+212 6..."),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: isLoading ? null : () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.grey.shade300),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text("Annuler", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: isLoading ? null : () async {
+                      // VALIDATION
+                      if (nomController.text.trim().isEmpty || 
+                          prenomController.text.trim().isEmpty || 
+                          (!isEdit && emailController.text.trim().isEmpty)) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Veuillez remplir le Prénom, le Nom et l'Email"), backgroundColor: Colors.orange),
                         );
-                      } else {
-                        await _service.createInterSyndic(
-                            nomController.text,
-                            prenomController.text,
-                            emailController.text,
-                            "123456",
-                            phoneController.text
+                        return;
+                      }
+
+                      setDialogState(() => isLoading = true);
+
+                      try {
+                        if (isEdit) {
+                          await _service.updateInterSyndic(
+                              syndic['id'],
+                              nomController.text.trim(),
+                              prenomController.text.trim(),
+                              phoneController.text.trim()
+                          );
+                        } else {
+                          await _service.createAndInviteSyndic(
+                            email: emailController.text.trim(),
+                            nom: nomController.text.trim(),
+                            prenom: prenomController.text.trim(),
+                            telephone: phoneController.text.trim(),
+                          );
+                        }
+                        
+                        if (mounted) {
+                          Navigator.pop(context);
+                          _loadData();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(isEdit ? "Modifié avec succès" : "Syndic ajouté avec succès"), backgroundColor: Colors.green),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() => isLoading = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("Erreur : ${e.toString()}"), backgroundColor: Colors.red),
                         );
                       }
-                      Navigator.pop(context);
-                      _loadData();
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryOrange,
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text(
-                      isEdit ? "Enregistrer" : "Ajouter",
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryOrange,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: isLoading 
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : Text(isEdit ? "Enregistrer" : "Ajouter", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
