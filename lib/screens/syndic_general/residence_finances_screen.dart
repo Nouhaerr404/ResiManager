@@ -3,7 +3,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:resimanager/widgets/main_layout.dart';
-import 'package:resimanager/widgets/nav_buttons.dart';
 import '../../services/finance_service.dart';
 import 'add_global_expense_screen.dart';
 
@@ -23,7 +22,6 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
 
   final Color primaryOrange = const Color(0xFFFF6F4A);
   final Color darkGrey = const Color(0xFF2C2C2C);
-  final Color successGreen = const Color(0xFF4DB6AC);
 
   final List<String> _moisFr = [
     'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -36,16 +34,14 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
     bool isMobile = screenWidth < 800;
 
     return MainLayout(
-      title: isMobile ? 'Finances' : '',
+      title: '', // On vide le titre ici
       activePage: 'Finances',
       body: SingleChildScrollView(
         padding: EdgeInsets.only(left: isMobile ? 15 : 30, right: isMobile ? 15 : 30, bottom: 30, top: isMobile ? 10 : 25),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(isMobile),
-            const SizedBox(height: 20),
-            _buildSummarySection(isMobile),
+            _buildActionHeader(isMobile),
             const SizedBox(height: 35),
             _buildSearchAndFilters(isMobile),
             const SizedBox(height: 25),
@@ -56,55 +52,39 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
     );
   }
 
-  Widget _buildHeader(bool isMobile) {
+  Widget _buildActionHeader(bool isMobile) {
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Gestion des Dépenses", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF2C2C2C))),
+          const Text("Gérez les factures et sorties d'argent", style: TextStyle(color: Colors.grey, fontSize: 13)),
+          const SizedBox(height: 15),
+          _addBtn(true),
+        ],
+      );
+    }
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(children: [
-          NavButtons(residenceId: widget.residenceId),
-          const SizedBox(width: 20),
-          Text("Gestion des Dépenses", style: TextStyle(fontSize: isMobile ? 22 : 32, fontWeight: FontWeight.bold, color: darkGrey)),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text("Gestion des Dépenses", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF2C2C2C))),
+          const Text("Gérez les factures et sorties d'argent", style: TextStyle(color: Colors.grey, fontSize: 16)),
         ]),
-        if (!isMobile) _addBtn(),
+        _addBtn(false),
       ],
     );
   }
 
-  Widget _addBtn() {
-    return ElevatedButton.icon(
-      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AddGlobalExpenseScreen(residenceId: widget.residenceId))).then((_) => setState((){})),
-      icon: const Icon(Icons.add, color: Colors.white),
-      label: const Text("Nouvelle Dépense", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      style: ElevatedButton.styleFrom(backgroundColor: primaryOrange, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-    );
-  }
-
-  Widget _buildSummarySection(bool isMobile) {
-    return FutureBuilder<Map<String, double>>(
-      future: _service.getFinanceSummary(widget.residenceId, _selectedAnnee),
-      builder: (context, snapshot) {
-        final data = snapshot.data ?? {'total': 0, 'paye': 0, 'attente': 0};
-        Widget content = Row(children: [
-          Expanded(child: _summaryCard("Total Dépenses", data['total']!, primaryOrange)),
-          const SizedBox(width: 15),
-          Expanded(child: _summaryCard("Payées", data['paye']!, successGreen)),
-          const SizedBox(width: 15),
-          Expanded(child: _summaryCard("En attente", data['attente']!, darkGrey)),
-        ]);
-        return isMobile ? SingleChildScrollView(scrollDirection: Axis.horizontal, child: SizedBox(width: 600, child: content)) : content;
-      },
-    );
-  }
-
-  Widget _summaryCard(String title, double amount, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(15)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-        const SizedBox(height: 8),
-        FittedBox(child: Text("${amount.toInt()} DH", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold))),
-      ]),
+  Widget _addBtn(bool isFullWidth) {
+    return SizedBox(
+      width: isFullWidth ? double.infinity : null,
+      child: ElevatedButton.icon(
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AddGlobalExpenseScreen(residenceId: widget.residenceId))).then((_) => setState((){})),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text("Nouvelle Dépense", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        style: ElevatedButton.styleFrom(backgroundColor: primaryOrange, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+      ),
     );
   }
 
@@ -242,6 +222,7 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: Colors.white,
           title: const Text("Modifier la dépense", style: TextStyle(fontWeight: FontWeight.bold)),
           content: SingleChildScrollView(
             child: Column(
@@ -295,42 +276,62 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
               ],
             ),
           ),
+          actionsPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
           actions: [
-            TextButton(
-              onPressed: isSaving ? null : () => Navigator.pop(context),
-              child: const Text("Annuler", style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: primaryOrange),
-              onPressed: isSaving ? null : () async {
-                if (mntController.text.isEmpty || selectedCatId == null) return;
-                
-                setDialogState(() => isSaving = true);
-                try {
-                  String? fileUrl;
-                  if (newFile != null) {
-                    fileUrl = kIsWeb ? newFile!.name : newFile!.path;
-                  }
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.grey.shade300),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text("Annuler", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: isSaving ? null : () async {
+                      if (mntController.text.isEmpty || selectedCatId == null) return;
+                      
+                      setDialogState(() => isSaving = true);
+                      try {
+                        String? fileUrl;
+                        if (newFile != null) {
+                          fileUrl = kIsWeb ? newFile!.name : newFile!.path;
+                        }
 
-                  await _service.updateGlobalExpense(
-                    expenseId: d['id'],
-                    montant: double.parse(mntController.text.replaceAll(',', '.')),
-                    categorieId: selectedCatId!,
-                    annee: d['annee'],
-                    description: descController.text,
-                    facturePath: fileUrl,
-                  );
-                  Navigator.pop(context);
-                  setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Dépense mise à jour !"), backgroundColor: Colors.green));
-                } catch (e) {
-                  setDialogState(() => isSaving = false);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red));
-                }
-              },
-              child: isSaving 
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Text("Enregistrer", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        await _service.updateGlobalExpense(
+                          expenseId: d['id'],
+                          montant: double.parse(mntController.text.replaceAll(',', '.')),
+                          categorieId: selectedCatId!,
+                          annee: d['annee'],
+                          description: descController.text,
+                          facturePath: fileUrl,
+                        );
+                        Navigator.pop(context);
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Dépense mise à jour !"), backgroundColor: Colors.green));
+                      } catch (e) {
+                        setDialogState(() => isSaving = false);
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red));
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryOrange,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: isSaving 
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text("Enregistrer", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -381,13 +382,13 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
       return Image.file(File(path));
     }
 
-    // 2. Sinon on cherche dans les assets (comme l'Inter-Syndic)
+    // 2. Sinon on cherche dans les assets
     return Image.asset(
       'assets/images/$path',
       errorBuilder: (context, error, stack) => Center(
         child: Padding(
           padding: const EdgeInsets.all(40.0),
-          child: Text("Fichier '$path' introuvable.\n\nNote: Pour qu'un fichier soit dans les assets, vous devez l'ajouter manuellement dans le dossier du projet."),
+          child: Text("Fichier '$path' introuvable."),
         ),
       ),
     );

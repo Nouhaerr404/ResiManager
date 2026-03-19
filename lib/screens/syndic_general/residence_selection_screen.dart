@@ -178,24 +178,30 @@ class _ResidenceSelectionScreenState extends State<ResidenceSelectionScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Bienvenue,",
-                            style: TextStyle(color: Colors.white70, fontSize: 18),
-                          ),
-                          Text(
-                            "Mes Résidences",
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold
+                      // AJOUT DE EXPANDED ICI
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              "Bienvenue,",
+                              style: TextStyle(color: Colors.white70, fontSize: 18),
                             ),
-                          ),
-                        ],
+                            Text(
+                              "Mes Résidences",
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 26, // Taille légèrement réduite pour mobile
+                                  fontWeight: FontWeight.bold
+                              ),
+                              overflow: TextOverflow.ellipsis, // Met "..." si c'est vraiment trop long
+                            ),
+                          ],
+                        ),
                       ),
-                      // Bouton d'ajout stylisé
+                      const SizedBox(width: 10), // Un petit espace de sécurité
+
+                      // Bouton d'ajout reste tel quel
                       GestureDetector(
                         onTap: _showAddResidenceDialog,
                         child: Container(
@@ -217,7 +223,6 @@ class _ResidenceSelectionScreenState extends State<ResidenceSelectionScreen> {
                     ],
                   ),
                 ),
-
                 // Liste des résidences
                 Expanded(
                   child: FutureBuilder<List<Map<String, dynamic>>>(
