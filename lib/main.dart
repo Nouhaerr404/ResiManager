@@ -1,4 +1,3 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -7,15 +6,18 @@ import 'screens/role_selector_screen.dart';
 import 'screens/inter_syndic/tranches_list_screen.dart';
 import 'screens/inter_syndic/apartments/apartments_screen.dart';
 import 'screens/syndic_general/residence_selection_screen.dart';
+import 'screens/auth/login_screen.dart';
+import 'screens/resident/resident_dashboard_screen.dart';
+import 'screens/inter_syndic/intersyndic_selection_screen.dart';
+import 'screens/syndic_general/dashboard_screen.dart';
+import 'screens/super_admin/super_admin_dashboard_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
     anonKey: SupabaseConfig.supabaseAnonKey,
   );
-
   runApp(const ResiManagerApp());
 }
 
@@ -53,11 +55,24 @@ class ResiManagerApp extends StatelessWidget {
       title: 'ResiManager',
       debugShowCheckedModeBanner: false,
       theme: theme,
-      home: const RoleSelectorScreen(), // Point d'entrée de Wiam
+      home: const RoleSelectorScreen(),
       routes: {
-        '/home': (context) => const HomePage(),
-        '/apartments': (context) => const ApartmentsListScreen(),
-        '/tranches': (context) => const TranchesListScreen(),
+        '/home':           (context) => const HomePage(),
+        '/apartments':     (context) => const ApartmentsListScreen(),
+        '/tranches':       (context) => const TranchesListScreen(),
+        '/inter_syndic':   (context) => const InterSyndicSelectionScreen(),
+        '/syndic_general': (context) => DashboardScreen(residenceId: 1),
+        '/super_admin':    (context) => SuperAdminDashboardScreen(),
+      },
+      // Route /resident séparée pour passer userId dynamiquement
+      onGenerateRoute: (settings) {
+        if (settings.name == '/resident') {
+          final userId = settings.arguments as int? ?? 3;
+          return MaterialPageRoute(
+            builder: (_) => ResidentDashboardScreen(userId: userId),
+          );
+        }
+        return null;
       },
     );
   }
@@ -67,21 +82,15 @@ class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
   void _openResidenceSelection(BuildContext context, {int syndicGeneralId = 1}) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ResidenceSelectionScreen(syndicGeneralId: syndicGeneralId),
-      ),
-    );
+    Navigator.push(context, MaterialPageRoute(
+      builder: (context) => ResidenceSelectionScreen(syndicGeneralId: syndicGeneralId),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('ResiManager'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('ResiManager'), centerTitle: true),
       drawer: const _AppDrawer(),
       body: Center(
         child: Padding(
@@ -91,10 +100,8 @@ class HomePage extends StatelessWidget {
             children: [
               const Icon(Icons.cloud_done, size: 80),
               const SizedBox(height: 20),
-              const Text(
-                'Supabase connecté avec succès 🎉',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+              const Text('Supabase connecté avec succès 🎉',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 40),
               ElevatedButton.icon(
                 onPressed: () => Navigator.pushNamed(context, '/apartments'),
@@ -137,18 +144,14 @@ class _AppDrawer extends StatelessWidget {
               ),
               child: const Align(
                 alignment: Alignment.bottomLeft,
-                child: Text(
-                  'ResiManager',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
+                child: Text('ResiManager',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               ),
             ),
             ListTile(
               leading: const Icon(Icons.home),
               title: const Text('Accueil'),
-              onTap: () {
-                Navigator.popUntil(context, (route) => route.isFirst);
-              },
+              onTap: () => Navigator.popUntil(context, (route) => route.isFirst),
             ),
             ListTile(
               leading: const Icon(Icons.apartment),
@@ -171,22 +174,17 @@ class _AppDrawer extends StatelessWidget {
               title: const Text('Sélection résidence'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const ResidenceSelectionScreen(syndicGeneralId: 1),
-                  ),
-                );
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => const ResidenceSelectionScreen(syndicGeneralId: 1),
+                ));
               },
             ),
             const Spacer(),
             Padding(
               padding: const EdgeInsets.all(12.0),
-              child: Text(
-                'Version debug',
-                style: TextStyle(color: Colors.grey.shade600),
-                textAlign: TextAlign.center,
-              ),
+              child: Text('Version debug',
+                  style: TextStyle(color: Colors.grey.shade600),
+                  textAlign: TextAlign.center),
             ),
           ],
         ),

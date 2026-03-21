@@ -110,4 +110,29 @@ class SyndicDashboardService {
       throw Exception('Erreur Supabase : $e');
     }
   }
+
+  // --- AJOUTE CECI DANS TON SERVICE ---
+  Future<Map<String, dynamic>> getChartsData(int residenceId) async {
+    // 1. Récupérer les dépenses par mois
+    final depensesRes = await _supabase.from('depenses')
+        .select('montant, mois')
+        .eq('residence_id', residenceId);
+
+    // 2. Récupérer les revenus (paiements reçus) par mois
+    final revenusRes = await _supabase.from('paiements')
+        .select('montant_paye, mois')
+        .eq('residence_id', residenceId);
+
+    // Initialisation des 12 mois
+    List<double> monthlyDeps = List.filled(12, 0.0);
+    List<double> monthlyRevs = List.filled(12, 0.0);
+
+    for (var d in depensesRes) { monthlyDeps[d['mois'] - 1] += (d['montant'] as num).toDouble(); }
+    for (var r in revenusRes) { monthlyRevs[r['mois'] - 1] += (r['montant_paye'] as num).toDouble(); }
+
+    return {
+      'expenses': monthlyDeps,
+      'revenues': monthlyRevs,
+    };
+  }
 }

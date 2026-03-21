@@ -28,13 +28,13 @@ class FinanceService {
     }
   }
 
-  // 2. Pour récupérer les catégories (Utilisé par tes deux écrans)
+  // 2. Pour récupérer les catégories
   Future<List<Map<String, dynamic>>> getCategories(String type) async {
     final res = await _db.from('categories').select('id, nom').eq('type', type);
     return List<Map<String, dynamic>>.from(res);
   }
 
-  // 3. Pour récupérer TOUTES les catégories sans filtre
+  // 3. Pour récupérer TOUTES les catégories
   Future<List<Map<String, dynamic>>> getAllCategories() async {
     final response = await _db.from('categories').select('id, nom, type');
     return List<Map<String, dynamic>>.from(response);
@@ -45,7 +45,7 @@ class FinanceService {
     required int residenceId,
     required double montant,
     required int categorieId,
-    required DateTime date,
+    required int annee,
     required int syndicId,
     String? facturePath,
     String? description,
@@ -54,16 +54,16 @@ class FinanceService {
       'residence_id': residenceId,
       'montant': montant,
       'categorie_id': categorieId,
-      'date': date.toIso8601String().split('T').first,
-      'annee': date.year,
-      'mois': date.month,
+      'annee': annee,
+      'date': DateTime.now().toIso8601String().split('T').first,
+      'mois': DateTime.now().month,
       'syndic_general_id': syndicId,
       'facture_path': facturePath,
       'description': description,
     });
   }
 
-  // 6. Pour enregistrer une dépense Inter-Syndic (Globale ou Spécifique)
+  // 6. Pour enregistrer une dépense Inter-Syndic (RESTAURÉ)
   Future<void> addInterSyndicExpense({
     required int residenceId,
     required int interSyndicId,
@@ -152,7 +152,7 @@ class FinanceService {
     }
   }
 
-  // 7. Pour le dashboard Inter-Syndic
+  // 7. Pour le dashboard Inter-Syndic (RESTAURÉ)
   Future<Map<String, dynamic>> getInterSyndicFinances(int interSyndicId, int residenceId, {int? annee}) async {
     final tranches = await _db.from('tranches')
         .select('id, nom')
@@ -168,7 +168,7 @@ class FinanceService {
         .select('montant, tranche_id')
         .eq('inter_syndic_id', interSyndicId);
     if (annee != null) depQuery = depQuery.eq('annee', annee);
-    
+
     final depensesInter = await depQuery;
 
     double totalDepenses = 0;
@@ -186,9 +186,9 @@ class FinanceService {
         .select('montant_paye')
         .eq('inter_syndic_id', interSyndicId);
     if (annee != null) payQuery = payQuery.eq('annee', annee);
-    
+
     final paiementsRes = await payQuery;
-    
+
     double totalRevenus = 0;
     for (var p in paiementsRes) {
       totalRevenus += double.parse(p['montant_paye'].toString());
@@ -198,15 +198,14 @@ class FinanceService {
         .select('montant_total')
         .eq('inter_syndic_id', interSyndicId);
     if (annee != null) objQuery = objQuery.eq('annee', annee);
-    
+
     final targetRes = await objQuery;
-    
+
     double totalObjectif = 0;
     for (var p in targetRes) {
       totalObjectif += double.parse(p['montant_total'].toString());
     }
 
-    // 3. Récupérer les dépenses détaillées (Globales + Spécifiques à cet Inter-Syndic)
     var detailedQuery = _db.from('depenses')
         .select('''
           id, montant, date, mois, annee, description, facture_path, inter_syndic_id, tranche_id, categorie_id,
@@ -215,9 +214,9 @@ class FinanceService {
         ''')
         .or('inter_syndic_id.eq.$interSyndicId,syndic_general_id.not.is.null')
         .eq('residence_id', residenceId);
-    
+
     if (annee != null) detailedQuery = detailedQuery.eq('annee', annee);
-    
+
     final depensesRes = await detailedQuery.order('date', ascending: false);
 
     final recentExpenses = (depensesRes as List).map((d) => {
@@ -246,7 +245,7 @@ class FinanceService {
     };
   }
 
-  // 7b. Nouvelle méthode pour modifier une dépense
+  // 7b. Modifier une dépense Inter-Syndic (RESTAURÉ)
   Future<void> updateInterSyndicExpense({
     required int expenseId,
     required double oldMontant,
@@ -256,7 +255,6 @@ class FinanceService {
     String? description,
     String? facturePath,
   }) async {
-    // 1. Mettre à jour la dépense
     final updateData = {
       'montant': newMontant,
       'categorie_id': categorieId,
@@ -269,8 +267,6 @@ class FinanceService {
 
     await _db.from('depenses').update(updateData).eq('id', expenseId);
 
-    // 2. Ajuster les paiements liés
-    // On doit retrouver les appartements concernés
     final depense = await _db.from('depenses').select('tranche_id, residence_id, inter_syndic_id').eq('id', expenseId).single();
     int? tId = depense['tranche_id'];
     int resId = depense['residence_id'];
@@ -285,7 +281,7 @@ class FinanceService {
     }
 
     if (tranchesIds.isEmpty) return;
-    
+
     final immeublesRes = await _db.from('immeubles').select('id').inFilter('tranche_id', tranchesIds);
     final listImmIds = (immeublesRes as List).map((i) => i['id'] as int).toList();
     if (listImmIds.isEmpty) return;
@@ -308,7 +304,7 @@ class FinanceService {
         double currentTotal = double.parse(pRes['montant_total'].toString());
         double paid = double.parse(pRes['montant_paye'].toString());
         double updatedTotal = currentTotal + diffShare;
-        
+
         await _db.from('paiements').update({
           'montant_total': updatedTotal,
           'statut': (paid >= updatedTotal) ? 'complet' : (paid > 0 ? 'partiel' : 'impaye'),
@@ -317,9 +313,8 @@ class FinanceService {
     }
   }
 
-  // 7c. Supprimer une dépense et corriger les paiements
+  // 7c. Supprimer une dépense Inter-Syndic (RESTAURÉ)
   Future<void> deleteInterSyndicExpense(int expenseId, double montant) async {
-    // 1. Récupérer les infos de la dépense avant de corriger les paiements
     final depense = await _db.from('depenses').select('*').eq('id', expenseId).single();
     int? tId = depense['tranche_id'];
     int resId = depense['residence_id'];
@@ -338,14 +333,14 @@ class FinanceService {
     if (tranchesIds.isNotEmpty) {
       final immeublesRes = await _db.from('immeubles').select('id').inFilter('tranche_id', tranchesIds);
       final listImmIds = (immeublesRes as List).map((i) => i['id'] as int).toList();
-      
+
       if (listImmIds.isNotEmpty) {
         final appartRes = await _db.from('appartements').select('id').inFilter('immeuble_id', listImmIds);
         final listAppartIds = (appartRes as List).map((a) => a['id'] as int).toList();
-        
+
         if (listAppartIds.isNotEmpty) {
           double shareToDelete = montant / listAppartIds.length;
-          
+
           for (int appartId in listAppartIds) {
             final pRes = await _db.from('paiements')
                 .select('id, montant_total, montant_paye')
@@ -358,7 +353,7 @@ class FinanceService {
               double currentTotal = double.parse(pRes['montant_total'].toString());
               double paid = double.parse(pRes['montant_paye'].toString());
               double updatedTotal = (currentTotal - shareToDelete).clamp(0, double.infinity);
-              
+
               await _db.from('paiements').update({
                 'montant_total': updatedTotal,
                 'statut': (updatedTotal <= 0) ? 'complet' : (paid >= updatedTotal ? 'complet' : (paid > 0 ? 'partiel' : 'impaye')),
@@ -369,87 +364,86 @@ class FinanceService {
       }
     }
 
-    // 2. Supprimer la dépense
     await _db.from('depenses').delete().eq('id', expenseId);
   }
 
-  // 7d. Ajouter une nouvelle catégorie de dépense
+  // 7d. Catégories (RESTAURÉ)
   Future<void> addExpenseCategory(String nom) async {
     await _db.from('categories').insert({'nom': nom, 'type': 'individuelle'});
   }
 
-  // 7e. Supprimer une catégorie de dépense
   Future<void> deleteExpenseCategory(int categoryId) async {
     await _db.from('categories').delete().eq('id', categoryId);
   }
 
-  // 8. Récupérer le résumé financier pour les cartes de couleur
-  // 8. RÉCUPÉRATION DES VALEURS RÉELLES DEPUIS LA DB
+  // 8. Résumé financier
   Future<Map<String, double>> getFinanceSummary(int residenceId, int annee) async {
     try {
-      // A. Récupérer le total que la résidence DOIT payer (Factures fournisseurs)
-      final depensesRes = await _db
-          .from('depenses')
-          .select('montant')
-          .eq('residence_id', residenceId)
-          .eq('annee', annee);
-
+      final depensesRes = await _db.from('depenses').select('montant').eq('residence_id', residenceId).eq('annee', annee);
       double totalDepenses = 0;
-      for (var row in depensesRes) {
-        totalDepenses += (row['montant'] as num).toDouble();
-      }
-
-      // B. Récupérer l'état des collectes auprès des résidents (Table paiements)
-      final paiementsRes = await _db
-          .from('paiements')
-          .select('montant_total, montant_paye')
-          .eq('residence_id', residenceId)
-          .eq('annee', annee);
-
-      double totalAttendu = 0;
-      double totalRecolte = 0;
-
+      for (var row in depensesRes) { totalDepenses += (row['montant'] as num).toDouble(); }
+      final paiementsRes = await _db.from('paiements').select('montant_total, montant_paye').eq('residence_id', residenceId).eq('annee', annee);
+      double totalAttendu = 0; double totalRecolte = 0;
       for (var row in paiementsRes) {
         totalAttendu += (row['montant_total'] as num).toDouble();
         totalRecolte += (row['montant_paye'] as num).toDouble();
       }
-
-      // C. Retourner les vrais calculs
-      return {
-        'total': totalDepenses,      // Ce que la résidence a dépensé (Factures)
-        'paye': totalRecolte,        // Ce que les résidents ont déjà payé
-        'attente': totalAttendu - totalRecolte, // Ce qui reste à recouvrer
-      };
-    } catch (e) {
-      print("Erreur Finance Summary: $e");
-      return {'total': 0, 'paye': 0, 'attente': 0};
-    }
+      return {'total': totalDepenses, 'paye': totalRecolte, 'attente': totalAttendu - totalRecolte};
+    } catch (e) { return {'total': 0, 'paye': 0, 'attente': 0}; }
   }
 
-// Modifie ta fonction dans finance_service.dart
+  // Dépenses Syndic Général
   Future<List<Map<String, dynamic>>> getMyExpenses({
     required int residenceId,
     required int mySyndicId,
     int? annee,
-    int? mois, // AJOUT
-    int? categorieId, // AJOUT
+    int? mois,
+    int? categorieId,
   }) async {
     try {
       var query = _db.from('depenses').select('''
-        id, montant, date, annee, mois, description, facture_path,
+        id, montant, date, annee, mois, description, facture_path, categorie_id,
         categories!inner(id, nom, type)
-      ''')
-          .eq('residence_id', residenceId)
-          .eq('syndic_general_id', mySyndicId);
-
+      ''').eq('residence_id', residenceId).eq('syndic_general_id', mySyndicId);
       if (annee != null) query = query.eq('annee', annee);
-      if (mois != null) query = query.eq('mois', mois); // FILTRE SQL MOIS
-      if (categorieId != null) query = query.eq('categorie_id', categorieId); // FILTRE SQL CATÉGORIE
-
+      if (mois != null) query = query.eq('mois', mois);
+      if (categorieId != null) query = query.eq('categorie_id', categorieId);
       final response = await query.order('date', ascending: false);
       return List<Map<String, dynamic>>.from(response);
+    } catch (e) { return []; }
+  }
+
+  Future<void> deleteExpense(int id) async {
+    await _db.from('depenses').delete().eq('id', id);
+  }
+
+  Future<void> updateGlobalExpense({
+    required int expenseId,
+    required double montant,
+    required int categorieId,
+    required int annee,
+    String? description,
+    String? facturePath,
+  }) async {
+    final Map<String, dynamic> data = {
+      'montant': montant, 'categorie_id': categorieId, 'annee': annee, 'description': description,
+    };
+    if (facturePath != null) data['facture_path'] = facturePath;
+    await _db.from('depenses').update(data).eq('id', expenseId);
+  }
+
+  // Upload simplifié
+  Future<String?> uploadInvoice(String fileName, dynamic fileBytesOrPath) async {
+    try {
+      final String path = 'factures/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+      if (kIsWeb) {
+        await _db.storage.from('resimanager_bucket').uploadBinary(path, fileBytesOrPath);
+      } else {
+        await _db.storage.from('resimanager_bucket').upload(path, File(fileBytesOrPath));
+      }
+      return _db.storage.from('resimanager_bucket').getPublicUrl(path);
     } catch (e) {
-      return [];
+      return fileName; // Retourne le nom simple en cas d'erreur de bucket
     }
   }
 }

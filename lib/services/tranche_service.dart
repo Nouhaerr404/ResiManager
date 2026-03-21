@@ -199,4 +199,42 @@ class TrancheService {
     return (response as List).map((i) => i['nom'] as String).toList();
   }
 
+  // Mettre à jour une tranche existante (Nom + Syndic)
+  Future<void> updateTrancheComplet(
+      int trancheId,
+      String nom,
+      int? interSyndicId,
+      int nbImm, int nbApp, int nbPark, int nbGar, int nbBox) async {
+
+    await _db.from('tranches').update({
+      'nom': nom,
+      'inter_syndic_id': interSyndicId,
+      'nombre_immeubles': nbImm,
+      'nombre_appartements': nbApp,
+      'nombre_parkings': nbPark,
+      'nombre_garages': nbGar,
+      'nombre_boxes': nbBox,
+    }).eq('id', trancheId);
+  }
+
+  // Récupérer les numéros d'appartements d'une tranche (via les immeubles)
+  Future<List<String>> getAppartementNumeros(int trancheId) async {
+    final res = await _db.from('appartements')
+        .select('numero, immeubles!inner(tranche_id)')
+        .eq('immeubles.tranche_id', trancheId);
+    return (res as List).map((a) => a['numero'] as String).toList();
+  }
+
+  // Récupérer les numéros de parkings
+  Future<List<String>> getParkingNumeros(int trancheId) async {
+    final res = await _db.from('parkings').select('numero').eq('tranche_id', trancheId);
+    return (res as List).map((p) => p['numero'] as String).toList();
+  }
+
+  // Récupérer les numéros de garages
+  Future<List<String>> getGarageNumeros(int trancheId) async {
+    final res = await _db.from('garages').select('numero').eq('tranche_id', trancheId);
+    return (res as List).map((g) => g['numero'] as String).toList();
+  }
+
 }
