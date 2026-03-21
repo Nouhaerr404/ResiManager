@@ -125,32 +125,28 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
               if (!snapshot.hasData) return const Padding(padding: EdgeInsets.all(50), child: Center(child: CircularProgressIndicator()));
               final list = snapshot.data!;
               if (list.isEmpty) return const Padding(padding: EdgeInsets.all(50), child: Center(child: Text("Aucune dépense trouvée.")));
-              
+
               return SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minWidth: isMobile ? 600 : screenWidth - 350),
                   child: DataTable(
-                    headingRowHeight: 60,
-                    dataRowHeight: 70,
                     columns: const [
-                      DataColumn(label: Text('Date', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Catégorie', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Montant', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Justificatif', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('Date')),
+                      DataColumn(label: Text('Catégorie')),
+                      DataColumn(label: Text('Montant')),
+                      DataColumn(label: Text('Justificatif')),
+                      DataColumn(label: Text('Actions')),
                     ],
                     rows: list.map((d) => DataRow(cells: [
-                      DataCell(Text(d['date']?.toString() ?? "Date inconnue")),
-                      DataCell(Text(d['categories']?['nom'] ?? 'Inconnu')),
-                      DataCell(Text("${d['montant']} DH", style: const TextStyle(fontWeight: FontWeight.bold))),
+                      DataCell(Text(d['date']?.toString() ?? "")),
+                      DataCell(Text(d['categories']?['nom'] ?? '')),
+                      DataCell(Text("${d['montant']} DH")),
                       DataCell(_buildJustifBadge(d['facture_path'])),
-                      DataCell(Row(
-                        children: [
-                          IconButton(icon: const Icon(Icons.edit, color: Colors.blue, size: 20), onPressed: () => _showEditDialog(d)),
-                          IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20), onPressed: () => _confirmDelete(d['id'])),
-                        ],
-                      )),
+                      DataCell(Row(children: [
+                        IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _showEditDialog(d)),
+                        IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _confirmDelete(d['id'])),
+                      ])),
                     ])).toList(),
                   ),
                 ),
@@ -161,9 +157,9 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
       ),
     );
   }
-
   Widget _buildJustifBadge(dynamic path) {
-    bool exists = path != null && path.toString().trim().isNotEmpty && path.toString() != 'null';
+    bool exists = path != null && path.toString().contains('http');
+
     if (exists) {
       return InkWell(
         onTap: () => _showInvoiceViewer(path.toString()),
@@ -189,7 +185,6 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
       );
     }
   }
-
   void _confirmDelete(int id) {
     showDialog(
       context: context,
@@ -213,10 +208,10 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
   }
 
   void _showEditDialog(Map<String, dynamic> d) {
-    final TextEditingController mntController = TextEditingController(text: d['montant'].toString());
-    final TextEditingController descController = TextEditingController(text: d['description'] ?? '');
+    final mntController = TextEditingController(text: d['montant'].toString());
+    final descController = TextEditingController(text: d['description'] ?? '');
     int? selectedCatId = d['categorie_id'];
-    PlatformFile? newFile;
+    PlatformFile? newFile; // Stocke la nouvelle facture choisie
     bool isSaving = false;
 
     showDialog(
@@ -225,7 +220,6 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          backgroundColor: Colors.white,
           title: const Text("Modifier la dépense", style: TextStyle(fontWeight: FontWeight.bold)),
           content: SingleChildScrollView(
             child: Column(
@@ -233,31 +227,13 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
               children: [
                 TextField(
                   controller: mntController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: TextInputType.number,
                   decoration: const InputDecoration(labelText: "Montant (DH)", border: OutlineInputBorder()),
                 ),
-                const SizedBox(height: 15),
-                FutureBuilder<List<Map<String, dynamic>>>(
-                  future: _service.getCategories('globale'),
-                  builder: (context, snapshot) {
-                    final cats = snapshot.data ?? [];
-                    return DropdownButtonFormField<int>(
-                      value: selectedCatId,
-                      decoration: const InputDecoration(labelText: "Catégorie", border: OutlineInputBorder()),
-                      items: cats.map((c) => DropdownMenuItem(value: c['id'] as int, child: Text(c['nom']))).toList(),
-                      onChanged: (v) => setDialogState(() => selectedCatId = v),
-                    );
-                  }
-                ),
-                const SizedBox(height: 15),
-                TextField(
-                  controller: descController,
-                  maxLines: 2,
-                  decoration: const InputDecoration(labelText: "Description", border: OutlineInputBorder()),
-                ),
                 const SizedBox(height: 20),
-                const Divider(),
-                const Text("Justificatif", style: TextStyle(fontWeight: FontWeight.bold)),
+
+                // ZONE D'UPLOAD (Même style que l'ajout)
+                const Align(alignment: Alignment.centerLeft, child: Text("Facture / Justificatif", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
                 const SizedBox(height: 10),
                 InkWell(
                   onTap: () async {
@@ -265,13 +241,23 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
                     if (r != null) setDialogState(() => newFile = r.files.first);
                   },
                   child: Container(
-                    padding: const EdgeInsets.all(15),
-                    decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey.shade300)),
-                    child: Row(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                        color: const Color(0xFFF8F7FF),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.deepPurple.shade100, width: 2, style: BorderStyle.solid)
+                    ),
+                    child: Column(
                       children: [
-                        Icon(Icons.cloud_upload, color: newFile == null ? Colors.grey : Colors.green),
-                        const SizedBox(width: 10),
-                        Expanded(child: Text(newFile == null ? (d['facture_path'] != null ? "Changer la facture" : "Ajouter une facture") : newFile!.name, style: TextStyle(fontSize: 12, color: newFile == null ? Colors.black54 : Colors.green, fontWeight: newFile == null ? FontWeight.normal : FontWeight.bold))),
+                        Icon(newFile == null ? Icons.cloud_upload_outlined : Icons.check_circle,
+                            color: newFile == null ? Colors.deepPurple : Colors.green),
+                        const SizedBox(height: 8),
+                        Text(
+                          newFile == null ? "Modifier la facture actuelle" : "Nouvelle : ${newFile!.name}",
+                          style: TextStyle(fontSize: 12, color: newFile == null ? Colors.black54 : Colors.green),
+                          textAlign: TextAlign.center,
+                        ),
                       ],
                     ),
                   ),
@@ -279,103 +265,85 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
               ],
             ),
           ),
-          actionsPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
           actions: [
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.grey.shade300),
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text("Annuler", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                const SizedBox(width: 15),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: isSaving ? null : () async {
-                      if (mntController.text.isEmpty || selectedCatId == null) return;
-                      
-                      setDialogState(() => isSaving = true);
-                      try {
-                        String? fileUrl;
-                        if (newFile != null) {
-                          fileUrl = kIsWeb ? newFile!.name : newFile!.path;
-                        }
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: primaryOrange),
+// À l'intérieur du bouton 'Enregistrer' de _showEditDialog :
 
-                        await _service.updateGlobalExpense(
-                          expenseId: d['id'],
-                          montant: double.parse(mntController.text.replaceAll(',', '.')),
-                          categorieId: selectedCatId!,
-                          annee: d['annee'],
-                          description: descController.text,
-                          facturePath: fileUrl,
-                        );
-                        Navigator.pop(context);
-                        setState(() {});
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Dépense mise à jour !"), backgroundColor: Colors.green));
-                      } catch (e) {
-                        setDialogState(() => isSaving = false);
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red));
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryOrange,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: isSaving 
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text("Enregistrer", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
+              onPressed: isSaving ? null : () async {
+                if (mntController.text.isEmpty || selectedCatId == null) return;
+
+                setDialogState(() => isSaving = true);
+                try {
+                  String? fileUrl; // Contiendra le lien https://...
+
+                  // ÉTAPE 1 : UPLOAD RÉEL
+                  if (newFile != null) {
+                    // On envoie le fichier et on ATTEND de recevoir l'URL publique
+                    fileUrl = await _service.uploadInvoice(
+                        newFile!.name,
+                        kIsWeb ? newFile!.bytes : newFile!.path
+                    );
+                    print(">>> LIEN GÉNÉRÉ POUR LA DB : $fileUrl"); // Vérifie dans ta console !
+                  }
+
+                  // ÉTAPE 2 : ENREGISTREMENT AVEC L'URL
+                  await _service.updateGlobalExpense(
+                    expenseId: d['id'],
+                    montant: double.parse(mntController.text.replaceAll(',', '.')),
+                    categorieId: selectedCatId!,
+                    annee: d['annee'],
+                    description: descController.text,
+                    facturePath: fileUrl, // <--- C'EST CETTE LIGNE QUI CHANGE LE "NON" EN "OUI"
+                  );
+
+                  Navigator.pop(context); // Ferme la popup
+                  setState(() {
+                    // Rafraîchit le tableau principal
+                  });
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Dépense et Facture mises à jour !"), backgroundColor: Colors.green)
+                  );
+                } catch (e) {
+                  setDialogState(() => isSaving = false);
+                  print("ERREUR FINALE : $e");
+                }
+              },              child: isSaving
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text("Enregistrer", style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
       ),
     );
-  }
-
-  void _showInvoiceViewer(String fileName) {
+  }  void _showInvoiceViewer(String imageUrl) {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.black,
         child: Stack(
-          alignment: Alignment.topRight,
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: _buildImageWidget(fileName),
-                  ),
-                  const SizedBox(height: 10),
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Fermer")),
-                ],
+            Center(
+              // Comme c'est un lien internet, tout le monde peut le voir !
+              child: InteractiveViewer(
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return const CircularProgressIndicator(color: Colors.white);
+                  },
+                ),
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.close, color: Colors.white),
-              onPressed: () => Navigator.pop(ctx),
-              style: IconButton.styleFrom(backgroundColor: Colors.black54),
-            ),
+            Positioned(top: 10, right: 10, child: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(ctx))),
           ],
         ),
       ),
     );
   }
-
   Widget _buildImageWidget(String path) {
     if (path.startsWith('http')) {
       return Image.network(path);

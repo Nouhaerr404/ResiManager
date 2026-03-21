@@ -424,46 +424,67 @@ class FinanceService {
     await _db.from('depenses').delete().eq('id', id);
   }
 
+  // MODIFICATION DE LA MÉTHODE DE MISE À JOUR
   Future<void> updateGlobalExpense({
     required int expenseId,
     required double montant,
     required int categorieId,
     required int annee,
     String? description,
-    String? facturePath,
+    String? facturePath, // <--- BIEN VÉRIFIER QUE C'EST LÀ
   }) async {
     final Map<String, dynamic> data = {
-      'montant': montant, 'categorie_id': categorieId, 'annee': annee, 'description': description,
+      'montant': montant,
+      'categorie_id': categorieId,
+      'annee': annee,
+      'description': description,
     };
-    if (facturePath != null) data['facture_path'] = facturePath;
+
+    // On n'ajoute la facture que si une nouvelle a été choisie
+    if (facturePath != null && facturePath.isNotEmpty) {
+      data['facture_path'] = facturePath;
+    }
+
     await _db.from('depenses').update(data).eq('id', expenseId);
   }
 
   // Upload simplifié
   Future<String?> uploadInvoice(String fileName, dynamic fileBytesOrPath) async {
     try {
-      final String path = 'factures/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+      // 1. NETTOYAGE DU NOM (Supprime espaces, accents, parenthèses, apostrophes)
+      // On ne garde que les lettres, les chiffres et le point de l'extension
+      String sanitizedName = fileName
+          .replaceAll(RegExp(r'[^a-zA-Z0-9.]'), '_') // Remplace tout le "bizarre" par _
+          .replaceAll('__', '_'); // Évite les doubles __
+
+      final String uniqueName = '${DateTime.now().millisecondsSinceEpoch}_$sanitizedName';
+      final String path = 'factures/$uniqueName';
+
+      print(">>> TENTATIVE UPLOAD AVEC NOM NETTOYÉ : $path");
+
       if (kIsWeb) {
-        await _db.storage.from('resimanager_bucket').uploadBinary(path, fileBytesOrPath);
+        await _db.storage.from('resimanager_bucket').uploadBinary(
+          path,
+          fileBytesOrPath,
+          fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
+        );
       } else {
-        await _db.storage.from('resimanager_bucket').upload(path, File(fileBytesOrPath));
+        // SUR WINDOWS
+        final file = File(fileBytesOrPath);
+        await _db.storage.from('resimanager_bucket').upload(
+          path,
+          file,
+          fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
+        );
       }
-      return _db.storage.from('resimanager_bucket').getPublicUrl(path);
+
+      final String publicUrl = _db.storage.from('resimanager_bucket').getPublicUrl(path);
+      print(">>> SUCCÈS ! URL : $publicUrl");
+      return publicUrl;
+
     } catch (e) {
-      return fileName; // Retourne le nom simple en cas d'erreur de bucket
+      print(">>> ERREUR SUPABASE STORAGE : $e");
+      return null;
     }
-  }
-  // Cette fonction trouve l'ID (integer) de l'utilisateur connecté via son email
-  Future<int> getCurrentUserId() async {
-    final userEmail = _db.auth.currentUser?.email;
-    if (userEmail == null) throw Exception("Non connecté");
-
-    final res = await _db
-        .from('users')
-        .select('id')
-        .eq('email', userEmail)
-        .single();
-
-    return res['id'] as int;
   }
 }
