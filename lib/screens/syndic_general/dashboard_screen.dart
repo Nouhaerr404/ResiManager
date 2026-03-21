@@ -30,7 +30,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       residenceId: widget.residenceId,
       syndicId: widget.syndicId,
       title: "Tableau de bord",
-      // ON CHARGE TOUTES LES DONNÉES EN MÊME TEMPS
       body: FutureBuilder<List<dynamic>>(
         future: Future.wait([
           _service.fetchDashboardStats(widget.residenceId),
@@ -73,7 +72,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       Expanded(flex: 2, child: _buildMonthlyBalanceChart(revenues, expenses)),
                       const SizedBox(width: 30),
-                      Expanded(flex: 1, child: _buildRecoveryGauge(recoveryRate)),
+                      Expanded(flex: 1, child: _buildRecoveryGauge(stats.recoveryRate)),
                     ],
                   )
                 else
@@ -92,8 +91,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- GRAPHIQUE 1 : RÉEL (Recettes vs Dépenses) ---
   Widget _buildMonthlyBalanceChart(List<double> revenues, List<double> expenses) {
+    double maxVal = 0;
+    for (var v in [...revenues, ...expenses]) {
+      if (v > maxVal) maxVal = v;
+    }
+
+    // Si tout est à 0, on met une base de 1000, sinon on ajoute 15% de marge en haut
+    double calculatedMaxY = maxVal == 0 ? 1000 : maxVal * 1.15;
+
     return _containerWrapper(
       title: "Bilan Financier Mensuel",
       subtitle: "Données réelles de l'année en cours",
@@ -102,7 +108,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              _legend("Recettes", Colors.teal),
+              _legend("Revenus", Colors.teal),
               const SizedBox(width: 15),
               _legend("Dépenses", primaryOrange),
             ],
@@ -113,22 +119,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: BarChart(
               BarChartData(
                 alignment: BarChartAlignment.spaceAround,
-                maxY: 60000, // Tu peux calculer le max dynamiquement
+                // ON UTILISE LA VALEUR CALCULÉE ICI
+                maxY: calculatedMaxY,
                 barTouchData: BarTouchData(
                   touchTooltipData: BarTouchTooltipData(
                     getTooltipColor: (group) => darkGrey,
-                    getTooltipItem: (group, groupIndex, rod, rodIndex) => BarTooltipItem("${rod.toY.toInt()} DH", const TextStyle(color: Colors.white)),
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) =>
+                        BarTooltipItem("${rod.toY.toInt()} DH", const TextStyle(color: Colors.white, fontSize: 10)),
                   ),
                 ),
                 titlesData: FlTitlesData(
                   show: true,
-                  bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, m) => Text(['Jan', 'Fev', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aou', 'Sep', 'Oct', 'Nov', 'Dec'][v.toInt() % 12], style: const TextStyle(fontSize: 10)))),
-                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, m) => Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(['Jan', 'Fev', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aou', 'Sep', 'Oct', 'Nov', 'Dec'][v.toInt() % 12], style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                  ))),
+                  // CONFIGURATION DE L'AXE GAUCHE POUR LES GRANDS NOMBRES
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 45,
+                      getTitlesWidget: (value, meta) {
+                        if (value == 0) return const Text("");
+                        // Si c'est plus d'un million, on affiche "M"
+                        if (value >= 1000000) return Text("${(value / 1000000).toStringAsFixed(1)}M", style: const TextStyle(fontSize: 9, color: Colors.grey));
+                        // Si c'est plus de mille, on affiche "K"
+                        if (value >= 1000) return Text("${(value / 1000).toInt()}K", style: const TextStyle(fontSize: 9, color: Colors.grey));
+                        return Text(value.toInt().toString(), style: const TextStyle(fontSize: 9, color: Colors.grey));
+                      },
+                    ),
+                  ),
                   topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 ),
                 borderData: FlBorderData(show: false),
-                gridData: const FlGridData(show: false),
-                // ON GÉNÈRE LES BARRES DYNAMIQUEMENT DEPUIS LES LISTES
+                gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (v) => FlLine(color: Colors.grey.withOpacity(0.05), strokeWidth: 1)),
                 barGroups: List.generate(6, (i) => _makeGroupData(i, revenues[i], expenses[i])),
               ),
             ),
@@ -137,8 +162,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-
-  // --- GRAPHIQUE 2 : RÉEL (Jauge de recouvrement) ---
   Widget _buildRecoveryGauge(double percentage) {
     return _containerWrapper(
       title: "Taux de Recouvrement",
@@ -171,7 +194,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- KPIS RÉELS ---
   Widget _buildKpiGrid(DashboardStats stats) {
     return Wrap(
       spacing: 20, runSpacing: 20,

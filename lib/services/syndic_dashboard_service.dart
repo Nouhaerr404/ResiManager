@@ -1,6 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// 1. Définition du modèle
+// 1. Définition du modèle mis à jour pour inclure le taux de recouvrement
 class DashboardStats {
   final int syndicsActifs;
   final int tranches;
@@ -8,6 +8,7 @@ class DashboardStats {
   final int appartements;
   final double chargesTotales;
   final double revenusParkings;
+  final double recoveryRate; // <--- NOUVEAU CHAMP POUR LA JAUGE
 
   DashboardStats({
     required this.syndicsActifs,
@@ -16,10 +17,10 @@ class DashboardStats {
     required this.appartements,
     required this.chargesTotales,
     required this.revenusParkings,
+    required this.recoveryRate, // <--- AJOUTÉ ICI
   });
 }
 
-// 2. Le Service
 class SyndicDashboardService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -33,12 +34,11 @@ class SyndicDashboardService {
 
       final int tranchesCount = tranchesData.length;
 
-      // CORRECTION ERREUR LIGNE 33 : Conversion sécurisée en List<int>
+      // Conversion sécurisée en List<int> pour éviter l'erreur de type
       final List<int> trancheIds = tranchesData
           .map((t) => int.parse(t['id'].toString()))
           .toList();
 
-      // Calcul des syndics uniques et actifs
       final activeSyndics = tranchesData
           .where((t) => t['inter_syndic_id'] != null)
           .map((t) => t['inter_syndic_id'])
@@ -61,7 +61,6 @@ class SyndicDashboardService {
             .toList();
 
         if (immeubleIds.isNotEmpty) {
-          // CORRECTION ERREUR LIGNE 42 : On compte la longueur de la liste
           final List<dynamic> appartementsData = await _supabase
               .from('appartements')
               .select('id')
@@ -71,7 +70,7 @@ class SyndicDashboardService {
         }
       }
 
-      // --- 3. CHARGES RÉELLES DE LA RÉSIDENCE ---
+      // --- 3. CHARGES RÉELLES (Sorties d'argent / Factures) ---
       final List<dynamic> depensesRes = await _supabase
           .from('depenses')
           .select('montant')
@@ -82,7 +81,27 @@ class SyndicDashboardService {
         totalCharges += (d['montant'] as num).toDouble();
       }
 
-      // --- 4. REVENUS PARKINGS RÉELS ---
+      // --- 4. REVENUS RÉELS ET TAUX DE RECOUVREMENT (Calcul pour la jauge) ---
+      // On récupère ce que les résidents DOIVENT payer vs ce qu'ils ONT payé
+      final List<dynamic> paiementsData = await _supabase
+          .from('paiements')
+          .select('montant_total, montant_paye')
+          .eq('residence_id', residenceId);
+
+      double totalAttendu = 0;
+      double totalRecolte = 0;
+
+      for (var p in paiementsData) {
+        totalAttendu += (p['montant_total'] as num).toDouble();
+        totalRecolte += (p['montant_paye'] as num).toDouble();
+      }
+
+      // Calcul du pourcentage réel de recouvrement
+      double calculatedRecoveryRate = (totalAttendu > 0)
+          ? (totalRecolte / totalAttendu) * 100
+          : 0.0;
+
+      // --- 5. REVENUS PARKINGS RÉELS ---
       final List<dynamic> parkingsData = await _supabase
           .from('parkings')
           .select('prix_annuel')
@@ -91,7 +110,6 @@ class SyndicDashboardService {
 
       double totalParkings = 0;
       for (var p in parkingsData) {
-        // Revenu mensuel estimé (Annuel / 12)
         totalParkings += ((p['prix_annuel'] as num).toDouble() / 12);
       }
 
@@ -102,19 +120,18 @@ class SyndicDashboardService {
         appartements: appartementsCount,
         chargesTotales: totalCharges,
         revenusParkings: totalParkings,
+        recoveryRate: calculatedRecoveryRate, // On renvoie le vrai taux !
       );
 
     } catch (e) {
       print('Erreur Dashboard Service: $e');
-      // En cas d'erreur, on renvoie des zéros pour ne pas faire crasher l'app
       return DashboardStats(
           syndicsActifs: 0, tranches: 0, immeubles: 0,
-          appartements: 0, chargesTotales: 0, revenusParkings: 0
+          appartements: 0, chargesTotales: 0, revenusParkings: 0, recoveryRate: 0
       );
     }
   }
 
-  // --- LOGIQUE POUR LES GRAPHIQUES ---
   Future<Map<String, dynamic>> getChartsData(int residenceId) async {
     try {
       // 1. Dépenses par mois

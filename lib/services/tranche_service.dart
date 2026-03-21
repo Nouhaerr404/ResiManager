@@ -240,31 +240,24 @@ class TrancheService {
   // --- NOUVELLE MÉTHODE À AJOUTER À LA FIN DE TA CLASSE ---
   Future<List<Map<String, dynamic>>> getMyAvailableInterSyndics(int myId) async {
     try {
-      print(">>> DEBUG : Recherche des syndics pour l'Admin ID : $myId");
-
-      // On demande les IDs de la table associative
+      // Le secret est d'ajouter "!inner" après le nom de la table jointe
       final response = await _db
           .from('liens_syndics')
-          .select('inter_syndic_id')
-          .eq('syndic_general_id', myId);
+          .select('''
+            inter_syndic:users!inter_syndic_id!inner (
+              id, nom, prenom, statut
+            )
+          ''')
+          .eq('syndic_general_id', myId)
+          .eq('inter_syndic.statut', 'actif'); // On utilise l'alias défini au dessus
 
       final List data = response as List;
-      if (data.isEmpty) return [];
 
-      // On récupère les IDs des syndics
-      final List<int> ids = data.map((item) => item['inter_syndic_id'] as int).toList();
-
-      // On va chercher les profils réels dans la table users
-      final usersResponse = await _db
-          .from('users')
-          .select('id, nom, prenom')
-          .inFilter('id', ids);
-
-      print(">>> DEBUG : ${usersResponse.length} syndics trouvés !");
-      return List<Map<String, dynamic>>.from(usersResponse);
+      // On extrait proprement le profil pour le Dropdown
+      return data.map((item) => item['inter_syndic'] as Map<String, dynamic>).toList();
 
     } catch (e) {
-      print("ERREUR getMyAvailableInterSyndics : $e");
+      print("ERREUR FILTRAGE ACTIFS : $e");
       return [];
     }
   }

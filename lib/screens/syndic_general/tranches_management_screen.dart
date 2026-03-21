@@ -270,11 +270,7 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(children: [
-          NavButtons(residenceId: widget.residenceId, syndicId : widget.syndicId, ),
-          const SizedBox(width: 15),
-          Text("Tranches", style: TextStyle(fontSize: isMobile ? 22 : 32, fontWeight: FontWeight.bold, color: darkGrey)),
-        ]),
+
         if (!isMobile) _addButton(false),
       ],
     );
