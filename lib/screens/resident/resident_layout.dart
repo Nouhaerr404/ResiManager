@@ -7,7 +7,7 @@ import 'resident_annonces_screen.dart';
 import 'resident_reunions_screen.dart';
 import 'historique_paiements_screen.dart';
 import 'resident_reclamations_screen.dart';
-
+import 'paiement_status_screen.dart';
 class ResidentLayout extends StatefulWidget {
   final int userId;
   final int initialIndex;
@@ -50,8 +50,9 @@ class _ResidentLayoutState extends State<ResidentLayout> {
           userId: widget.userId, onNavigate: _goTo);
       case 1: return ResidentChargesScreen(
           userId: widget.userId, onNavigate: _goTo);
-      case 2: return HistoriquePaiementsScreen(
+      case 2: return PaiementStatusScreen(
           userId: widget.userId, onNavigate: _goTo);
+
       case 3: return ResidentAnnoncesScreen(
           userId: widget.userId, onNavigate: _goTo);
       case 4: return ResidentReunionsScreen(
