@@ -1,0 +1,56 @@
+[33mb99ac44[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeature/reset-password-complet[m[33m)[m chore: mise à jour configuration principale
+[33m11a2139[m feat(services): mise à jour des services résident et admin
+[33mbb7d463[m feat(resident): intégration layout fixe avec navigation
+[33m6420413[m feat(auth): ajout des écrans mot de passe oublié et réinitialisation
+[33m6bcc310[m feat(auth): sécurisation des mots de passe avec bcrypt
+[33m226fb22[m[33m ([m[1;31morigin/DEV[m[33m, [m[1;32mDEV[m[33m)[m Ajustement appliqué tranch dashboard termine reste donne financement soit dynamique
+[33mde2f7d1[m Merge branch 'DEV' of https://github.com/Nouhaerr404/ResiManager into DEV
+[33mcc624e4[m Selectione intersyndique +Modification codification appartement
+[33mf83e84a[m Selectione intersyndique +Modification codification appartement
+[33mdc33f65[m Implementation de l'espace Box avec codification
+[33m1840b0a[m Ajout le module de Parking management avec codification
+[33m463fed3[m Reglage problme de facture s'afiche pop up
+[33m22633aa[m v1_Modufication_apres_suivi_reste problem de facture
+[33mb19677c[m fix: dashboard resident N/A + depenses annee 2026
+[33m6d08ad0[m Merge branch 'DEV' of https://github.com/Nouhaerr404/ResiManager into DEV
+[33m5d56693[m home page
+[33mc79d92c[m Button de revenir a l'accueil
+[33m98f9d87[m Merge branch 'DEV' of https://github.com/Nouhaerr404/ResiManager into DEV
+[33m6b12942[m Amélioration d'espace de gestion des tranches (syndic general)
+[33ma9b1645[m fixing Finance Page (Syndic Géneral) and unifying navigation with MainLayout and fix responsive issues
+[33m54b157d[m ajout modifications
+[33m1b2df0f[m[33m ([m[1;31morigin/Adam--espace-inter-dépense[m[33m)[m Apres merge affichage de tous les esapce dans main.dart
+[33m9ec4d19[m Merge remote-tracking branch 'origin/feature/espace-admin-resident' into Adam--espace-inter-dépense
+[33m7ac35e6[m ajustement sur tranch_dashbord pour voir module depense
+[33m85c97ad[m[33m ([m[1;31morigin/feature/espace-admin-resident[m[33m, [m[1;32mfeature/espace-admin-resident[m[33m)[m refactor(resident): remove notifications module as requested
+[33m1cf6c7f[m feat(resident): implement interactive meeting attendance system with database sync
+[33m6fd112d[m ui(resident): optimize announcements layout with compact grid view
+[33m2105b61[m ui(resident): implement high-transparency charges view with building and tranche breakdown
+[33md875b16[m ui(resident): update dashboard with real-time navigation and interactive KPI cards
+[33m405dafb[m ui(resident): clean navbar navigation and fix active index logic
+[33mb6d18c6[m feat(resident): add complex database queries for interactive charges and meetings
+[33m31dd1d9[m Adptation de Module appartements avec theme de nouha(syndique generale)
+[33m3a347c4[m Merge remote-tracking branch 'origin/hajar--dashbord_inter_syndic/liste_des_tranche/reunions' into Adam--espace-inter-dépense
+[33m85cf499[m V1: Implémenter le tableau de bord financier pour l’inter-syndic affichant les indicateurs clés (KPI), la répartition des dépenses par tranche, ainsi que la fonctionnalité d’ajout de nouvelles dépenses.
+[33m6c50ff6[m[33m ([m[1;31morigin/hajar--dashbord_inter_syndic/liste_des_tranche/reunions[m[33m)[m Ajout du dashboard syndic et de la liste des tranches avec réunions
+[33m1304971[m[33m ([m[1;31morigin/Adam--Espace_Intersyndic_appartements[m[33m)[m Modularisation de apartments.dart en plusieur fichier
+[33m345a9d4[m feat: implement role selector and app entry point
+[33m6dbfd74[m ui: develop resident portal with charges and dashboard
+[33mc6aa287[m ui: develop super admin dashboard and management screens
+[33me7511a9[m ui: create reusable navigation components for admin and residents
+[33m1480eb4[m feat: implement data services with Supabase integration
+[33mcf96976[m feat: setup models for residence and users
+[33mbcb9413[m Modification de main apres merge avec nouha
+[33m3258e97[m Merge remote-tracking branch 'origin/main'(Les modification de Nouha ) into Adam--Espace_Intersyndic_appartements
+[33m0faf9c9[m Modification de main apres merge avec hajar
+[33m9419354[m Merge remote-tracking branch 'origin/feature/hajar' into Adam--Espace_Intersyndic_appartements
+[33m3ceab8d[m feat: Implement apartment management feature with model, UI, and Supabase integration.
+[33m28fc06d[m feat(finance): passage de la consommation mensuelle à annuelle
+[33m3414958[m feat(finance): implémentation de l'écran d'ajout de dépense responsive
+[33mc1c12db[m[33m ([m[1;32mmain[m[33m)[m ui: refonte visuelle complète et ajout d'images immersives
+[33m2053825[m espace inter_syndic
+[33me0f331b[m feat(navbar): add navigation logic and screen switching
+[33m8d0f246[m feat(syndic-general): Implement Dashboard and Tranche Management
+[33mf397ff4[m structure de base
+[33m5de980a[m Structure Updated
+[33mb1f4f00[m Initial commit - ResiManager Flutter project
