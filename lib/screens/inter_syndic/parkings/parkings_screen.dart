@@ -1024,6 +1024,7 @@ class _ParkingsScreenState extends State<ParkingsScreen>
     final nomCtrl = TextEditingController();
     final prenomCtrl = TextEditingController();
     final telCtrl = TextEditingController();
+    ResidentModel? selectedResident;
     String typebenef = 'resident';
     bool saving = false;
     String? errorMsg;
@@ -1045,7 +1046,7 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                     iconColor: _C.coral),
                 const SizedBox(height: 20),
                 if (errorMsg != null) _errorBanner(errorMsg!),
-                _label('Type de beneficiaire'),
+                _label('Type de bénéficiaire'),
                 const SizedBox(height: 6),
                 Row(children: [
                   Expanded(
@@ -1053,7 +1054,7 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                       onTap: () =>
                           setDialog(() => typebenef = 'resident'),
                       child: _typeBtn(
-                          'Resident', typebenef == 'resident', _C.coral),
+                          'Résident', typebenef == 'resident', _C.coral),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1067,15 +1068,47 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                   ),
                 ]),
                 const SizedBox(height: 14),
-                _label('Prenom *'),
-                _field(prenomCtrl, 'ex: Ahmed'),
-                const SizedBox(height: 14),
-                _label('Nom *'),
-                _field(nomCtrl, 'ex: Bennani'),
-                const SizedBox(height: 14),
-                _label('Telephone'),
-                _field(telCtrl, 'ex: 0612345678',
-                    inputType: TextInputType.phone),
+
+                if (typebenef == 'resident') ...[
+                  _label('Chercher un résident *'),
+                  Container(
+                    decoration: BoxDecoration(
+                        color: _C.bg,
+                        borderRadius: BorderRadius.circular(10)),
+                    child: Autocomplete<ResidentModel>(
+                      optionsBuilder: (val) async {
+                        if (val.text.isEmpty) return const Iterable<ResidentModel>.empty();
+                        return await ResidentService().searchResidents(val.text);
+                      },
+                      displayStringForOption: (o) => '${o.prenom} ${o.nom}',
+                      onSelected: (selection) => setDialog(() => selectedResident = selection),
+                      fieldViewBuilder: (ctx, ctrl, focus, onSub) => TextField(
+                        controller: ctrl,
+                        focusNode: focus,
+                        style: const TextStyle(fontSize: 14, color: _C.dark),
+                        decoration: InputDecoration(
+                          hintText: 'Nom ou prénom...',
+                          hintStyle: const TextStyle(color: _C.textLight, fontSize: 13),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                          suffixIcon: selectedResident != null 
+                              ? const Icon(Icons.check_circle_rounded, color: _C.green, size: 18)
+                              : const Icon(Icons.search_rounded, color: _C.textLight, size: 18),
+                        ),
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  _label('Prénom *'),
+                  _field(prenomCtrl, 'ex: Ahmed'),
+                  const SizedBox(height: 14),
+                  _label('Nom *'),
+                  _field(nomCtrl, 'ex: Bennani'),
+                  const SizedBox(height: 14),
+                  _label('Téléphone'),
+                  _field(telCtrl, 'ex: 0612345678', inputType: TextInputType.phone),
+                ],
+
                 const SizedBox(height: 24),
                 _dialogActions(
                   ctx: ctx,
@@ -1083,26 +1116,36 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                   confirmLabel: 'Assigner',
                   confirmColor: _C.coral,
                   onConfirm: () async {
-                    if (nomCtrl.text.trim().isEmpty ||
-                        prenomCtrl.text.trim().isEmpty) {
-                      setDialog(() =>
-                      errorMsg = 'Nom et Prenom obligatoires');
-                      return;
+                    if (typebenef == 'resident') {
+                      if (selectedResident == null) {
+                        setDialog(() => errorMsg = 'Sélectionnez un résident');
+                        return;
+                      }
+                      nomCtrl.text = selectedResident!.nom;
+                      prenomCtrl.text = selectedResident!.prenom;
+                      telCtrl.text = selectedResident!.telephone ?? '';
+                    } else {
+                      if (nomCtrl.text.trim().isEmpty || prenomCtrl.text.trim().isEmpty) {
+                        setDialog(() => errorMsg = 'Nom et Prénom obligatoires');
+                        return;
+                      }
                     }
+
                     setDialog(() {
                       saving = true;
                       errorMsg = null;
                     });
+                    
                     final err = await _service.assignerParking(
                       parkingId: p.id,
                       nom: nomCtrl.text.trim(),
                       prenom: prenomCtrl.text.trim(),
-                      telephone: telCtrl.text.isEmpty
-                          ? null
-                          : telCtrl.text.trim(),
+                      telephone: telCtrl.text.isEmpty ? null : telCtrl.text.trim(),
                       type: typebenef,
                       trancheId: widget.trancheId,
+                      residentId: typebenef == 'resident' ? selectedResident?.userId : null,
                     );
+
                     if (!ctx.mounted) return;
                     if (err != null) {
                       setDialog(() {

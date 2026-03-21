@@ -948,6 +948,7 @@ class _BoxesScreenState extends State<BoxesScreen>
                         nom: selectedResident!.nom,
                         prenom: selectedResident!.prenom,
                         trancheId: widget.trancheId,
+                        residentId: selectedResident!.userId,
                       );
                       if (err != null) {
                         setDialog(() { errorMsg = err; saving = false; });

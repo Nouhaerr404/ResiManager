@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/resident_model.dart';
+import '../models/paiement_model.dart';
 
 class ResidentService {
   final _db = Supabase.instance.client;
@@ -55,7 +56,7 @@ class ResidentService {
       final paiementsRes = await _db
           .from('paiements')
           .select(
-          'id, appartement_id, montant_total, montant_paye, statut, date_paiement')
+          'id, appartement_id, montant_total, montant_paye, statut, date_paiement, type_paiement')
           .inFilter('appartement_id', appartementIds);
       final paiements = paiementsRes as List;
       print('>>> Paiements: ${paiements.length}');
@@ -79,13 +80,42 @@ class ResidentService {
           orElse: () => <String, dynamic>{},
         ) as Map;
 
-        final paiement = paiements.firstWhere(
+        // On filtre TOUS les paiements de ce résident
+        final residentPaiements = paiements.where(
               (p) => p['appartement_id'] == r['appartement_id'],
-          orElse: () => <String, dynamic>{},
-        ) as Map;
+        ).toList();
 
-        print(
-            '>>> ${user['prenom']} ${user['nom']}: paiement=${paiement.isNotEmpty ? paiement['id'] : 'AUCUN'}');
+        double totalM = 0;
+        double payeM = 0;
+        bool hasImpaye = false;
+        bool hasPartiel = false;
+        int? mainPaiementId;
+
+        if (residentPaiements.isNotEmpty) {
+          for (final p in residentPaiements) {
+            totalM += double.parse((p['montant_total'] ?? 0).toString());
+            payeM += double.parse((p['montant_paye'] ?? 0).toString());
+            if (p['statut'] == 'impaye') hasImpaye = true;
+            if (p['statut'] == 'partiel') hasPartiel = true;
+            
+            // On considère les "charges" comme le paiement principal par défaut
+            if (p['type_paiement'] == 'charges') {
+              mainPaiementId = p['id'] as int;
+            }
+          }
+          // Si pas de charges, on prend n'importe quel ID pour le paiement par défaut
+          mainPaiementId ??= residentPaiements.first['id'] as int;
+        }
+
+        // Calcul du statut global
+        String globalStatut = 'complet';
+        if (hasImpaye) {
+          globalStatut = payeM > 0 ? 'partiel' : 'impaye';
+        } else if (hasPartiel) {
+          globalStatut = 'partiel';
+        }
+
+        print('>>> ${user['prenom']} ${user['nom']}: globalStatut=$globalStatut, total=$totalM');
 
         result.add(ResidentModel(
           id: r['id'] as int,
@@ -99,16 +129,30 @@ class ResidentService {
           telephone: user['telephone']?.toString(),
           appartementNumero: appart['numero']?.toString() ?? '',
           immeubleName: immeuble['nom']?.toString() ?? '',
-          paiementId: paiement.isNotEmpty ? paiement['id'] as int? : null,
-          montantTotal: paiement.isNotEmpty
-              ? double.parse(paiement['montant_total'].toString())
-              : 3000.0,
-          montantPaye: paiement.isNotEmpty
-              ? double.parse(paiement['montant_paye'].toString())
-              : 0.0,
-          statutPaiement:
-          paiement.isNotEmpty ? paiement['statut'].toString() : 'impaye',
+          paiementId: mainPaiementId,
+          montantTotal: residentPaiements.isNotEmpty ? totalM : 3000.0,
+          montantPaye: payeM,
+          statutPaiement: residentPaiements.isNotEmpty ? globalStatut : 'impaye',
           anneePaiement: DateTime.now().year,
+          paiements: residentPaiements.map((p) => PaiementModel(
+            id: p['id'],
+            residentId: r['user_id'],
+            appartementId: r['appartement_id'],
+            depenseId: 0,
+            interSyndicId: 0,
+            residenceId: immeuble['residence_id'] ?? 0,
+            montantTotal: double.parse((p['montant_total'] ?? 0).toString()),
+            montantPaye: double.parse((p['montant_paye'] ?? 0).toString()),
+            typePaiement: TypePaiementEnum.values.firstWhere(
+                  (e) => e.name == (p['type_paiement'] ?? 'charges'),
+              orElse: () => TypePaiementEnum.charges,
+            ),
+            statut: StatutPaiementEnum.values.firstWhere(
+                  (e) => e.name == (p['statut'] ?? 'impaye'),
+              orElse: () => StatutPaiementEnum.impaye,
+            ),
+            annee: DateTime.now().year,
+          )).toList(),
         ));
       }
 
@@ -340,6 +384,55 @@ class ResidentService {
     } catch (e) {
       print('>>> ERREUR enregistrerPaiement: $e');
       return e.toString();
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // CRÉER un paiement de ressource (Box, Parking, Garage)
+  // ─────────────────────────────────────────
+  Future<void> createResourcePayment({
+    required int residentId,
+    required int trancheId,
+    required int residenceId,
+    required double montant,
+    required String type,
+  }) async {
+    try {
+      // 1. Récupérer l'appartement_id du résident
+      final resData = await _db
+          .from('residents')
+          .select('appartement_id')
+          .eq('user_id', residentId)
+          .maybeSingle();
+      
+      final int? appartId = resData?['appartement_id'];
+      if (appartId == null) return;
+
+      // 2. Récupérer l'inter_syndic_id de la tranche
+      final trancheData = await _db
+          .from('tranches')
+          .select('inter_syndic_id')
+          .eq('id', trancheId)
+          .maybeSingle();
+      
+      final int isId = trancheData?['inter_syndic_id'] ?? 1;
+
+      // 3. Insérer le paiement
+      await _db.from('paiements').insert({
+        'resident_id': residentId,
+        'appartement_id': appartId,
+        'residence_id': residenceId,
+        'inter_syndic_id': isId,
+        'montant_total': montant,
+        'montant_paye': 0,
+        'type_paiement': type,
+        'statut': 'impaye',
+        'annee': DateTime.now().year,
+        'mois': DateTime.now().month,
+      });
+      print('>>> Paiement ressource créé: $type, $montant DH');
+    } catch (e) {
+      print('>>> ERREUR createResourcePayment: $e');
     }
   }
 

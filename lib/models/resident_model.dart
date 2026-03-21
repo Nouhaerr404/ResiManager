@@ -1,3 +1,5 @@
+import 'paiement_model.dart';
+
 class ResidentModel {
   final int id;
   final int userId;
@@ -15,6 +17,7 @@ class ResidentModel {
   final double montantPaye;
   final String statutPaiement;
   final int anneePaiement;
+  final List<PaiementModel> paiements; // ← Détail des lignes de paiement
 
   ResidentModel({
     required this.id,
@@ -33,6 +36,7 @@ class ResidentModel {
     required this.montantPaye,
     required this.statutPaiement,
     required this.anneePaiement,
+    this.paiements = const [],
   });
 
   String get nomComplet => '$prenom $nom';

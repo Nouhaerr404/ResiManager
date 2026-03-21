@@ -577,7 +577,12 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
           valueColor: _C.amber,
           interactive: true,
           onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => GaragesScreen(trancheId: widget.tranche.id))),
+              MaterialPageRoute(builder: (_) => GaragesScreen(
+                trancheId: widget.tranche.id,
+                residenceId: widget.tranche.residenceId,
+                trancheName: widget.tranche.nom,
+                residenceName: widget.tranche.residenceNom,
+              ))),
         ),
         _ModuleData(
           label: 'Box',

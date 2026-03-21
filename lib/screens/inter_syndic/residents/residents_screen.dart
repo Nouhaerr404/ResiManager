@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../models/resident_model.dart';
+import '../../../models/paiement_model.dart';
 import '../../../services/resident_service.dart';
 
 // ── Brand palette — aligned with ResiManager desktop app
@@ -1102,6 +1103,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   // ── Payment Dialog
   void _showPaiementDialog(ResidentModel r) {
     final montantCtrl = TextEditingController();
+    PaiementModel? selectedPaiement = r.paiements.isNotEmpty ? r.paiements.first : null;
     String? errorMsg;
     bool saving = false;
 
@@ -1150,37 +1152,68 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                        children: [
-                          Text(r.nomComplet,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                  color: _C.dark)),
-                          Text(r.adresseAppart,
-                              style: const TextStyle(
-                                  color: _C.textLight,
-                                  fontSize: 11)),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                          children: [
+                            Text(r.nomComplet,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                    color: _C.dark)),
+                            Text(r.adresseAppart,
+                                style: const TextStyle(
+                                    color: _C.textLight,
+                                    fontSize: 11)),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+                
+                _label('Ligne de paiement *'),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                      color: _C.bg,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: _C.divider)),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<PaiementModel>(
+                      value: selectedPaiement,
+                      isExpanded: true,
+                      onChanged: (val) => setDialog(() => selectedPaiement = val),
+                      items: r.paiements.map((p) => DropdownMenuItem(
+                        value: p,
+                        child: Text(
+                          '${p.typePaiement.name.toUpperCase()} - ${p.annee}',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                      )).toList(),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 14),
-                _infoRow(
-                    'Total', '${r.montantTotal.toInt()} DH', _C.dark),
-                const SizedBox(height: 8),
-                _infoRow(
-                    'Paye', '${r.montantPaye.toInt()} DH', _C.green),
-                const SizedBox(height: 8),
-                _infoRow('Reste', '${r.resteAPayer.toInt()} DH',
-                    _C.coral,
-                    bold: true),
+
+                if (selectedPaiement != null) ...[
+                  _infoRow(
+                      'Total ligne', '${selectedPaiement!.montantTotal.toInt()} DH', _C.dark),
+                  const SizedBox(height: 8),
+                  _infoRow(
+                      'Payé ligne', '${selectedPaiement!.montantPaye.toInt()} DH', _C.green),
+                  const SizedBox(height: 8),
+                  _infoRow('Reste ligne', '${selectedPaiement!.resteAPayer.toInt()} DH',
+                      _C.coral,
+                      bold: true),
+                ],
+                
                 const SizedBox(height: 16),
                 if (errorMsg != null) _errorBanner(errorMsg!),
-                _label('Montant a payer (DH)'),
+                _label('Montant à payer (DH)'),
                 _field(montantCtrl, 'ex: 1500',
                     inputType: TextInputType.number),
                 const SizedBox(height: 22),
@@ -1198,9 +1231,9 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                       errorMsg = 'Entrez un montant valide');
                       return;
                     }
-                    if (r.paiementId == null) {
+                    if (selectedPaiement == null) {
                       setDialog(
-                              () => errorMsg = 'Aucun paiement trouve');
+                              () => errorMsg = 'Sélectionnez une ligne de paiement');
                       return;
                     }
                     setDialog(() {
@@ -1208,11 +1241,11 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                       errorMsg = null;
                     });
                     final err = await _service.enregistrerPaiement(
-                      paiementId: r.paiementId!,
+                      paiementId: selectedPaiement!.id,
                       residentUserId: r.userId,
                       montantAjoute: montant,
-                      montantDejaPane: r.montantPaye,
-                      montantTotal: r.montantTotal,
+                      montantDejaPane: selectedPaiement!.montantPaye,
+                      montantTotal: selectedPaiement!.montantTotal,
                     );
                     if (!ctx.mounted) return;
                     if (err != null) {
