@@ -794,7 +794,7 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                         if (textEditingValue.text.isEmpty) {
                           return const Iterable<ResidentModel>.empty();
                         }
-                        return await ResidentService().searchResidents(textEditingValue.text);
+                        return await ResidentService().searchResidents(textEditingValue.text, trancheId: widget.trancheId);
                       },
                       displayStringForOption: (ResidentModel option) =>
                           '${option.prenom} ${option.nom}',
@@ -1078,7 +1078,7 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                     child: Autocomplete<ResidentModel>(
                       optionsBuilder: (val) async {
                         if (val.text.isEmpty) return const Iterable<ResidentModel>.empty();
-                        return await ResidentService().searchResidents(val.text);
+                        return await ResidentService().searchResidents(val.text, trancheId: widget.trancheId);
                       },
                       displayStringForOption: (o) => '${o.prenom} ${o.nom}',
                       onSelected: (selection) => setDialog(() => selectedResident = selection),

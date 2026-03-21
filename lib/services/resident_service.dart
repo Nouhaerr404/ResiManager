@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/resident_model.dart';
 import '../models/paiement_model.dart';
+import 'parking_service.dart';
+import 'box_service.dart';
 import 'dart:typed_data';
 
 class ResidentService {
@@ -16,11 +18,19 @@ class ResidentService {
       final List immeubles = immeublesRes as List? ?? [];
       if (immeubles.isEmpty) return [];
       final immeubleIds = immeubles.map((i) => i['id']).toList();
-      final appartementsRes = await _db.from('appartements').select('id, numero, immeuble_id, statut').inFilter('immeuble_id', immeubleIds);
+      final appartementsRes = await _db
+          .from('appartements')
+          .select('id, numero, immeuble_id, statut, immeubles!inner(id, nom, tranches!inner(nom, residences!inner(nom)))')
+          .inFilter('immeuble_id', immeubleIds);
       final List appartements = appartementsRes as List? ?? [];
       if (appartements.isEmpty) return [];
       final appartementIds = appartements.map((a) => a['id']).toList();
-      final residentsRes = await _db.from('residents').select('id, user_id, appartement_id, type, statut').inFilter('appartement_id', appartementIds);
+      // On récupère les résidents de ces appartements OU les résidents sans appartement (pour pouvoir les assigner)
+      final residentsRes = await _db
+          .from('residents')
+          .select('id, user_id, appartement_id, type, statut')
+          .or('appartement_id.in.(${appartementIds.join(",")}),appartement_id.is.null');
+
       final List residents = residentsRes as List? ?? [];
       if (residents.isEmpty) return [];
       final userIds = residents.map((r) => r['user_id'] as int).toList();
@@ -47,15 +57,24 @@ class ResidentService {
         ) as Map;
         if (user.isEmpty) continue;
 
-        final appart = appartements.firstWhere(
-              (a) => a['id'] == r['appartement_id'],
-          orElse: () => <String, dynamic>{},
-        ) as Map;
+        final appart = r['appartement_id'] != null 
+            ? appartements.firstWhere((a) => a['id'] == r['appartement_id'], orElse: () => <String, dynamic>{}) 
+            : <String, dynamic>{};
 
-        final immeuble = immeubles.firstWhere(
-              (i) => i['id'] == appart['immeuble_id'],
-          orElse: () => <String, dynamic>{},
-        ) as Map;
+        final immeuble = (appart.isNotEmpty && appart['immeuble_id'] != null)
+            ? immeubles.firstWhere((i) => i['id'] == appart['immeuble_id'], orElse: () => <String, dynamic>{})
+            : <String, dynamic>{};
+
+        String displayNumero = appart['numero']?.toString() ?? '';
+        if (displayNumero.isNotEmpty && appart['immeubles'] != null) {
+          final immRaw = appart['immeubles'];
+          final trNom = immRaw['tranches']?['nom'] ?? '';
+          final resNom = immRaw['tranches']?['residences']?['nom'] ?? '';
+          final immNom = immRaw['nom'] ?? '';
+          final parts = displayNumero.split('-'); 
+          final numApt = parts.isNotEmpty ? parts.last : '';
+          displayNumero = 'R$resNom-T$trNom-Imm$immNom-$numApt';
+        }
 
         // On filtre TOUS les paiements de ce résident
         final residentPaiements = paiements.where(
@@ -104,7 +123,7 @@ class ResidentService {
           prenom: user['prenom']?.toString() ?? '',
           email: user['email']?.toString() ?? '',
           telephone: user['telephone']?.toString(),
-          appartementNumero: appart['numero']?.toString() ?? '',
+          appartementNumero: displayNumero,
           immeubleName: immeuble['nom']?.toString() ?? '',
           paiementId: mainPaiementId,
           montantTotal: residentPaiements.isNotEmpty ? totalM : 3000.0,
@@ -136,21 +155,45 @@ class ResidentService {
     } catch (e) { return []; }
   }
 
-  Future<List<ResidentModel>> searchResidents(String query) async {
+  Future<List<ResidentModel>> searchResidents(String query, {int? trancheId}) async {
     if (query.isEmpty) return [];
     try {
       final q = query.toLowerCase().trim();
-      final usersRes = await _db.from('users').select('id, nom, prenom, email, telephone').or('nom.ilike.%$q%,prenom.ilike.%$q%,email.ilike.%$q%').limit(10);
+      final usersRes = await _db.from('users').select('id, nom, prenom, email, telephone').or('nom.ilike.%$q%,prenom.ilike.%$q%,email.ilike.%$q%').limit(20);
       final List users = usersRes as List? ?? [];
       if (users.isEmpty) return [];
       final userIds = users.map((u) => u['id']).toList();
-      final residentsRes = await _db.from('residents').select('id, user_id, appartement_id, type, statut').inFilter('user_id', userIds);
+
+      var queryBuilder = _db
+          .from('residents')
+          .select('id, user_id, appartement_id, type, statut, appartements(id, immeubles(id, tranche_id))')
+          .inFilter('user_id', userIds);
+
+      final residentsRes = await queryBuilder;
       final List residents = residentsRes as List? ?? [];
       if (residents.isEmpty) return [];
+
       final List<ResidentModel> result = [];
       for (final r in residents) {
-        final user = users.firstWhere((u) => u['id'] == r['user_id'], orElse: () => null);
+        Map<String, dynamic>? user;
+        try {
+          user = users.firstWhere((u) => u['id'] == r['user_id']);
+        } catch (_) {
+          user = null;
+        }
         if (user == null) continue;
+
+        // Filtrage côté Dart pour éviter les soucis de syntaxe .or() complexe sur des jointures
+        if (trancheId != null) {
+          final residentAppartId = r['appartement_id'];
+          final residentTrancheId = r['appartements']?['immeubles']?['tranche_id'];
+          
+          // On inclut si : pas d'appartement OU appartement dans la bonne tranche
+          if (residentAppartId != null && residentTrancheId != trancheId) {
+            continue; 
+          }
+        }
+
         result.add(ResidentModel(
           id: r['id'] is int ? r['id'] : 0, userId: r['user_id'] is int ? r['user_id'] : 0, appartementId: r['appartement_id'] is int ? r['appartement_id'] : null,
           type: r['type'].toString(), statut: r['statut'].toString(),
@@ -160,7 +203,10 @@ class ResidentService {
         ));
       }
       return result;
-    } catch (e) { return []; }
+    } catch (e) { 
+      print(">>> ERREUR searchResidents: $e");
+      return []; 
+    }
   }
 
   Future<List<Map<String, dynamic>>> getAppartementsLibres(dynamic trancheId) async {
@@ -183,16 +229,78 @@ class ResidentService {
     } catch (e) { return []; }
   }
 
-  Future<String?> addResident({required String nom, required String prenom, required String email, String? telephone, required String type, required dynamic trancheId, required dynamic appartementId, required double montantTotal}) async {
+  Future<String?> addResident({required String nom, required String prenom, required String email, String? telephone, required String type, required dynamic trancheId, required dynamic appartementId, required double montantTotal, int? parkingId, int? boxId}) async {
     try {
       try { await _db.auth.signUp(email: email.trim(), password: 'changeme123'); } on AuthException catch (_) {}
-      final userRes = await _db.from('users').insert({ 'nom': nom.trim(), 'prenom': prenom.trim(), 'email': email.trim(), 'telephone': telephone?.trim(), 'password': 'changeme123', 'role': 'resident', 'statut': 'actif', }).select('id').single();
+      
+      final userRes = await _db.from('users').insert({ 
+        'nom': nom.trim(), 
+        'prenom': prenom.trim(), 
+        'email': email.trim(), 
+        'telephone': telephone?.trim(), 
+        'password': 'changeme123', 
+        'role': 'resident', 
+        'statut': 'actif', 
+      }).select('id').single();
+      
       final dynamic userId = userRes['id'];
-      await _db.from('residents').insert({ 'user_id': userId, 'appartement_id': appartementId, 'type': type, 'statut': 'actif', 'date_arrivee': DateTime.now().toIso8601String().substring(0, 10), });
+      
+      await _db.from('residents').insert({ 
+        'user_id': userId, 
+        'appartement_id': appartementId, 
+        'type': type, 
+        'statut': 'actif', 
+        'date_arrivee': DateTime.now().toIso8601String().substring(0, 10), 
+      });
+      
       await _db.from('appartements').update({'statut': 'occupe', 'resident_id': userId}).eq('id', appartementId);
-      await _db.from('paiements').insert({ 'appartement_id': appartementId, 'depense_id': 1, 'inter_syndic_id': 1, 'montant_total': montantTotal, 'montant_paye': 0, 'type_paiement': 'charges', 'statut': 'impaye', 'annee': DateTime.now().year, });
+      
+      // Récupérer residence_id et inter_syndic_id depuis la tranche
+      final trData = await _db.from('tranches').select('residence_id, inter_syndic_id').eq('id', trancheId).maybeSingle();
+      final residenceId = trData?['residence_id'] ?? 1;
+      final isId = trData?['inter_syndic_id'] ?? 1;
+
+      await _db.from('paiements').insert({ 
+        'resident_id': userId,
+        'appartement_id': appartementId, 
+        'residence_id': residenceId,
+        'inter_syndic_id': isId, 
+        'montant_total': montantTotal, 
+        'montant_paye': 0, 
+        'type_paiement': 'charges', 
+        'statut': 'impaye', 
+        'annee': DateTime.now().year, 
+        'mois': DateTime.now().month,
+      });
+
+      if (parkingId != null) {
+        await ParkingService().assignerParking(
+          parkingId: parkingId,
+          nom: nom.trim(),
+          prenom: prenom.trim(),
+          telephone: telephone?.trim(),
+          type: type,
+          trancheId: int.parse(trancheId.toString()),
+          residentId: int.parse(userId.toString()),
+        );
+      }
+
+      if (boxId != null) {
+        await BoxService().assignerBox(
+          boxId: boxId,
+          nom: nom.trim(),
+          prenom: prenom.trim(),
+          telephone: telephone?.trim(),
+          trancheId: int.parse(trancheId.toString()),
+          residentId: int.parse(userId.toString()),
+        );
+      }
+      
       return null;
-    } catch (e) { return e.toString(); }
+    } catch (e) { 
+      print(">>> ERREUR addResident: $e");
+      return e.toString(); 
+    }
   }
 
   Future<String?> enregistrerPaiement({required dynamic paiementId, required dynamic residentUserId, required double montantAjoute, required double montantDejaPane, required double montantTotal}) async {

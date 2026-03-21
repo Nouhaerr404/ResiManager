@@ -43,6 +43,7 @@ class ResidentModel {
   double get pourcentagePaiement =>
       montantTotal > 0 ? (montantPaye / montantTotal) : 0;
   double get resteAPayer => montantTotal - montantPaye;
-  String get adresseAppart =>
-      '${immeubleName ?? ''} • App. ${appartementNumero ?? ''}';
+  String get adresseAppart => (appartementNumero != null && appartementNumero!.isNotEmpty)
+      ? '$appartementNumero'
+      : 'Non assigné';
 }

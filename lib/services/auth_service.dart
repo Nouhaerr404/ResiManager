@@ -81,6 +81,20 @@ class AuthService {
     } catch (e) { return {'success': false, 'error': e.toString()}; }
   }
 
+  Future<Map<String, dynamic>> resetPassword(String newPassword, {String? accessToken}) async {
+    try {
+      final currentUser = _db.auth.currentUser;
+      if (currentUser == null || currentUser.email == null) {
+        return {'success': false, 'error': 'Session expirée ou utilisateur non authentifié.'};
+      }
+      
+      await _db.auth.updateUser(UserAttributes(password: newPassword));
+      final hashedPassword = await _hashPassword(newPassword);
+      await _db.from('users').update({'password': hashedPassword}).eq('email', currentUser.email!);
+      return {'success': true};
+    } catch (e) { return {'success': false, 'error': e.toString()}; }
+  }
+
   Future<String?> soumettreDemandeInscription({required String nom, required String prenom, required String email, required String password, String? telephone}) async {
     try {
       final hashedPassword = await _hashPassword(password);
