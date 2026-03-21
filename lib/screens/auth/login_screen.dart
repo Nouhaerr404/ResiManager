@@ -65,26 +65,13 @@ class _LoginScreenState extends State<LoginScreen> {
         );
         break;
 
-      case 'syndic_general':
-        final db = Supabase.instance.client;
-        final residences = await db
-            .from('residences')
-            .select('id')
-            .eq('syndic_general_id', userId);
-        if (!mounted) return;
-        if ((residences as List).isEmpty) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-                builder: (_) => ResidenceSelectionScreen(syndicGeneralId: userId)), // ← Plus de const
-          );
-        } else {
-          final residenceId = residences.first['id'] as int;
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => DashboardScreen(residenceId: residenceId)), // ← Plus de const
-          );
-        }
+        case 'syndic_general':
+        Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+        builder: (_) => ResidenceSelectionScreen(syndicGeneralId: userId),
+        ),
+        );
         break;
 
       case 'inter_syndic':

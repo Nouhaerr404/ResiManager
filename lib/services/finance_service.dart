@@ -395,7 +395,7 @@ class FinanceService {
   // Dépenses Syndic Général
   Future<List<Map<String, dynamic>>> getMyExpenses({
     required int residenceId,
-    required int mySyndicId,
+    required int mySyndicId, // On passe l'ID récupéré à la connexion
     int? annee,
     int? mois,
     int? categorieId,
@@ -404,13 +404,20 @@ class FinanceService {
       var query = _db.from('depenses').select('''
         id, montant, date, annee, mois, description, facture_path, categorie_id,
         categories!inner(id, nom, type)
-      ''').eq('residence_id', residenceId).eq('syndic_general_id', mySyndicId);
+      ''')
+          .eq('residence_id', residenceId)
+          .eq('syndic_general_id', mySyndicId); // Filtre dynamique
+
       if (annee != null) query = query.eq('annee', annee);
       if (mois != null) query = query.eq('mois', mois);
       if (categorieId != null) query = query.eq('categorie_id', categorieId);
+
       final response = await query.order('date', ascending: false);
       return List<Map<String, dynamic>>.from(response);
-    } catch (e) { return []; }
+    } catch (e) {
+      print("Erreur SQL getMyExpenses: $e");
+      return [];
+    }
   }
 
   Future<void> deleteExpense(int id) async {
@@ -445,5 +452,18 @@ class FinanceService {
     } catch (e) {
       return fileName; // Retourne le nom simple en cas d'erreur de bucket
     }
+  }
+  // Cette fonction trouve l'ID (integer) de l'utilisateur connecté via son email
+  Future<int> getCurrentUserId() async {
+    final userEmail = _db.auth.currentUser?.email;
+    if (userEmail == null) throw Exception("Non connecté");
+
+    final res = await _db
+        .from('users')
+        .select('id')
+        .eq('email', userEmail)
+        .single();
+
+    return res['id'] as int;
   }
 }

@@ -4,8 +4,9 @@ import '../screens/syndic_general/dashboard_screen.dart';
 
 class NavButtons extends StatelessWidget {
   final int residenceId;
+  final int syndicId;
 
-  const NavButtons({Key? key, required this.residenceId}) : super(key: key);
+  const NavButtons({Key? key, required this.residenceId, required this.syndicId}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +32,7 @@ class NavButtons extends StatelessWidget {
           iconColor: Colors.white,
           onTap: () => Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => DashboardScreen(residenceId: residenceId)),
+            MaterialPageRoute(builder: (context) => DashboardScreen(residenceId: residenceId, syndicId: syndicId)),
           ),
         ),
       ],

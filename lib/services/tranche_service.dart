@@ -237,4 +237,36 @@ class TrancheService {
     return (res as List).map((g) => g['numero'] as String).toList();
   }
 
+  // --- NOUVELLE MÉTHODE À AJOUTER À LA FIN DE TA CLASSE ---
+  Future<List<Map<String, dynamic>>> getMyAvailableInterSyndics(int myId) async {
+    try {
+      print(">>> DEBUG : Recherche des syndics pour l'Admin ID : $myId");
+
+      // On demande les IDs de la table associative
+      final response = await _db
+          .from('liens_syndics')
+          .select('inter_syndic_id')
+          .eq('syndic_general_id', myId);
+
+      final List data = response as List;
+      if (data.isEmpty) return [];
+
+      // On récupère les IDs des syndics
+      final List<int> ids = data.map((item) => item['inter_syndic_id'] as int).toList();
+
+      // On va chercher les profils réels dans la table users
+      final usersResponse = await _db
+          .from('users')
+          .select('id, nom, prenom')
+          .inFilter('id', ids);
+
+      print(">>> DEBUG : ${usersResponse.length} syndics trouvés !");
+      return List<Map<String, dynamic>>.from(usersResponse);
+
+    } catch (e) {
+      print("ERREUR getMyAvailableInterSyndics : $e");
+      return [];
+    }
+  }
+
 }

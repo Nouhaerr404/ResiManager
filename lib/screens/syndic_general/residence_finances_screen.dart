@@ -8,7 +8,8 @@ import 'add_global_expense_screen.dart';
 
 class ResidenceFinancesScreen extends StatefulWidget {
   final int residenceId;
-  const ResidenceFinancesScreen({Key? key, required this.residenceId}) : super(key: key);
+  final int syndicId;
+  const ResidenceFinancesScreen({Key? key, required this.residenceId, required this.syndicId}) : super(key: key);
 
   @override
   _ResidenceFinancesScreenState createState() => _ResidenceFinancesScreenState();
@@ -36,6 +37,8 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
     return MainLayout(
       title: '', // On vide le titre ici
       activePage: 'Finances',
+      residenceId: widget.residenceId,
+      syndicId: widget.syndicId,
       body: SingleChildScrollView(
         padding: EdgeInsets.only(left: isMobile ? 15 : 30, right: isMobile ? 15 : 30, bottom: 30, top: isMobile ? 10 : 25),
         child: Column(
@@ -80,7 +83,7 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
     return SizedBox(
       width: isFullWidth ? double.infinity : null,
       child: ElevatedButton.icon(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AddGlobalExpenseScreen(residenceId: widget.residenceId))).then((_) => setState((){})),
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AddGlobalExpenseScreen(residenceId: widget.residenceId, syndicId: widget.syndicId))).then((_) => setState((){})),
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text("Nouvelle Dépense", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         style: ElevatedButton.styleFrom(backgroundColor: primaryOrange, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
@@ -117,7 +120,7 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
             child: const Text("Toutes les dépenses", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
           ),
           FutureBuilder<List<Map<String, dynamic>>>(
-            future: _service.getMyExpenses(residenceId: widget.residenceId, mySyndicId: 1, annee: _selectedAnnee, mois: _selectedMois, categorieId: _selectedFilterCatId),
+            future: _service.getMyExpenses(residenceId: widget.residenceId, mySyndicId: widget.syndicId, annee: _selectedAnnee, mois: _selectedMois, categorieId: _selectedFilterCatId),
             builder: (context, snapshot) {
               if (!snapshot.hasData) return const Padding(padding: EdgeInsets.all(50), child: Center(child: CircularProgressIndicator()));
               final list = snapshot.data!;

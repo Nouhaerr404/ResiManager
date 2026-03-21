@@ -273,10 +273,11 @@ class _ResidenceSelectionScreenState extends State<ResidenceSelectionScreen> {
                               subtitle: Text(res['adresse'], style: const TextStyle(color: Colors.grey)),
                               trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Color(0xFFFF6F4A)),
                               onTap: () {
+                                final int idDeLaResidenceChoisie = res['id'];
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => DashboardScreen(residenceId: res['id']),
+                                    builder: (context) => DashboardScreen(residenceId: idDeLaResidenceChoisie, syndicId: widget.syndicGeneralId),
                                   ),
                                 );
                               },
