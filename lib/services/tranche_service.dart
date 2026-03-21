@@ -133,14 +133,41 @@ class TrancheService {
   }
 
   Future<List<TrancheModel>> getTranchesByResidence(int residenceId) async {
+    // On demande à Supabase de compter les relations (immeubles et appartements)
     final response = await _db
         .from('tranches')
-        .select('*, residences(*), users(nom, prenom)') // Jointure avec users pour le nom de l'inter-syndic
+        .select('''
+          *,
+          users(nom, prenom),
+          immeubles(count),
+          appartements_count:immeubles(appartements(count))
+        ''')
         .eq('residence_id', residenceId);
 
-    return (response as List)
-        .map((e) => TrancheModel.fromJson(e))
-        .toList();
+    return (response as List).map((e) {
+      // On calcule le nombre d'appartements total en sommant les comptes des immeubles
+      int realAppCount = 0;
+      if (e['appartements_count'] != null) {
+        for (var imm in e['appartements_count']) {
+          realAppCount += (imm['appartements'][0]['count'] as int);
+        }
+      }
+
+      return TrancheModel(
+        id: e['id'],
+        nom: e['nom'],
+        description: e['description'],
+        residenceId: e['residence_id'],
+        interSyndicId: e['inter_syndic_id'],
+        // ON REMPLACE LES COLONNES PAR LES COMPTES RÉELS
+        nombreImmeubles: e['immeubles'][0]['count'],
+        nombreAppartements: realAppCount,
+        nombreParkings: e['nombre_parkings'] ?? 0,
+        nombreGarages: e['nombre_garages'] ?? 0,
+        nombreBoxes: e['nombre_boxes'] ?? 0,
+        interSyndicNom: e['users'] != null ? "${e['users']['prenom']} ${e['users']['nom']}" : null,
+      );
+    }).toList();
   }
 
   Future<void> createTrancheComplet(
