@@ -6,7 +6,8 @@ import '../../services/syndic_dashboard_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   final int residenceId;
-  const DashboardScreen({Key? key, required this.residenceId}) : super(key: key);
+  final int syndicId;
+  const DashboardScreen({Key? key, required this.residenceId, required this.syndicId}) : super(key: key);
 
   @override
   _DashboardScreenState createState() => _DashboardScreenState();
@@ -17,7 +18,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   final Color primaryOrange = const Color(0xFFFF6F4A);
   final Color darkGrey = const Color(0xFF2C2C2C);
-  final Color softGrey = const Color(0xFF9E9E9E);
+  final Color successGreen = const Color(0xFF4DB6AC);
 
   @override
   Widget build(BuildContext context) {
@@ -26,50 +27,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return MainLayout(
       activePage: 'Dashboard',
-      body: FutureBuilder<DashboardStats>(
-        future: _service.fetchDashboardStats(widget.residenceId),
+      residenceId: widget.residenceId,
+      syndicId: widget.syndicId,
+      title: "Tableau de bord",
+      // ON CHARGE TOUTES LES DONNÉES EN MÊME TEMPS
+      body: FutureBuilder<List<dynamic>>(
+        future: Future.wait([
+          _service.fetchDashboardStats(widget.residenceId),
+          _service.getChartsData(widget.residenceId),
+        ]),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          final stats = snapshot.data!;
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) return Center(child: Text("Erreur: ${snapshot.error}"));
+
+          // Récupération des données réelles
+          final DashboardStats stats = snapshot.data![0];
+          final Map<String, dynamic> chartData = snapshot.data![1];
+          final List<double> expenses = chartData['expenses'];
+          final List<double> revenues = chartData['revenues'];
+
+          // Calcul du taux de recouvrement réel
+          double totalDue = stats.chargesTotales;
+          double totalPaid = revenues.fold(0, (sum, item) => sum + item);
+          double recoveryRate = (totalDue > 0) ? (totalPaid / totalDue) * 100 : 0;
 
           return SingleChildScrollView(
             padding: EdgeInsets.all(isWeb ? 40 : 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // --- HEADER ---
                 const Text("Statistiques Globales", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
                 const Text("Analyse en temps réel de votre résidence", style: TextStyle(color: Colors.grey)),
                 const SizedBox(height: 30),
 
-                // --- TOP KPI GRID ---
-                _buildKpiGrid(stats, isWeb),
+                // 1. KPIS RÉELS
+                _buildKpiGrid(stats),
                 const SizedBox(height: 40),
 
-                // --- MAIN ANALYTICS SECTION ---
-                // --- MAIN ANALYTICS SECTION ---
+                // 2. GRAPHIQUES RÉELS
                 if (isWeb)
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // REMPLACE _buildTrendSection() PAR :
-                      Expanded(flex: 2, child: _buildMonthlyBalanceChart()),
+                      Expanded(flex: 2, child: _buildMonthlyBalanceChart(revenues, expenses)),
                       const SizedBox(width: 30),
-                      Expanded(flex: 1, child: _buildRecoveryGauge(85)),
+                      Expanded(flex: 1, child: _buildRecoveryGauge(recoveryRate)),
                     ],
                   )
                 else
                   Column(
                     children: [
-                      // REMPLACE _buildTrendSection() PAR :
-                      _buildMonthlyBalanceChart(),
+                      _buildMonthlyBalanceChart(revenues, expenses),
                       const SizedBox(height: 30),
-                      _buildRecoveryGauge(85),
+                      _buildRecoveryGauge(recoveryRate),
                     ],
                   ),
-
-                const SizedBox(height: 40),
-                _buildTranchePerformanceSection(),
               ],
             ),
           );
@@ -78,19 +92,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // 📈 GRAPHIQUE 1 : LA TENDANCE FINANCIÈRE (LINE CHART)
-  Widget _buildMonthlyBalanceChart() {
+  // --- GRAPHIQUE 1 : RÉEL (Recettes vs Dépenses) ---
+  Widget _buildMonthlyBalanceChart(List<double> revenues, List<double> expenses) {
     return _containerWrapper(
       title: "Bilan Financier Mensuel",
-      subtitle: "Comparaison Revenus vs Dépenses",
+      subtitle: "Données réelles de l'année en cours",
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              _buildLegendItem("Revenus", Colors.teal),
+              _legend("Recettes", Colors.teal),
               const SizedBox(width: 15),
-              _buildLegendItem("Dépenses", primaryOrange),
+              _legend("Dépenses", primaryOrange),
             ],
           ),
           const SizedBox(height: 20),
@@ -99,46 +113,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: BarChart(
               BarChartData(
                 alignment: BarChartAlignment.spaceAround,
-                maxY: 60000,
+                maxY: 60000, // Tu peux calculer le max dynamiquement
                 barTouchData: BarTouchData(
                   touchTooltipData: BarTouchTooltipData(
-                    // CORRECTION ICI : Nouvelle syntaxe pour la couleur du fond
                     getTooltipColor: (group) => darkGrey,
-                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                      return BarTooltipItem(
-                        "${rod.toY.toInt()} DH",
-                        const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                      );
-                    },
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) => BarTooltipItem("${rod.toY.toInt()} DH", const TextStyle(color: Colors.white)),
                   ),
                 ),
                 titlesData: FlTitlesData(
                   show: true,
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (value, meta) {
-                        const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin'];
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Text(months[value.toInt() % 6], style: const TextStyle(color: Colors.grey, fontSize: 10)),
-                        );
-                      },
-                    ),
-                  ),
+                  bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, m) => Text(['Jan', 'Fev', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aou', 'Sep', 'Oct', 'Nov', 'Dec'][v.toInt() % 12], style: const TextStyle(fontSize: 10)))),
                   leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 ),
-                gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey.shade100, strokeWidth: 1)),
                 borderData: FlBorderData(show: false),
-                barGroups: [
-                  _makeGroupData(0, 45000, 32000),
-                  _makeGroupData(1, 38000, 41000),
-                  _makeGroupData(2, 52000, 28000),
-                  _makeGroupData(3, 48000, 35000),
-                  _makeGroupData(4, 55000, 30000),
-                ],
+                gridData: const FlGridData(show: false),
+                // ON GÉNÈRE LES BARRES DYNAMIQUEMENT DEPUIS LES LISTES
+                barGroups: List.generate(6, (i) => _makeGroupData(i, revenues[i], expenses[i])),
               ),
             ),
           ),
@@ -146,62 +137,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-  // Fonction pour créer une paire de barres (Recette + Dépense)
-  BarChartGroupData _makeGroupData(int x, double income, double expense) {
-    return BarChartGroupData(
-      x: x,
-      barRods: [
-        BarChartRodData(
-            toY: income,
-            color: Colors.teal,
-            width: 12,
-            borderRadius: const BorderRadius.only(topLeft: Radius.circular(4), topRight: Radius.circular(4))
-        ),
-        BarChartRodData(
-            toY: expense,
-            color: primaryOrange,
-            width: 12,
-            borderRadius: const BorderRadius.only(topLeft: Radius.circular(4), topRight: Radius.circular(4))
-        ),
-      ],
-    );
-  }
 
-  // Petit widget pour la légende
-  Widget _buildLegendItem(String label, Color color) {
-    return Row(
-      children: [
-        Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 5),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-      ],
-    );
-  }
+  // --- GRAPHIQUE 2 : RÉEL (Jauge de recouvrement) ---
   Widget _buildRecoveryGauge(double percentage) {
     return _containerWrapper(
       title: "Taux de Recouvrement",
-      subtitle: "Charges payées par les résidents",
+      subtitle: "Paiements reçus vs Charges totales",
       child: SizedBox(
-        height: 300,
+        height: 250,
         child: Stack(
           alignment: Alignment.center,
           children: [
             PieChart(
               PieChartData(
-                startDegreeOffset: 270,
                 sectionsSpace: 0,
                 centerSpaceRadius: 70,
                 sections: [
-                  PieChartSectionData(value: percentage, color: primaryOrange, radius: 15, showTitle: false),
-                  PieChartSectionData(value: 100 - percentage, color: Colors.grey.shade200, radius: 15, showTitle: false),
+                  PieChartSectionData(value: percentage, color: successGreen, radius: 15, showTitle: false),
+                  PieChartSectionData(value: 100 - percentage, color: Colors.grey.shade100, radius: 15, showTitle: false),
                 ],
               ),
             ),
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text("${percentage.toInt()}%", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: darkGrey)),
-                const Text("Collecté", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                Text("${percentage.toStringAsFixed(1)}%", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: darkGrey)),
+                const Text("Encaissé", style: TextStyle(color: Colors.grey, fontSize: 12)),
               ],
             )
           ],
@@ -210,77 +171,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // 📊 SECTION 3 : PERFORMANCE PAR TRANCHE
-  Widget _buildTranchePerformanceSection() {
-    return _containerWrapper(
-      title: "Performance par Tranche",
-      subtitle: "État des paiements par secteur",
-      child: Column(
-        children: [
-          _trancheProgressRow("Tranche A - Les Jardins", 0.9, Colors.green),
-          _trancheProgressRow("Tranche B - Les Palmiers", 0.6, primaryOrange),
-          _trancheProgressRow("Tranche C - Le Parc", 0.35, Colors.redAccent),
-        ],
-      ),
+  // --- KPIS RÉELS ---
+  Widget _buildKpiGrid(DashboardStats stats) {
+    return Wrap(
+      spacing: 20, runSpacing: 20,
+      children: [
+        KpiCard(title: 'Total Tranches', value: stats.tranches.toString(), icon: Icons.domain, iconColor: primaryOrange),
+        KpiCard(title: 'Appartements', value: stats.appartements.toString(), icon: Icons.home_filled, iconColor: darkGrey),
+        KpiCard(title: 'Charges Globales', value: stats.chargesTotales.toInt().toString(), icon: Icons.payments, iconColor: primaryOrange, isCurrency: true),
+      ],
     );
   }
 
-  // --- HELPERS UI ---
+  // --- HELPERS ---
+  BarChartGroupData _makeGroupData(int x, double income, double expense) {
+    return BarChartGroupData(x: x, barRods: [
+      BarChartRodData(toY: income, color: Colors.teal, width: 12, borderRadius: BorderRadius.circular(4)),
+      BarChartRodData(toY: expense, color: primaryOrange, width: 12, borderRadius: BorderRadius.circular(4)),
+    ]);
+  }
 
   Widget _containerWrapper({required String title, required String subtitle, required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(25),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20)],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkGrey)),
-          Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 30),
-          child,
-        ],
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20)]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkGrey)),
+        Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 30),
+        child,
+      ]),
     );
   }
 
-  Widget _trancheProgressRow(String name, double progress, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              Text("${(progress * 100).toInt()}%", style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(
-            value: progress,
-            backgroundColor: Colors.grey.shade100,
-            color: color,
-            minHeight: 8,
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildKpiGrid(DashboardStats stats, bool isWeb) {
-    return Wrap(
-      spacing: 20, runSpacing: 20,
-      children: [
-        KpiCard(title: 'Total Résidents', value: "148", icon: Icons.people_alt_rounded, iconColor: darkGrey),
-        KpiCard(title: 'Appartements Libres', value: "12", icon: Icons.vpn_key_rounded, iconColor: primaryOrange),
-        KpiCard(title: 'Charges à Collecter', value: "45 000", icon: Icons.account_balance_wallet, iconColor: darkGrey, isCurrency: true),
-      ],
-    );
-  }
+  Widget _legend(String l, Color c) => Row(children: [Container(width: 10, height: 10, decoration: BoxDecoration(color: c, shape: BoxShape.circle)), const SizedBox(width: 5), Text(l, style: const TextStyle(fontSize: 11, color: Colors.grey))]);
 }

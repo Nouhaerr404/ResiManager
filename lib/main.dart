@@ -12,6 +12,7 @@ import 'screens/inter_syndic/intersyndic_selection_screen.dart';
 import 'screens/syndic_general/dashboard_screen.dart';
 import 'screens/super_admin/super_admin_dashboard_screen.dart';
 
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
@@ -61,7 +62,7 @@ class ResiManagerApp extends StatelessWidget {
         '/apartments':     (context) => const ApartmentsListScreen(),
         '/tranches':       (context) => const TranchesListScreen(),
         '/inter_syndic':   (context) => const InterSyndicSelectionScreen(),
-        '/syndic_general': (context) => DashboardScreen(residenceId: 1),
+        '/login':          (context) => const LoginScreen(),
         '/super_admin':    (context) => SuperAdminDashboardScreen(),
       },
       // Route /resident séparée pour passer userId dynamiquement
@@ -81,10 +82,28 @@ class ResiManagerApp extends StatelessWidget {
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
-  void _openResidenceSelection(BuildContext context, {int syndicGeneralId = 1}) {
-    Navigator.push(context, MaterialPageRoute(
-      builder: (context) => ResidenceSelectionScreen(syndicGeneralId: syndicGeneralId),
-    ));
+  // On enlève le "= 1" et on rend la fonction asynchrone
+  Future<void> _openResidenceSelection(BuildContext context) async {
+    final client = Supabase.instance.client;
+    final userEmail = client.auth.currentUser?.email;
+
+    if (userEmail != null) {
+      // On va chercher le vrai ID en base de données via l'email
+      final res = await client
+          .from('users')
+          .select('id')
+          .eq('email', userEmail)
+          .single();
+
+      final int realId = res['id'];
+
+      Navigator.push(context, MaterialPageRoute(
+        builder: (context) => ResidenceSelectionScreen(syndicGeneralId: realId),
+      ));
+    } else {
+      // Si pas d'utilisateur, on l'envoie au login
+      Navigator.pushNamed(context, '/login');
+    }
   }
 
   @override
@@ -100,7 +119,7 @@ class HomePage extends StatelessWidget {
             children: [
               const Icon(Icons.cloud_done, size: 80),
               const SizedBox(height: 20),
-              const Text('Supabase connecté avec succès 🎉',
+              const Text('Supabase connecté avec succès ',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 40),
               ElevatedButton.icon(
@@ -116,9 +135,9 @@ class HomePage extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
-                onPressed: () => _openResidenceSelection(context, syndicGeneralId: 1),
+                onPressed: () => _openResidenceSelection(context),
                 icon: const Icon(Icons.location_city),
-                label: const Text('Sélection de résidence (test id=1)'),
+                label: const Text('Mes Résidences'),
               ),
             ],
           ),

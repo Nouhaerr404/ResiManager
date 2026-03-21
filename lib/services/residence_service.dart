@@ -5,10 +5,13 @@ class ResidenceService {
 
   // Récupère toutes les résidences d'un Syndic Général
   Future<List<Map<String, dynamic>>> getResidences(int syndicGeneralId) async {
+    // On demande à Supabase de ne donner QUE les lignes
+    // où la colonne syndic_general_id correspond à TOI.
     final response = await _db
         .from('residences')
         .select()
-        .eq('syndic_general_id', syndicGeneralId);
+        .eq('syndic_general_id', syndicGeneralId); // <--- LE FILTRE ESSENTIEL
+
     return List<Map<String, dynamic>>.from(response);
   }
 

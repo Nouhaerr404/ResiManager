@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../screens/syndic_general/dashboard_screen.dart';
+import '../screens/syndic_general/residence_audit_screen.dart';
 import '../screens/syndic_general/syndics_management_screen.dart';
 import '../screens/syndic_general/tranches_management_screen.dart';
 import '../screens/syndic_general/residence_finances_screen.dart';
@@ -8,9 +9,12 @@ import '../screens/role_selector_screen.dart';
 
 class SyndicSidebar extends StatelessWidget {
 
-  final String activePage; // Dashboard, Tranches, Finances, etc.
+  final String activePage;
+  final int residenceId;
+  final int syndicId;
+  // Dashboard, Tranches, Finances, etc.
 
-  const SyndicSidebar({Key? key, required this.activePage}) : super(key: key);
+  const SyndicSidebar({Key? key, required this.activePage, required this.residenceId, required this.syndicId, }) : super(key: key);
 
 
   final Color primaryOrange = const Color(0xFFFF6F4A);
@@ -31,26 +35,38 @@ class SyndicSidebar extends StatelessWidget {
 
             // On passe 'true' si c'est la page active pour mettre l'orange
             _buildMenuItem(context, Icons.dashboard_outlined, 'Tableau de bord', activePage == 'Dashboard', () {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const DashboardScreen(residenceId: 1)));
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => DashboardScreen(residenceId: residenceId, syndicId: syndicId)));
             }),
 
             _buildMenuItem(context, Icons.domain, 'Tranches', activePage == 'Tranches', () {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const TranchesManagementScreen(residenceId: 1)));
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => TranchesManagementScreen(residenceId: residenceId, syndicId: syndicId)));
             }),
 
             _buildMenuItem(context, Icons.people_outline, 'Syndics', activePage == 'Syndics', () {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => SyndicsManagementScreen(residenceId: 1)));
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => SyndicsManagementScreen(residenceId: residenceId, syndicId: syndicId)));
             }),
 
             _buildMenuItem(context, Icons.account_balance_wallet_outlined, 'Dépenses', activePage == 'Dépenses', () {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => ResidenceFinancesScreen(residenceId: 1)));
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => ResidenceFinancesScreen(residenceId: residenceId, syndicId: syndicId)));
             }),
+
+            _buildMenuItem(
+                context,
+                Icons.analytics_outlined, // Icône de statistiques/audit
+                'Audit & Bilans',
+                activePage == 'Audit',
+                    () {
+                  Navigator.pushReplacement(context, MaterialPageRoute(
+                      builder: (context) => ResidenceAuditScreen(residenceId: residenceId, syndicId: syndicId)
+                  ));
+                }
+            ),
 
             const Spacer(),
 
             // Lien pour sortir de la résidence
             _buildMenuItem(context, Icons.logout, 'Mes Résidences', false, () {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const ResidenceSelectionScreen(syndicGeneralId: 1)));
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => ResidenceSelectionScreen(syndicGeneralId: syndicId)));
             }),
 
             const Divider(indent: 20, endIndent: 20),

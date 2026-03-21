@@ -6,7 +6,8 @@ import '../../services/finance_service.dart';
 
 class AddGlobalExpenseScreen extends StatefulWidget {
   final int residenceId;
-  const AddGlobalExpenseScreen({Key? key, required this.residenceId}) : super(key: key);
+  final int syndicId;
+  const AddGlobalExpenseScreen({Key? key, required this.residenceId, required this.syndicId}) : super(key: key);
 
   @override
   _AddGlobalExpenseScreenState createState() => _AddGlobalExpenseScreenState();
@@ -207,7 +208,7 @@ class _AddGlobalExpenseScreenState extends State<AddGlobalExpenseScreen> {
         montant: double.parse(_montantController.text.replaceAll(',', '.')),
         categorieId: _selectedCategoryId!,
         annee: _selectedAnnee,
-        syndicId: 1, 
+        syndicId: widget.syndicId,
         facturePath: finalPath,
         description: _descController.text,
       );

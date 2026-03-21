@@ -4,7 +4,8 @@ import '../../services/syndic_collaborator_service.dart';
 
 class SyndicsManagementScreen extends StatefulWidget {
   final int residenceId;
-  const SyndicsManagementScreen({Key? key, required this.residenceId}) : super(key: key);
+  final int syndicId;
+  const SyndicsManagementScreen({Key? key, required this.residenceId, required this.syndicId}) : super(key: key);
 
   @override
   _SyndicsManagementScreenState createState() => _SyndicsManagementScreenState();
@@ -24,9 +25,12 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
     _loadData();
   }
 
+  // Dans _SyndicsManagementScreenState
+
   void _loadData() {
     setState(() {
-      _syndicsFuture = _service.getInterSyndics(query: _searchController.text);
+      // On utilise la nouvelle fonction qui passe par la table de liaison
+      _syndicsFuture = _service.getMyInterSyndics(widget.syndicId);
     });
   }
 
@@ -38,6 +42,8 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
     return MainLayout(
       title: '', 
       activePage: 'Syndics',
+      residenceId: widget.residenceId,
+      syndicId: widget.syndicId,
       body: SingleChildScrollView(
         padding: EdgeInsets.only(
             left: isMobile ? 15 : 30,
@@ -204,16 +210,25 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
     ]);
   }
 
-  Widget _buildTranchesCell(dynamic tranches) {
-    final list = tranches as List;
-    if (list.isEmpty) return const Text("Aucune tranche", style: TextStyle(color: Colors.grey, fontSize: 12));
+  Widget _buildTranchesCell(dynamic tranchesData) {
+    // 1. Si le syndic n'a aucune tranche du tout
+    if (tranchesData == null || tranchesData is! List || tranchesData.isEmpty) {
+      return const Text("Aucune affectation", style: TextStyle(color: Colors.grey, fontSize: 12));
+    }
+
+    // 2. On filtre pour ne garder que les tranches de CETTE résidence (residenceId)
+    final List filteredTranches = tranchesData.where((t) => t['residence_id'] == widget.residenceId).toList();
+
+    if (filteredTranches.isEmpty) {
+      return const Text("Non affecté ici", style: TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold));
+    }
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: list.map((t) => Text("• ${t['nom']}", style: const TextStyle(fontSize: 11))).toList(),
+      children: filteredTranches.map((t) => Text("• ${t['nom']}", style: const TextStyle(fontSize: 11))).toList(),
     );
   }
-
   Widget _buildStatusBadge(String status) {
     bool isActive = status == 'actif';
     return Container(
@@ -313,8 +328,8 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
                   child: ElevatedButton(
                     onPressed: isLoading ? null : () async {
                       // VALIDATION
-                      if (nomController.text.trim().isEmpty || 
-                          prenomController.text.trim().isEmpty || 
+                      if (nomController.text.trim().isEmpty ||
+                          prenomController.text.trim().isEmpty ||
                           (!isEdit && emailController.text.trim().isEmpty)) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text("Veuillez remplir le Prénom, le Nom et l'Email"), backgroundColor: Colors.orange),
@@ -338,9 +353,10 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
                             nom: nomController.text.trim(),
                             prenom: prenomController.text.trim(),
                             telephone: phoneController.text.trim(),
+                            mySyndicGeneralId: widget.syndicId,
                           );
                         }
-                        
+
                         if (mounted) {
                           Navigator.pop(context);
                           _loadData();
@@ -361,7 +377,7 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: isLoading 
+                    child: isLoading
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                       : Text(isEdit ? "Enregistrer" : "Ajouter", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),

@@ -223,10 +223,14 @@ class RoleSelectorScreen extends StatelessWidget {
                         icon: Icons.business_center_outlined,
                         label: 'Syndic Général',
                         color: _coral,
-                        onTap: () => Navigator.push(context,
-                            MaterialPageRoute(
-                                builder: (_) => DashboardScreen(residenceId: 1))),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const LoginScreen(),
+                          ),
+                        ),
                       ),
+
                       _RoleCard(
                         icon: Icons.admin_panel_settings_outlined,
                         label: 'Super Admin',
