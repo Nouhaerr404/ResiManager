@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../../../models/resident_model.dart';
 import '../../../models/paiement_model.dart';
 import '../../../services/resident_service.dart';
+import '../../../services/parking_service.dart';
+import '../../../services/box_service.dart';
+import '../../../models/parking_model.dart';
+import '../../../models/box_model.dart';
 
 // ── Brand palette — aligned with ResiManager desktop app
 class _C {
@@ -923,7 +927,14 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     bool saving = false;
     List<Map<String, dynamic>> appartementsLibres = [];
     int? selectedAppartId;
+    int? selectedParkingId;
+    int? selectedBoxId;
+
     bool loadingApparts = true;
+    bool loadingParkings = true;
+    bool loadingBoxes = true;
+    List<ParkingModel> parkingsLibres = [];
+    List<BoxModel> boxesLibres = [];
 
     showDialog(
       context: context,
@@ -937,6 +948,26 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                 .then((list) {
               if (ctx.mounted) {
                 setDialog(() => appartementsLibres = list);
+              }
+            });
+          }
+          if (loadingParkings) {
+            loadingParkings = false;
+            ParkingService()
+                .getParkingsByTranche(widget.trancheId)
+                .then((list) {
+              if (ctx.mounted) {
+                setDialog(() => parkingsLibres = list.where((p) => p.statut.name == 'disponible').toList());
+              }
+            });
+          }
+          if (loadingBoxes) {
+            loadingBoxes = false;
+            BoxService()
+                .getBoxesByTranche(widget.trancheId)
+                .then((list) {
+              if (ctx.mounted) {
+                setDialog(() => boxesLibres = list.where((b) => b.statut.name == 'disponible').toList());
               }
             });
           }
@@ -1016,6 +1047,71 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                       ),
                     ),
                     const SizedBox(height: 14),
+
+                    _label('Parking (Optionnel)'),
+                    parkingsLibres.isEmpty
+                        ? Container(
+                            padding: const EdgeInsets.all(14),
+                            width: double.infinity,
+                            decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10)),
+                            child: const Text('Aucun parking libre', style: TextStyle(color: _C.textLight)),
+                          )
+                        : Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10), border: Border.all(color: _C.divider)),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<int>(
+                                isExpanded: true,
+                                hint: const Text('Aucun parking sélectionné', style: TextStyle(color: _C.textLight, fontSize: 13)),
+                                value: selectedParkingId,
+                                items: [
+                                  const DropdownMenuItem<int>(
+                                    value: null,
+                                    child: Text('Aucun', style: TextStyle(fontStyle: FontStyle.italic)),
+                                  ),
+                                  ...parkingsLibres.map((p) => DropdownMenuItem<int>(
+                                    value: p.id,
+                                    child: Text('Parking ${p.numero}'),
+                                  )).toList(),
+                                ],
+                                onChanged: (val) => setDialog(() => selectedParkingId = val),
+                              ),
+                            ),
+                          ),
+                    const SizedBox(height: 14),
+
+                    _label('Box / Garage (Optionnel)'),
+                    boxesLibres.isEmpty
+                        ? Container(
+                            padding: const EdgeInsets.all(14),
+                            width: double.infinity,
+                            decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10)),
+                            child: const Text('Aucun box libre', style: TextStyle(color: _C.textLight)),
+                          )
+                        : Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10), border: Border.all(color: _C.divider)),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<int>(
+                                isExpanded: true,
+                                hint: const Text('Aucun box sélectionné', style: TextStyle(color: _C.textLight, fontSize: 13)),
+                                value: selectedBoxId,
+                                items: [
+                                  const DropdownMenuItem<int>(
+                                    value: null,
+                                    child: Text('Aucun', style: TextStyle(fontStyle: FontStyle.italic)),
+                                  ),
+                                  ...boxesLibres.map((b) => DropdownMenuItem<int>(
+                                    value: b.id,
+                                    child: Text('Box ${b.numero}'),
+                                  )).toList(),
+                                ],
+                                onChanged: (val) => setDialog(() => selectedBoxId = val),
+                              ),
+                            ),
+                          ),
+                    const SizedBox(height: 14),
+
                     _label('Montant annuel (DH) *'),
                     _field(montantCtrl, '3000',
                         inputType: TextInputType.number),
@@ -1077,6 +1173,8 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                           trancheId: widget.trancheId,
                           appartementId: selectedAppartId!,
                           montantTotal: montant,
+                          parkingId: selectedParkingId,
+                          boxId: selectedBoxId,
                         );
                         if (!ctx.mounted) return;
                         if (err != null) {

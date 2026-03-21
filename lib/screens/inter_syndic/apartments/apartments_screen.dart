@@ -59,7 +59,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
   Future<void> _loadApartments() async {
     setState(() => loading = true);
     try {
-      dynamic query = _supabase.from('appartements').select('*, immeubles!inner(id, nom, tranche_id, tranches!inner(id, nom, residence_id, residences!inner(id, nom)))');
+      dynamic query = _supabase.from('appartements').select('*, users(*), immeubles!inner(id, nom, tranche_id, tranches!inner(id, nom, residence_id, residences!inner(id, nom)))');
       
       if (widget.trancheId != null) {
         query = query.eq('immeubles.tranche_id', widget.trancheId!);
@@ -142,9 +142,15 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     };
 
     try {
-      final inserted = await _supabase.from('appartements').insert(row).select('*, immeubles!inner(id, nom, tranche_id, tranches!inner(id, nom, residence_id, residences!inner(id, nom)))') as List<dynamic>;
+      final inserted = await _supabase.from('appartements').insert(row).select('*, users(*), immeubles!inner(id, nom, tranche_id, tranches!inner(id, nom, residence_id, residences!inner(id, nom)))') as List<dynamic>;
       if (inserted.isNotEmpty) {
         final ap = AppartementModel.fromJson(Map<String, dynamic>.from(inserted.first));
+        
+        // Synchronisation du résident si assigné
+        if (residentId != null) {
+          await _supabase.from('residents').update({'appartement_id': ap.id, 'updated_at': now}).eq('user_id', residentId);
+        }
+
         setState(() {
           apartments.add(ap);
           if (searchController.text.isEmpty) {
@@ -182,13 +188,26 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     };
 
     try {
+      // 1. Nettoyer TOUS les liens actuels vers cet appartement dans la table residents
+      // pour garantir qu'un seul résident pointe vers lui.
+      if (oldApartment.residentId != residentId) {
+        await _supabase.from('residents').update({'appartement_id': null, 'updated_at': now}).eq('appartement_id', oldApartment.id);
+      }
+
       final updated = await _supabase
           .from('appartements')
           .update(row)
           .eq('id', oldApartment.id)
-          .select('*, immeubles!inner(id, nom, tranche_id, tranches!inner(id, nom, residence_id, residences!inner(id, nom)))') as List<dynamic>;
+          .select('*, users(*), immeubles!inner(id, nom, tranche_id, tranches!inner(id, nom, residence_id, residences!inner(id, nom)))') as List<dynamic>;
+
       if (updated.isNotEmpty) {
         final ap = AppartementModel.fromJson(Map<String, dynamic>.from(updated.first));
+
+        // 2. Assigner le nouveau résident si présent
+        if (residentId != null) {
+          await _supabase.from('residents').update({'appartement_id': ap.id, 'updated_at': now}).eq('user_id', residentId);
+        }
+
         setState(() {
           final idx = apartments.indexWhere((a) => a.id == ap.id);
           if (idx != -1) apartments[idx] = ap;
@@ -227,11 +246,26 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
   Future<void> _assignResidentInDb(AppartementModel apartment, int residentId) async {
     try {
       final now = DateTime.now().toIso8601String();
+      
+      // 1. Libérer quiconque était lié à cet appartement dans la table residents
+      await _supabase
+          .from('residents')
+          .update({'appartement_id': null, 'updated_at': now})
+          .eq('appartement_id', apartment.id);
+
+      // 2. Mise à jour de l'appartement
       final updated = await _supabase
           .from('appartements')
           .update({'resident_id': residentId, 'statut': 'occupe', 'updated_at': now})
           .eq('id', apartment.id)
-          .select('*, immeubles!inner(id, nom, tranche_id, tranches!inner(id, nom, residence_id, residences!inner(id, nom)))') as List<dynamic>;
+          .select('*, users(*), immeubles!inner(id, nom, tranche_id, tranches!inner(id, nom, residence_id, residences!inner(id, nom)))') as List<dynamic>;
+      
+      // 3. Mise à jour du nouveau résident pour lier à l'appartement
+      await _supabase
+          .from('residents')
+          .update({'appartement_id': apartment.id, 'updated_at': now})
+          .eq('user_id', residentId);
+
       if (updated.isNotEmpty) {
         final ap = AppartementModel.fromJson(Map<String, dynamic>.from(updated.first));
         setState(() {
@@ -350,7 +384,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                         displayStringForOption: (r) => '${r.prenom} ${r.nom} (${r.userId})',
                         optionsBuilder: (textEditingValue) async {
                           if (textEditingValue.text.isEmpty) return const Iterable<ResidentModel>.empty();
-                          return await _residentService.searchResidents(textEditingValue.text);
+                          return await _residentService.searchResidents(textEditingValue.text, trancheId: widget.trancheId);
                         },
                         onSelected: (r) {
                           residentController.text = r.userId.toString();
@@ -441,7 +475,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                 displayStringForOption: (r) => '${r.prenom} ${r.nom} (${r.userId})',
                 optionsBuilder: (textEditingValue) async {
                   if (textEditingValue.text.isEmpty) return const Iterable<ResidentModel>.empty();
-                  return await _residentService.searchResidents(textEditingValue.text);
+                  return await _residentService.searchResidents(textEditingValue.text, trancheId: widget.trancheId);
                 },
                 onSelected: (r) {
                   residentController.text = r.userId.toString();
@@ -579,7 +613,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                         initialValue: TextEditingValue(text: apartment.residentNomComplet ?? (apartment.residentId?.toString() ?? '')),
                         optionsBuilder: (textEditingValue) async {
                           if (textEditingValue.text.isEmpty) return const Iterable<ResidentModel>.empty();
-                          return await _residentService.searchResidents(textEditingValue.text);
+                          return await _residentService.searchResidents(textEditingValue.text, trancheId: widget.trancheId);
                         },
                         onSelected: (r) {
                           residentController.text = r.userId.toString();
