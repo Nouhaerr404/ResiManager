@@ -21,7 +21,7 @@ class ConvocationPdfService {
   static final _headerSub  = PdfColor.fromHex('#FFCAB5');
 
   // ─────────────────────────────────────────────────────────
-  // 1. Générer le PDF en mémoire
+  // 1. Generer le PDF en memoire
   // ─────────────────────────────────────────────────────────
   static Future<Uint8List> generate({
     required String residentPrenom,
@@ -220,25 +220,16 @@ class ConvocationPdfService {
   }
 
   // ─────────────────────────────────────────────────────────
-  // 2. Upload dans Supabase Storage + créer notification
+  // 2. Creer notification resident + partager le PDF localement
   //
-  //    PRÉREQUIS Supabase : exécuter dans SQL Editor :
+  // L'upload Storage necessite une policy RLS.
+  // Si le bucket n'est pas configure, on envoie juste la notification
+  // et on partage le PDF via le share sheet du telephone.
   //
-  //    CREATE POLICY "authenticated can upload convocations"
-  //    ON storage.objects FOR INSERT TO authenticated
-  //    WITH CHECK (bucket_id = 'convocations');
-  //
-  //    CREATE POLICY "public can read convocations"
-  //    ON storage.objects FOR SELECT TO public
-  //    USING (bucket_id = 'convocations');
-  //
-  //    CREATE POLICY "authenticated can update convocations"
-  //    ON storage.objects FOR UPDATE TO authenticated
-  //    USING (bucket_id = 'convocations');
-  //
-  //    CREATE POLICY "authenticated can delete convocations"
-  //    ON storage.objects FOR DELETE TO authenticated
-  //    USING (bucket_id = 'convocations');
+  // Pour activer l'upload Storage :
+  //   Supabase → Storage → convocations → Policies → ajouter :
+  //   INSERT : TO authenticated WITH CHECK (bucket_id = 'convocations')
+  //   SELECT : TO public USING (bucket_id = 'convocations')
   // ─────────────────────────────────────────────────────────
   static Future<void> uploadAndNotify({
     required Uint8List bytes,
@@ -249,53 +240,48 @@ class ConvocationPdfService {
     required String reunionHeure,
     required String reunionLieu,
   }) async {
-    // Chemin unique par résident + réunion (upsert possible)
-    final path = 'convocations/$reunionId/$residentId.pdf';
+    String? pdfUrl;
 
-    // ── Upload dans le bucket ──────────────────────────────
-    await _db.storage.from('convocations').uploadBinary(
-      path,
-      bytes,
-      fileOptions: const FileOptions(contentType: 'application/pdf', upsert: true),
-    );
+    // Tentative d'upload dans Storage (optionnel — necessite RLS configure)
+    try {
+      final ts   = DateTime.now().millisecondsSinceEpoch;
+      final path = '$residentId/${reunionId}_$ts.pdf';
 
-    // ── URL publique ───────────────────────────────────────
-    final url = _db.storage.from('convocations').getPublicUrl(path);
+      await _db.storage.from('convocations').uploadBinary(
+        path,
+        bytes,
+        fileOptions: const FileOptions(
+            contentType: 'application/pdf', upsert: true),
+      );
+      pdfUrl = _db.storage.from('convocations').getPublicUrl(path);
+    } catch (_) {
+      // RLS bloque l'upload — on continue sans URL Storage
+      // Le PDF sera partage via share sheet separement
+      pdfUrl = null;
+    }
 
-    // ── Notification propre avec pdf_url séparé ────────────
-    // On utilise le champ message pour le texte lisible
-    // et on stocke l'URL dans le message avec séparateur fiable
-    // Si vous ajoutez une colonne pdf_url à la table notifications,
-    // remplacez le bloc ci-dessous par la version commentée.
+    // Creer la notification pour le resident
+    final message = pdfUrl != null
+        ? 'Vous etes convoque(e) a la reunion "$reunionTitre" '
+        'le $reunionDate a $reunionHeure, $reunionLieu. PDF::$pdfUrl'
+        : 'Vous etes convoque(e) a la reunion "$reunionTitre" '
+        'le $reunionDate a $reunionHeure, lieu : $reunionLieu.';
+
     await _db.from('notifications').insert({
       'user_id':    residentId,
       'titre':      'Convocation : $reunionTitre',
-      'message':    'Vous etes convoque(e) a la reunion "$reunionTitre" '
-          'le $reunionDate a $reunionHeure, $reunionLieu.|PDF|$url',
+      'message':    message,
       'type':       'reunion',
       'lu':         false,
       'reunion_id': reunionId,
     });
 
-    /* ── VERSION avec colonne pdf_url (recommandée) ─────────
-       Après avoir exécuté : ALTER TABLE notifications ADD COLUMN pdf_url text;
-       Remplacer le insert ci-dessus par :
-
-    await _db.from('notifications').insert({
-      'user_id':    residentId,
-      'titre':      'Convocation : $reunionTitre',
-      'message':    'Vous etes convoque(e) a la reunion "$reunionTitre" '
-          'le $reunionDate a $reunionHeure, $reunionLieu.',
-      'type':       'reunion',
-      'lu':         false,
-      'reunion_id': reunionId,
-      'pdf_url':    url,
-    });
-    ── ───────────────────────────────────────────────────── */
+    // Partager le PDF via le share sheet (toujours disponible)
+    await share(bytes, '${reunionTitre}_$residentId');
   }
 
   // ─────────────────────────────────────────────────────────
-  // 3. Récupérer les convocations d'un résident
+  // 3. Recuperer les convocations d'un resident (espace resident)
   // ─────────────────────────────────────────────────────────
   static Future<List<Map<String, dynamic>>> getConvocationsResident(int residentId) async {
     try {
@@ -308,18 +294,9 @@ class ConvocationPdfService {
 
       return (res as List? ?? []).map((n) {
         final msg = n['message']?.toString() ?? '';
-
-        // Séparateur fiable |PDF|
-        final idx    = msg.indexOf('|PDF|');
-        final pdfUrl = idx != -1 ? msg.substring(idx + 5).trim() : null;
+        final idx = msg.indexOf('PDF::');
+        final pdfUrl = idx != -1 ? msg.substring(idx + 5) : null;
         final texte  = idx != -1 ? msg.substring(0, idx).trim() : msg;
-
-        /* Si vous utilisez la colonne pdf_url, remplacez les 3 lignes
-           ci-dessus par :
-           final pdfUrl = n['pdf_url']?.toString();
-           final texte  = msg;
-        */
-
         return {
           'id':         n['id'],
           'titre':      n['titre']?.toString() ?? '',
@@ -345,7 +322,7 @@ class ConvocationPdfService {
   }
 
   // ─────────────────────────────────────────────────────────
-  // 5. Partager via le système (share sheet)
+  // 5. Partager via le systeme (share sheet)
   // ─────────────────────────────────────────────────────────
   static Future<void> share(Uint8List bytes, String titre) async {
     final safe = titre.replaceAll(RegExp(r'[^\w\s-]'), '').replaceAll(' ', '_');
@@ -353,25 +330,10 @@ class ConvocationPdfService {
   }
 
   // ─────────────────────────────────────────────────────────
-  // 6. Aperçu impression
+  // 6. Apercu impression
   // ─────────────────────────────────────────────────────────
   static Future<void> preview(Uint8List bytes) async {
     await Printing.layoutPdf(onLayout: (_) async => bytes);
-  }
-
-  // ─────────────────────────────────────────────────────────
-  // 7. Supprimer le PDF d'une réunion depuis Storage
-  //    (appelé lors de deleteReunion dans ReunionService)
-  // ─────────────────────────────────────────────────────────
-  static Future<void> deletePdfsForReunion(int reunionId, List<int> residentIds) async {
-    try {
-      final paths = residentIds.map((id) => 'convocations/$reunionId/$id.pdf').toList();
-      if (paths.isNotEmpty) {
-        await _db.storage.from('convocations').remove(paths);
-      }
-    } catch (_) {
-      // Silencieux : le fichier peut ne pas exister
-    }
   }
 
   // Ligne info dans la box date/heure/lieu

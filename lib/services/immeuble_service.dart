@@ -36,4 +36,30 @@ class ImmeubleService {
       return null;
     }
   }
+  Future<void> createImmeuble(Map<String, dynamic> data) async {
+    try {
+      await _db.from('immeubles').insert(data);
+    } catch (e) {
+      print('DEBUG: Error in createImmeuble: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateImmeuble(int id, Map<String, dynamic> data) async {
+    try {
+      await _db.from('immeubles').update(data).eq('id', id);
+    } catch (e) {
+      print('DEBUG: Error in updateImmeuble: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteImmeuble(int id) async {
+    try {
+      await _db.from('immeubles').delete().eq('id', id);
+    } catch (e) {
+      print('DEBUG: Error in deleteImmeuble: $e');
+      rethrow;
+    }
+  }
 }

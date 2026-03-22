@@ -47,6 +47,12 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _C.bg,
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddDialog,
+        backgroundColor: _C.coral,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: const Icon(Icons.add, color: _C.white, size: 28),
+      ),
       body: Stack(
         children: [
           // Background - Consistent with TrancheDashboard
@@ -84,15 +90,32 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
     return CustomScrollView(
       slivers: [
         _buildSliverHeader(),
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) => _buildImmeubleCard(_immeubles[index]),
-              childCount: _immeubles.length,
+        if (_immeubles.isEmpty)
+          SliverFillRemaining(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.business_rounded, size: 64, color: _C.white.withOpacity(0.3)),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Aucun immeuble trouvé',
+                    style: TextStyle(color: _C.white.withOpacity(0.5), fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => _buildImmeubleCard(_immeubles[index]),
+                childCount: _immeubles.length,
+              ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -177,6 +200,38 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
                   ),
                 ),
                 _chip('${imm.nombreAppartements} unités', _C.coral),
+                const SizedBox(width: 4),
+                PopupMenuButton<String>(
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.more_vert_rounded, color: _C.textLight, size: 20),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  onSelected: (val) {
+                    if (val == 'edit') _showEditDialog(imm);
+                    if (val == 'delete') _confirmDelete(imm);
+                  },
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_rounded, size: 16, color: _C.dark),
+                          SizedBox(width: 10),
+                          Text('Modifier', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline_rounded, size: 16, color: Colors.red),
+                          SizedBox(width: 10),
+                          Text('Supprimer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.red)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 20),
@@ -194,7 +249,7 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
                         builder: (_) => ApartmentsListScreen(
                           trancheId: widget.tranche.id,
                           residenceId: widget.tranche.residenceId,
-                          immeubleId: imm.id, // Ajouté pour filtrer par immeuble
+                          immeubleId: imm.id, 
                           trancheName: widget.tranche.nom,
                           residenceName: widget.tranche.residenceNom,
                         ),
@@ -204,6 +259,7 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _C.dark,
                     foregroundColor: _C.white,
+                    elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
@@ -219,6 +275,196 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // --- CRUD DIALOGS ---
+
+  void _showAddDialog() => _showImmeubleForm();
+  void _showEditDialog(ImmeubleModel imm) => _showImmeubleForm(immeuble: imm);
+
+  void _showImmeubleForm({ImmeubleModel? immeuble}) {
+    final bool isEdit = immeuble != null;
+    final nomCtrl = TextEditingController(text: isEdit ? immeuble.nom : '');
+    final countCtrl = TextEditingController(text: isEdit ? immeuble.nombreAppartements.toString() : '');
+    final priceCtrl = TextEditingController(text: isEdit ? (immeuble.prixAnnuel > 0 ? immeuble.prixAnnuel.toString() : '') : '');
+    bool saving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+            top: 24, left: 24, right: 24,
+          ),
+          decoration: const BoxDecoration(
+            color: _C.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                isEdit ? 'Modifier Immeuble' : 'Nouvel Immeuble',
+                style: const TextStyle(color: _C.dark, fontSize: 22, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 24),
+              _buildFieldLabel('Nom de l\'immeuble (ex: Immeuble A1)'),
+              _buildTextField(nomCtrl, 'Ex: Immeuble A1'),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildFieldLabel('Nombre d\'unités'),
+                        _buildTextField(countCtrl, 'Ex: 24', keyboardType: TextInputType.number),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildFieldLabel('Prix Annuel / Appt'),
+                        _buildTextField(priceCtrl, 'Ex: 2400', keyboardType: TextInputType.number),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: saving ? null : () async {
+                    if (nomCtrl.text.isEmpty) return;
+                    setModalState(() => saving = true);
+                    final data = {
+                      'nom': nomCtrl.text,
+                      'nombre_appartements': int.tryParse(countCtrl.text) ?? 0,
+                      'prix_annuel': double.tryParse(priceCtrl.text) ?? 0.0,
+                      'tranche_id': widget.tranche.id,
+                      'charges_generales': 0.0, // Default for now
+                    };
+                    try {
+                      if (isEdit) {
+                        await _service.updateImmeuble(immeuble.id, data);
+                      } else {
+                        await _service.createImmeuble(data);
+                      }
+                      if (mounted) {
+                        Navigator.pop(ctx);
+                        _loadData();
+                        _showSnackBar(isEdit ? 'Immeuble mis à jour' : 'Immeuble ajouté');
+                      }
+                    } catch (e) {
+                      setModalState(() => saving = false);
+                      _showSnackBar('Erreur lors de l\'enregistrement', isError: true);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _C.coral,
+                    foregroundColor: _C.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  child: saving 
+                    ? const CircularProgressIndicator(color: _C.white)
+                    : Text(isEdit ? 'Enregistrer les modifications' : 'Ajouter l\'immeuble', 
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                ),
+              ),
+              const SizedBox(height: 40),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _confirmDelete(ImmeubleModel imm) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Supprimer l\'immeuble ?'),
+        content: Text('Voulez-vous vraiment supprimer "${imm.nom}" ? Cette action est irréversible et supprimera TOUS les appartements liés.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler', style: TextStyle(color: _C.textMid)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await _service.deleteImmeuble(imm.id);
+                _loadData();
+                _showSnackBar('Immeuble supprimé');
+              } catch (e) {
+                _showSnackBar('Erreur lors de la suppression', isError: true);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: _C.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Supprimer', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSnackBar(String msg, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? Colors.red : _C.dark,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Widget _buildFieldLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        label,
+        style: const TextStyle(color: _C.textMid, fontSize: 13, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController ctrl, String hint, {TextInputType? keyboardType}) {
+    return TextField(
+      controller: ctrl,
+      keyboardType: keyboardType,
+      style: const TextStyle(color: _C.dark, fontWeight: FontWeight.w600),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: _C.textLight.withOpacity(0.5)),
+        filled: true,
+        fillColor: _C.bg,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
     );
   }
