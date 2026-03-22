@@ -9,7 +9,7 @@ import 'finance/finance_dashboard_screen.dart';
 import 'apartments/apartments_screen.dart';
 import 'parkings/parkings_screen.dart';
 import 'boxes/boxes_screen.dart';
-
+import 'reclamations/reclamations_screen.dart';
 // ── Palette de couleurs
 class _C {
   static const coral       = Color(0xFFE8603C);
@@ -522,96 +522,113 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
     );
   }
 
+  // ── 2. REMPLACER _buildModuleList() par cette version ─────
+//    (ajouter le module Reclamations a la liste existante)
+
   List<_ModuleData> _buildModuleList() => [
-        _ModuleData(
-          label: 'Residents',
-          value: '${_num(_stats?['nbResidents'] ?? 0)}',
-          sub: 'residents actifs',
-          icon: Icons.people_rounded,
-          iconBg: _C.coralLight,
-          valueColor: _C.coral,
-          interactive: true,
-          onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => ResidentsScreen(trancheId: widget.tranche.id))),
-        ),
-        _ModuleData(
-          label: 'Appartements',
-          value: '${_num(_stats?['nbAppartements'] ?? 0)}',
-          sub: 'unites',
-          icon: Icons.home_outlined,
-          iconBg: _C.iconBg,
-          valueColor: _C.dark,
-          interactive: true,
-          onTap: () => setState(() => _selectedView = 'apartments'),
-        ),
-        _ModuleData(
-          label: 'Personnel',
-          value: '${_num(_stats?['nbPersonnel'] ?? 0)}',
-          sub: 'employes',
-          icon: Icons.badge_outlined,
-          iconBg: _C.purpleLight,
-          valueColor: _C.purple,
-        ),
-        _ModuleData(
-          label: 'Parkings',
-          value: '${_num(_stats?['nbParkings'] ?? 0)}',
-          sub: 'places',
-          icon: Icons.local_parking_rounded,
-          iconBg: _C.coralLight,
-          valueColor: _C.coral,
-          interactive: true,
-          onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => ParkingsScreen(
-                trancheId: widget.tranche.id,
-                residenceId: widget.tranche.residenceId,
-                trancheName: widget.tranche.nom,
-                residenceName: widget.tranche.residenceNom,
-              ))),
-        ),
-        _ModuleData(
-          label: 'Garages',
-          value: '${_num(_stats?['nbGarages'] ?? 0)}',
-          sub: 'places',
-          icon: Icons.garage_outlined,
-          iconBg: _C.amberLight,
-          valueColor: _C.amber,
-          interactive: true,
-          onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => GaragesScreen(
-                trancheId: widget.tranche.id,
-                residenceId: widget.tranche.residenceId,
-                trancheName: widget.tranche.nom,
-                residenceName: widget.tranche.residenceNom,
-              ))),
-        ),
-        _ModuleData(
-          label: 'Box',
-          value: '${_num(_stats?['nbBoxes'] ?? 0)}',
-          sub: 'unites',
-          icon: Icons.inventory_2_outlined,
-          iconBg: _C.iconBg,
-          valueColor: _C.coral,
-          interactive: true,
-          onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => BoxesScreen(
-                trancheId: widget.tranche.id,
-                residenceId: widget.tranche.residenceId,
-                trancheName: widget.tranche.nom,
-                residenceName: widget.tranche.residenceNom,
-              ))),
-        ),
-        _ModuleData(
-          label: 'Réunions',
-          value: '${_num(_stats?['nbReunions'] ?? 0)}',
-          sub: 'planifiées',
-          icon: Icons.event_outlined,
-          iconBg: _C.blueLight,
-          valueColor: _C.blue,
-          interactive: true,
-          onTap: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => ReunionsScreen(trancheId: widget.tranche.id))),
-        ),
-      ];
+    _ModuleData(
+      label: 'Residents',
+      value: '${_num(_stats?['nbResidents'] ?? 0)}',
+      sub: 'residents actifs',
+      icon: Icons.people_rounded,
+      iconBg: _C.coralLight,
+      valueColor: _C.coral,
+      interactive: true,
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => ResidentsScreen(trancheId: widget.tranche.id))),
+    ),
+    _ModuleData(
+      label: 'Appartements',
+      value: '${_num(_stats?['nbAppartements'] ?? 0)}',
+      sub: 'unites',
+      icon: Icons.home_outlined,
+      iconBg: _C.iconBg,
+      valueColor: _C.dark,
+      interactive: true,
+      onTap: () => setState(() => _selectedView = 'apartments'),
+    ),
+    _ModuleData(
+      label: 'Personnel',
+      value: '${_num(_stats?['nbPersonnel'] ?? 0)}',
+      sub: 'employes',
+      icon: Icons.badge_outlined,
+      iconBg: _C.purpleLight,
+      valueColor: _C.purple,
+    ),
+    _ModuleData(
+      label: 'Parkings',
+      value: '${_num(_stats?['nbParkings'] ?? 0)}',
+      sub: 'places',
+      icon: Icons.local_parking_rounded,
+      iconBg: _C.coralLight,
+      valueColor: _C.coral,
+      interactive: true,
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => ParkingsScreen(
+            trancheId: widget.tranche.id,
+            residenceId: widget.tranche.residenceId,
+            trancheName: widget.tranche.nom,
+            residenceName: widget.tranche.residenceNom,
+          ))),
+    ),
+    _ModuleData(
+      label: 'Garages',
+      value: '${_num(_stats?['nbGarages'] ?? 0)}',
+      sub: 'places',
+      icon: Icons.garage_outlined,
+      iconBg: _C.amberLight,
+      valueColor: _C.amber,
+      interactive: true,
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => GaragesScreen(
+            trancheId: widget.tranche.id,
+            residenceId: widget.tranche.residenceId,
+            trancheName: widget.tranche.nom,
+            residenceName: widget.tranche.residenceNom,
+          ))),
+    ),
+    _ModuleData(
+      label: 'Box',
+      value: '${_num(_stats?['nbBoxes'] ?? 0)}',
+      sub: 'unites',
+      icon: Icons.inventory_2_outlined,
+      iconBg: _C.iconBg,
+      valueColor: _C.coral,
+      interactive: true,
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => BoxesScreen(
+            trancheId: widget.tranche.id,
+            residenceId: widget.tranche.residenceId,
+            trancheName: widget.tranche.nom,
+            residenceName: widget.tranche.residenceNom,
+          ))),
+    ),
+    _ModuleData(
+      label: 'Reunions',
+      value: '${_num(_stats?['nbReunions'] ?? 0)}',
+      sub: 'planifiees',
+      icon: Icons.event_outlined,
+      iconBg: _C.blueLight,
+      valueColor: _C.blue,
+      interactive: true,
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => ReunionsScreen(trancheId: widget.tranche.id))),
+    ),
+    // ── NOUVEAU MODULE RECLAMATIONS ──────────────────────────
+    _ModuleData(
+      label: 'Reclamations',
+      value: '${_num(_stats?['nbReclamations'] ?? 0)}',
+      sub: 'en cours',
+      icon: Icons.report_problem_rounded,
+      iconBg: const Color(0xFFFFF8EC),   // amberLight
+      valueColor: const Color(0xFFF5A623), // amber
+      interactive: true,
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => ReclamationsScreen(trancheId: widget.tranche.id))),
+    ),
+  ];
+
+
 
   Widget _buildModuleCard(_ModuleData m) {
     return GestureDetector(

@@ -19,9 +19,12 @@ class PaiementModel {
   final int? mois;
   final DateTime? createdAt;
 
-  // Données jointes
+  // Donnees jointes
   final String? residentNomComplet;
   final String? appartementNumero;
+
+  // Numero de la ressource (garage, parking, box) pour affichage dans le label
+  final String? reference;
 
   PaiementModel({
     required this.id,
@@ -40,6 +43,7 @@ class PaiementModel {
     this.createdAt,
     this.residentNomComplet,
     this.appartementNumero,
+    this.reference,
   });
 
   double get resteAPayer =>
@@ -57,27 +61,27 @@ class PaiementModel {
       case StatutPaiementEnum.partiel:
         return 'Partiel';
       case StatutPaiementEnum.impaye:
-        return 'Impayé';
+        return 'Impaye';
     }
   }
 
   bool get estComplet => statut == StatutPaiementEnum.complet;
   bool get estPartiel => statut == StatutPaiementEnum.partiel;
-  bool get estImpaye => statut == StatutPaiementEnum.impaye;
+  bool get estImpaye  => statut == StatutPaiementEnum.impaye;
 
   factory PaiementModel.fromJson(Map<String, dynamic> j) {
-    final user = j['users'] as Map<String, dynamic>?;
+    final user   = j['users']        as Map<String, dynamic>?;
     final appart = j['appartements'] as Map<String, dynamic>?;
 
     return PaiementModel(
-      id: j['id'],
-      residentId: j['resident_id'],
+      id:            j['id'],
+      residentId:    j['resident_id'],
       appartementId: j['appartement_id'],
-      depenseId: j['depense_id'],
-      interSyndicId: j['inter_syndic_id'],
-      residenceId: j['residence_id'],
-      montantTotal: double.parse((j['montant_total'] ?? 0).toString()),
-      montantPaye: double.parse((j['montant_paye'] ?? 0).toString()),
+      depenseId:     j['depense_id'] ?? 0,
+      interSyndicId: j['inter_syndic_id'] ?? 0,
+      residenceId:   j['residence_id'] ?? 0,
+      montantTotal:  double.parse((j['montant_total'] ?? 0).toString()),
+      montantPaye:   double.parse((j['montant_paye']  ?? 0).toString()),
       typePaiement: TypePaiementEnum.values.firstWhere(
             (e) => e.name == (j['type_paiement'] ?? 'charges'),
         orElse: () => TypePaiementEnum.charges,
@@ -89,8 +93,8 @@ class PaiementModel {
             (e) => e.name == (j['statut'] ?? 'impaye'),
         orElse: () => StatutPaiementEnum.impaye,
       ),
-      annee: j['annee'],
-      mois: j['mois'],
+      annee:    j['annee'] ?? DateTime.now().year,
+      mois:     j['mois'],
       createdAt: j['created_at'] != null
           ? DateTime.tryParse(j['created_at'])
           : null,
@@ -98,21 +102,22 @@ class PaiementModel {
           ? '${user['prenom']} ${user['nom']}'
           : null,
       appartementNumero: appart?['numero'],
+      reference: null, // Rempli manuellement dans ResidentService
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'resident_id': residentId,
-    'appartement_id': appartementId,
-    'depense_id': depenseId,
+    'resident_id':     residentId,
+    'appartement_id':  appartementId,
+    'depense_id':      depenseId,
     'inter_syndic_id': interSyndicId,
-    'residence_id': residenceId,
-    'montant_total': montantTotal,
-    'montant_paye': montantPaye,
-    'type_paiement': typePaiement.name,
-    'date_paiement': datePaiement?.toIso8601String().split('T').first,
-    'statut': statut.name,
-    'annee': annee,
-    'mois': mois,
+    'residence_id':    residenceId,
+    'montant_total':   montantTotal,
+    'montant_paye':    montantPaye,
+    'type_paiement':   typePaiement.name,
+    'date_paiement':   datePaiement?.toIso8601String().split('T').first,
+    'statut':          statut.name,
+    'annee':           annee,
+    'mois':            mois,
   };
 }

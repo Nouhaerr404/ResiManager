@@ -4,8 +4,13 @@ import '../../../models/paiement_model.dart';
 import '../../../services/resident_service.dart';
 import '../../../services/parking_service.dart';
 import '../../../services/box_service.dart';
+import '../../../services/garage_service.dart';
 import '../../../models/parking_model.dart';
 import '../../../models/box_model.dart';
+import '../../../models/garage_model.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+// ignore_for_file: avoid_multiple_underscores_for_members
 
 // ── Brand palette — aligned with ResiManager desktop app
 class _C {
@@ -26,8 +31,6 @@ class _C {
   static const greenLight  = Color(0xFFEBFAF4);
   static const orange      = Color(0xFFF97316);
   static const orangeLight = Color(0xFFFFF7ED);
-  static const red         = Color(0xFFE04444);
-  static const redLight    = Color(0xFFFFF0F0);
 }
 
 class ResidentsScreen extends StatefulWidget {
@@ -49,12 +52,17 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
 
+  // Prix annuel de la tranche
+  double? _prixAnnuel;
+  bool _loadingPrix = true;
+
   @override
   void initState() {
     super.initState();
     _fadeCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 450));
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+    _loadPrixAnnuel();
     _load();
     _searchCtrl.addListener(_applyFilter);
   }
@@ -64,6 +72,36 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     _searchCtrl.dispose();
     _fadeCtrl.dispose();
     super.dispose();
+  }
+
+  // ── Charger le prix annuel depuis la table tranches
+  // La colonne s'appelle "prix annuel" (avec espace) dans Supabase
+  Future<void> _loadPrixAnnuel() async {
+    try {
+      final db = Supabase.instance.client;
+      // Supabase PostgREST : les colonnes avec espaces doivent etre
+      // selectionnees avec guillemets doubles dans la requete
+      final res = await db
+          .from('tranches')
+          .select('"prix annuel"')
+          .eq('id', widget.trancheId)
+          .maybeSingle();
+      if (mounted) {
+        setState(() {
+          if (res != null) {
+            // Supabase peut retourner la cle avec espace ou sans
+            final raw = res['prix annuel'] ?? res['"prix annuel"'] ?? 0;
+            _prixAnnuel = double.tryParse(raw.toString()) ?? 0.0;
+          } else {
+            _prixAnnuel = 0.0;
+          }
+          _loadingPrix = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('>>> ERREUR _loadPrixAnnuel: $e');
+      if (mounted) setState(() => _loadingPrix = false);
+    }
   }
 
   Future<void> _load() async {
@@ -108,6 +146,95 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   int get _impayes =>
       _residents.where((r) => r.statutPaiement == 'impaye').length;
 
+  // ── Modifier le prix annuel de la tranche
+  void _showEditPrixAnnuelDialog() {
+    final prixCtrl = TextEditingController(
+        text: _prixAnnuel != null ? _prixAnnuel!.toInt().toString() : '');
+    bool saving = false;
+    String? errorMsg;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => Dialog(
+          shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _dialogHeader(ctx, 'Prix Annuel Tranche',
+                    icon: Icons.edit_rounded, iconColor: _C.amber),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                      color: _C.amberLight,
+                      borderRadius: BorderRadius.circular(12)),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline_rounded,
+                          color: _C.amber, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Ce prix sera appliqué automatiquement lors de l\'ajout de nouveaux résidents.',
+                          style: TextStyle(
+                              color: _C.amber.withValues(alpha: 0.85),
+                              fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (errorMsg != null) _errorBanner(errorMsg!),
+                _label('Nouveau prix annuel (DH) *'),
+                _field(prixCtrl, 'ex: 3000',
+                    inputType: TextInputType.number),
+                const SizedBox(height: 24),
+                _dialogActions(
+                  ctx: ctx,
+                  saving: saving,
+                  confirmLabel: 'Enregistrer',
+                  confirmColor: _C.amber,
+                  onConfirm: () async {
+                    final val = double.tryParse(prixCtrl.text.trim());
+                    if (val == null || val <= 0) {
+                      setDialog(
+                              () => errorMsg = 'Entrez un prix valide');
+                      return;
+                    }
+                    setDialog(() {
+                      saving = true;
+                      errorMsg = null;
+                    });
+                    try {
+                      await Supabase.instance.client
+                          .from('tranches')
+                          .update({'prix annuel': val}).eq(
+                          'id', widget.trancheId);
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      setState(() => _prixAnnuel = val);
+                    } catch (e) {
+                      setDialog(() {
+                        errorMsg = e.toString();
+                        saving = false;
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -129,7 +256,9 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                     padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
                     children: [
                       _buildPageTitle(),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
+                      _buildPrixAnnuelBanner(),
+                      const SizedBox(height: 16),
                       _buildStatsBanner(),
                       const SizedBox(height: 20),
                       _buildSearchBar(),
@@ -179,8 +308,8 @@ class _ResidentsScreenState extends State<ResidentsScreen>
           decoration: BoxDecoration(
               color: _C.coralLight,
               borderRadius: BorderRadius.circular(18)),
-          child: const Icon(Icons.people_rounded,
-              color: _C.coral, size: 30),
+          child:
+          const Icon(Icons.people_rounded, color: _C.coral, size: 30),
         ),
         const SizedBox(height: 14),
         const Text('Aucun resident',
@@ -216,7 +345,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             ),
           ),
           const SizedBox(width: 12),
-          // App logo
           Container(
             width: 38,
             height: 38,
@@ -224,8 +352,8 @@ class _ResidentsScreenState extends State<ResidentsScreen>
               color: _C.coral,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.grid_view_rounded,
-                color: _C.white, size: 20),
+            child:
+            const Icon(Icons.grid_view_rounded, color: _C.white, size: 20),
           ),
           const SizedBox(width: 10),
           const Column(
@@ -246,24 +374,97 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             ],
           ),
           const Spacer(),
-          // Add button
           GestureDetector(
             onTap: _showAddResidentDialog,
             child: Container(
               padding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
               decoration: BoxDecoration(
-                  color: _C.coral,
-                  borderRadius: BorderRadius.circular(22)),
-              child: Row(
+                  color: _C.coral, borderRadius: BorderRadius.circular(22)),
+              child: const Row(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
+                children: [
                   Icon(Icons.add_rounded, size: 16, color: _C.white),
                   SizedBox(width: 6),
                   Text('Ajouter',
                       style: TextStyle(
                           color: _C.white,
                           fontSize: 13,
+                          fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Prix Annuel Banner
+  Widget _buildPrixAnnuelBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: _C.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _C.amberLight),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+                color: _C.amberLight, borderRadius: BorderRadius.circular(11)),
+            child:
+            const Icon(Icons.monetization_on_rounded, color: _C.amber, size: 20),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Prix annuel de la tranche',
+                    style: TextStyle(
+                        color: _C.textMid,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500)),
+                const SizedBox(height: 3),
+                _loadingPrix
+                    ? const SizedBox(
+                    width: 80,
+                    height: 16,
+                    child: LinearProgressIndicator(
+                        color: _C.amber,
+                        backgroundColor: _C.amberLight))
+                    : Text(
+                  '${_prixAnnuel?.toInt() ?? 0} DH / an',
+                  style: const TextStyle(
+                      color: _C.amber,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                      letterSpacing: -0.3),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: _showEditPrixAnnuelDialog,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                  color: _C.amberLight,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _C.amber.withValues(alpha: 0.3))),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.edit_rounded, size: 13, color: _C.amber),
+                  SizedBox(width: 5),
+                  Text('Modifier',
+                      style: TextStyle(
+                          color: _C.amber,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700)),
                 ],
               ),
@@ -298,9 +499,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   // ── Stats Banner
   Widget _buildStatsBanner() {
     final totalPercent = _total == 0 ? 0.0 : _complets / _total;
-    final pctVal = _total == 0
-        ? 0
-        : (_complets * 100 ~/ _total);
+    final pctVal = _total == 0 ? 0 : (_complets * 100 ~/ _total);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -311,7 +510,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
       ),
       child: Column(
         children: [
-          // Top row
           Row(
             children: [
               Container(
@@ -320,8 +518,8 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                 decoration: BoxDecoration(
                     color: _C.coralLight,
                     borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.people_rounded,
-                    color: _C.coral, size: 22),
+                child:
+                const Icon(Icons.people_rounded, color: _C.coral, size: 22),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -335,31 +533,25 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                             fontSize: 18,
                             letterSpacing: -0.3)),
                     const Text('dans cette tranche',
-                        style:
-                        TextStyle(color: _C.textLight, fontSize: 11)),
+                        style: TextStyle(color: _C.textLight, fontSize: 11)),
                   ],
                 ),
               ),
-              // Percentage badge
               Container(
                 padding:
                 const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: _C.coralLight,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '$pctVal% complets',
-                  style: const TextStyle(
-                      color: _C.coral,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12),
-                ),
+                    color: _C.coralLight,
+                    borderRadius: BorderRadius.circular(20)),
+                child: Text('$pctVal% complets',
+                    style: const TextStyle(
+                        color: _C.coral,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12)),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          // Progress bar
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
             child: LinearProgressIndicator(
@@ -370,7 +562,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             ),
           ),
           const SizedBox(height: 16),
-          // 3 stat chips
           Row(
             children: [
               _bannerChip('$_complets', 'Complets', _C.green, _C.greenLight,
@@ -394,9 +585,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
         decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(12),
-        ),
+            color: bg, borderRadius: BorderRadius.circular(12)),
         child: Row(
           children: [
             Icon(icon, color: color, size: 18),
@@ -434,10 +623,9 @@ class _ResidentsScreenState extends State<ResidentsScreen>
         style: const TextStyle(fontSize: 14, color: _C.dark),
         decoration: InputDecoration(
           hintText: 'Rechercher un resident...',
-          hintStyle:
-          const TextStyle(color: _C.textLight, fontSize: 13),
-          prefixIcon: const Icon(Icons.search_rounded,
-              color: _C.textLight, size: 20),
+          hintStyle: const TextStyle(color: _C.textLight, fontSize: 13),
+          prefixIcon:
+          const Icon(Icons.search_rounded, color: _C.textLight, size: 20),
           suffixIcon: _searchCtrl.text.isNotEmpty
               ? GestureDetector(
             onTap: () {
@@ -474,21 +662,19 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               margin: const EdgeInsets.only(right: 8),
-              padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: isSelected ? _C.coral : _C.white,
                 borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                    color: isSelected ? _C.coral : _C.divider),
+                border:
+                Border.all(color: isSelected ? _C.coral : _C.divider),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(f.$2,
                       style: TextStyle(
-                          color:
-                          isSelected ? _C.white : _C.textMid,
+                          color: isSelected ? _C.white : _C.textMid,
                           fontWeight: FontWeight.w600,
                           fontSize: 12)),
                   const SizedBox(width: 6),
@@ -503,9 +689,8 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                     ),
                     child: Text('${f.$3}',
                         style: TextStyle(
-                            color: isSelected
-                                ? _C.white
-                                : _C.textLight,
+                            color:
+                            isSelected ? _C.white : _C.textLight,
                             fontSize: 11,
                             fontWeight: FontWeight.w700)),
                   ),
@@ -518,15 +703,12 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     );
   }
 
-  // ── Section label
-  Widget _buildSectionLabel(String text) => Text(
-    text,
-    style: const TextStyle(
-        color: _C.dark,
-        fontWeight: FontWeight.w700,
-        fontSize: 16,
-        letterSpacing: -0.3),
-  );
+  Widget _buildSectionLabel(String text) => Text(text,
+      style: const TextStyle(
+          color: _C.dark,
+          fontWeight: FontWeight.w700,
+          fontSize: 16,
+          letterSpacing: -0.3));
 
   // ── Resident Card
   Widget _buildResidentCard(ResidentModel r) {
@@ -549,18 +731,15 @@ class _ResidentsScreenState extends State<ResidentsScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Identity row
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Avatar
               Container(
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  color: isProp ? _C.blueLight : _C.amberLight,
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                    color: isProp ? _C.blueLight : _C.amberLight,
+                    borderRadius: BorderRadius.circular(12)),
                 child: Center(
                   child: Text(
                     r.nomComplet.isNotEmpty
@@ -606,14 +785,10 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             ],
           ),
           const SizedBox(height: 14),
-
-          // ── Payment block
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: _C.bg,
-              borderRadius: BorderRadius.circular(12),
-            ),
+                color: _C.bg, borderRadius: BorderRadius.circular(12)),
             child: Column(
               children: [
                 Row(
@@ -665,20 +840,18 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _amountChip('Paye',
-                        '${r.montantPaye.toInt()} DH', _C.greenLight, _C.green),
-                    _amountChip('Reste',
-                        '${r.resteAPayer.toInt()} DH', _C.coralLight, _C.coral),
-                    _amountChip('Total',
-                        '${r.montantTotal.toInt()} DH', _C.iconBg, _C.textMid),
+                    _amountChip('Paye', '${r.montantPaye.toInt()} DH',
+                        _C.greenLight, _C.green),
+                    _amountChip('Reste', '${r.resteAPayer.toInt()} DH',
+                        _C.coralLight, _C.coral),
+                    _amountChip('Total', '${r.montantTotal.toInt()} DH',
+                        _C.iconBg, _C.textMid),
                   ],
                 ),
               ],
             ),
           ),
           const SizedBox(height: 12),
-
-          // ── Action buttons
           Row(
             children: [
               Expanded(
@@ -689,11 +862,10 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                     decoration: BoxDecoration(
                         color: _C.coral,
                         borderRadius: BorderRadius.circular(10)),
-                    child: Row(
+                    child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.payments_rounded,
-                            size: 15, color: _C.white),
+                      children: [
+                        Icon(Icons.payments_rounded, size: 15, color: _C.white),
                         SizedBox(width: 6),
                         Text('Payer',
                             style: TextStyle(
@@ -721,27 +893,24 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     );
   }
 
-  Widget _iconBtn(
-      IconData icon, Color bg, Color fg, VoidCallback onTap) {
+  Widget _iconBtn(IconData icon, Color bg, Color fg, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 40,
         height: 40,
-        decoration: BoxDecoration(
-            color: bg, borderRadius: BorderRadius.circular(10)),
+        decoration:
+        BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
         child: Icon(icon, color: fg, size: 17),
       ),
     );
   }
 
-  Widget _amountChip(
-      String label, String value, Color bg, Color color) {
+  Widget _amountChip(String label, String value, Color bg, Color color) {
     return Container(
-      padding:
-      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-          color: bg, borderRadius: BorderRadius.circular(8)),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration:
+      BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -753,9 +922,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
           const SizedBox(height: 2),
           Text(value,
               style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12)),
+                  color: color, fontWeight: FontWeight.w700, fontSize: 12)),
         ],
       ),
     );
@@ -764,12 +931,10 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   Widget _typeBadge(String type) {
     final isProp = type == 'proprietaire';
     return Container(
-      padding:
-      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: isProp ? _C.blueLight : _C.amberLight,
-        borderRadius: BorderRadius.circular(20),
-      ),
+          color: isProp ? _C.blueLight : _C.amberLight,
+          borderRadius: BorderRadius.circular(20)),
       child: Text(
         isProp ? 'Proprietaire' : 'Locataire',
         style: TextStyle(
@@ -795,8 +960,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             decoration: BoxDecoration(
                 color: (iconColor ?? _C.coral).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10)),
-            child:
-            Icon(icon, color: iconColor ?? _C.coral, size: 18),
+            child: Icon(icon, color: iconColor ?? _C.coral, size: 18),
           ),
           const SizedBox(width: 12),
         ],
@@ -816,8 +980,8 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                 color: _C.bg,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: _C.divider)),
-            child: const Icon(Icons.close_rounded,
-                size: 15, color: _C.textMid),
+            child:
+            const Icon(Icons.close_rounded, size: 15, color: _C.textMid),
           ),
         ),
       ],
@@ -828,16 +992,13 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     margin: const EdgeInsets.only(bottom: 12),
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
-        color: _C.coralLight,
-        borderRadius: BorderRadius.circular(10)),
+        color: _C.coralLight, borderRadius: BorderRadius.circular(10)),
     child: Row(children: [
-      const Icon(Icons.error_outline_rounded,
-          color: _C.coral, size: 16),
+      const Icon(Icons.error_outline_rounded, color: _C.coral, size: 16),
       const SizedBox(width: 8),
       Expanded(
           child: Text(msg,
-              style:
-              const TextStyle(color: _C.coral, fontSize: 12))),
+              style: const TextStyle(color: _C.coral, fontSize: 12))),
     ]),
   );
 
@@ -903,74 +1064,96 @@ class _ResidentsScreenState extends State<ResidentsScreen>
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label,
-            style:
-            const TextStyle(color: _C.textMid, fontSize: 13)),
+            style: const TextStyle(color: _C.textMid, fontSize: 13)),
         Text(value,
             style: TextStyle(
                 color: color,
-                fontWeight:
-                bold ? FontWeight.w800 : FontWeight.w600,
+                fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
                 fontSize: 14)),
       ],
     );
   }
 
-  // ── Add Resident Dialog
+  // ── Add Resident Dialog (UPDATED)
   void _showAddResidentDialog() {
     final prenomCtrl = TextEditingController();
     final nomCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
     final telCtrl = TextEditingController();
-    final montantCtrl = TextEditingController(text: '3000');
+    final passwordCtrl = TextEditingController();
+    // Le montant vient du prix annuel de la tranche — pas de champ manuel
     String type = 'proprietaire';
     String? errorMsg;
     bool saving = false;
+    bool obscurePassword = true;
+
     List<Map<String, dynamic>> appartementsLibres = [];
     int? selectedAppartId;
     int? selectedParkingId;
     int? selectedBoxId;
+    int? selectedGarageId;
 
     bool loadingApparts = true;
     bool loadingParkings = true;
     bool loadingBoxes = true;
+    bool loadingGarages = true;
+
     List<ParkingModel> parkingsLibres = [];
     List<BoxModel> boxesLibres = [];
+    List<GarageModel> garagesLibres = []; // Voir note ci-dessous
 
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialog) {
+          // Charger les appartements libres
           if (loadingApparts) {
             loadingApparts = false;
             _service
                 .getAppartementsLibres(widget.trancheId)
                 .then((list) {
-              if (ctx.mounted) {
-                setDialog(() => appartementsLibres = list);
-              }
+              if (ctx.mounted) setDialog(() => appartementsLibres = list);
             });
           }
+          // Charger les parkings libres
           if (loadingParkings) {
             loadingParkings = false;
             ParkingService()
                 .getParkingsByTranche(widget.trancheId)
                 .then((list) {
               if (ctx.mounted) {
-                setDialog(() => parkingsLibres = list.where((p) => p.statut.name == 'disponible').toList());
+                setDialog(() => parkingsLibres = list
+                    .where((p) => p.statut.name == 'disponible')
+                    .toList());
               }
             });
           }
+          // Charger les boxes libres
           if (loadingBoxes) {
             loadingBoxes = false;
-            BoxService()
-                .getBoxesByTranche(widget.trancheId)
-                .then((list) {
+            BoxService().getBoxesByTranche(widget.trancheId).then((list) {
               if (ctx.mounted) {
-                setDialog(() => boxesLibres = list.where((b) => b.statut.name == 'disponible').toList());
+                setDialog(() => boxesLibres = list
+                    .where((b) => b.statut.name == 'disponible')
+                    .toList());
               }
             });
           }
+          // Charger les garages libres
+          if (loadingGarages) {
+            loadingGarages = false;
+            GarageService()
+                .getGaragesByTranche(widget.trancheId)
+                .then((list) {
+              if (ctx.mounted) {
+                setDialog(() => garagesLibres = list
+                    .where((g) => g.statut == 'disponible')
+                    .toList());
+              }
+            });
+          }
+
           return Dialog(
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20)),
@@ -982,186 +1165,290 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _dialogHeader(ctx, 'Ajouter Resident',
-                        icon: Icons.person_add_rounded,
-                        iconColor: _C.coral),
+                        icon: Icons.person_add_rounded, iconColor: _C.coral),
                     const SizedBox(height: 20),
+
+                    // ── Prix annuel (lecture seule, depuis la tranche)
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                          color: _C.amberLight,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: _C.amber.withValues(alpha: 0.3))),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.monetization_on_rounded,
+                              color: _C.amber, size: 18),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Prix annuel appliqué',
+                                  style: TextStyle(
+                                      color: _C.textMid,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500)),
+                              Text(
+                                '${_prixAnnuel?.toInt() ?? 0} DH / an',
+                                style: const TextStyle(
+                                    color: _C.amber,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 16),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
                     if (errorMsg != null) _errorBanner(errorMsg!),
+
                     _label('Prenom *'),
                     _field(prenomCtrl, 'ex: Ahmed'),
                     const SizedBox(height: 14),
+
                     _label('Nom *'),
                     _field(nomCtrl, 'ex: Bennani'),
                     const SizedBox(height: 14),
+
                     _label('Email *'),
                     _field(emailCtrl, 'ex: ahmed@example.com',
                         inputType: TextInputType.emailAddress),
                     const SizedBox(height: 14),
-                    _label('Telephone'),
-                    _field(telCtrl, 'ex: 0612345678',
-                        inputType: TextInputType.phone),
-                    const SizedBox(height: 14),
-                    _label('Appartement *'),
-                    appartementsLibres.isEmpty
-                        ? Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: _C.bg,
-                        borderRadius:
-                        BorderRadius.circular(10),
-                      ),
-                      child: const Text(
-                          'Aucun appartement libre',
-                          style: TextStyle(
-                              color: _C.textLight)),
-                    )
-                        : Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14),
-                      decoration: BoxDecoration(
-                        color: _C.bg,
-                        borderRadius:
-                        BorderRadius.circular(10),
-                        border:
-                        Border.all(color: _C.divider),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<int>(
-                          isExpanded: true,
-                          hint: const Text(
-                              'Selectionner un appartement',
-                              style: TextStyle(
-                                  color: _C.textLight,
-                                  fontSize: 13)),
-                          value: selectedAppartId,
-                          items: appartementsLibres
-                              .map((a) {
-                            return DropdownMenuItem<int>(
-                              value: a['id'] as int,
-                              child: Text(
-                                  a['label'].toString()),
-                            );
-                          }).toList(),
-                          onChanged: (val) => setDialog(
-                                  () => selectedAppartId = val),
+
+                    // ── Champ Mot de passe (NOUVEAU)
+                    _label('Mot de passe * (espace résident)'),
+                    StatefulBuilder(
+                      builder: (ctx2, setLocal) => TextField(
+                        controller: passwordCtrl,
+                        obscureText: obscurePassword,
+                        style: const TextStyle(fontSize: 14, color: _C.dark),
+                        decoration: InputDecoration(
+                          hintText: 'Min. 8 caractères',
+                          hintStyle: const TextStyle(
+                              color: _C.textLight, fontSize: 13),
+                          filled: true,
+                          fillColor: _C.bg,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(
+                                color: _C.coral, width: 1.5),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 13),
+                          suffixIcon: GestureDetector(
+                            onTap: () {
+                              setDialog(
+                                      () => obscurePassword = !obscurePassword);
+                            },
+                            child: Icon(
+                              obscurePassword
+                                  ? Icons.visibility_off_rounded
+                                  : Icons.visibility_rounded,
+                              color: _C.textLight,
+                              size: 18,
+                            ),
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(height: 14),
 
+                    _label('Telephone'),
+                    _field(telCtrl, 'ex: 0612345678',
+                        inputType: TextInputType.phone),
+                    const SizedBox(height: 14),
+
+                    // ── Appartement
+                    _label('Appartement *'),
+                    appartementsLibres.isEmpty
+                        ? _emptyDropdownBox('Aucun appartement libre')
+                        : _dropdownContainer(
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          isExpanded: true,
+                          hint: const Text('Selectionner un appartement',
+                              style: TextStyle(
+                                  color: _C.textLight, fontSize: 13)),
+                          value: selectedAppartId,
+                          items: appartementsLibres.map((a) {
+                            return DropdownMenuItem<int>(
+                              value: a['id'] as int,
+                              child: Text(a['label'].toString()),
+                            );
+                          }).toList(),
+                          onChanged: (val) =>
+                              setDialog(() => selectedAppartId = val),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ── Parking (optionnel)
                     _label('Parking (Optionnel)'),
                     parkingsLibres.isEmpty
-                        ? Container(
-                            padding: const EdgeInsets.all(14),
-                            width: double.infinity,
-                            decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10)),
-                            child: const Text('Aucun parking libre', style: TextStyle(color: _C.textLight)),
-                          )
-                        : Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10), border: Border.all(color: _C.divider)),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<int>(
-                                isExpanded: true,
-                                hint: const Text('Aucun parking sélectionné', style: TextStyle(color: _C.textLight, fontSize: 13)),
-                                value: selectedParkingId,
-                                items: [
-                                  const DropdownMenuItem<int>(
-                                    value: null,
-                                    child: Text('Aucun', style: TextStyle(fontStyle: FontStyle.italic)),
-                                  ),
-                                  ...parkingsLibres.map((p) => DropdownMenuItem<int>(
-                                    value: p.id,
-                                    child: Text('Parking ${p.numero}'),
-                                  )).toList(),
-                                ],
-                                onChanged: (val) => setDialog(() => selectedParkingId = val),
-                              ),
+                        ? _emptyDropdownBox('Aucun parking libre dans cette tranche')
+                        : _dropdownContainer(
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int?>(
+                          isExpanded: true,
+                          hint: const Text(
+                              'Aucun parking sélectionné',
+                              style: TextStyle(
+                                  color: _C.textLight, fontSize: 13)),
+                          value: selectedParkingId,
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('Aucun',
+                                  style: TextStyle(
+                                      fontStyle: FontStyle.italic,
+                                      color: _C.textLight)),
                             ),
-                          ),
+                            ...parkingsLibres.map((p) =>
+                                DropdownMenuItem<int?>(
+                                  value: p.id,
+                                  child: Text(
+                                      'Parking ${p.numero}'),
+                                )),
+                          ],
+                          onChanged: (val) =>
+                              setDialog(() => selectedParkingId = val),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 14),
 
-                    _label('Box / Garage (Optionnel)'),
+                    // ── Box (optionnel)
+                    _label('Box / Garage de rangement (Optionnel)'),
                     boxesLibres.isEmpty
-                        ? Container(
-                            padding: const EdgeInsets.all(14),
-                            width: double.infinity,
-                            decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10)),
-                            child: const Text('Aucun box libre', style: TextStyle(color: _C.textLight)),
-                          )
-                        : Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10), border: Border.all(color: _C.divider)),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<int>(
-                                isExpanded: true,
-                                hint: const Text('Aucun box sélectionné', style: TextStyle(color: _C.textLight, fontSize: 13)),
-                                value: selectedBoxId,
-                                items: [
-                                  const DropdownMenuItem<int>(
-                                    value: null,
-                                    child: Text('Aucun', style: TextStyle(fontStyle: FontStyle.italic)),
-                                  ),
-                                  ...boxesLibres.map((b) => DropdownMenuItem<int>(
-                                    value: b.id,
-                                    child: Text('Box ${b.numero}'),
-                                  )).toList(),
-                                ],
-                                onChanged: (val) => setDialog(() => selectedBoxId = val),
-                              ),
+                        ? _emptyDropdownBox('Aucun box libre dans cette tranche')
+                        : _dropdownContainer(
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int?>(
+                          isExpanded: true,
+                          hint: const Text(
+                              'Aucun box sélectionné',
+                              style: TextStyle(
+                                  color: _C.textLight, fontSize: 13)),
+                          value: selectedBoxId,
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('Aucun',
+                                  style: TextStyle(
+                                      fontStyle: FontStyle.italic,
+                                      color: _C.textLight)),
                             ),
-                          ),
+                            ...boxesLibres.map((b) =>
+                                DropdownMenuItem<int?>(
+                                  value: b.id,
+                                  child: Text('Box ${b.numero}'),
+                                )),
+                          ],
+                          onChanged: (val) =>
+                              setDialog(() => selectedBoxId = val),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 14),
 
-                    _label('Montant annuel (DH) *'),
-                    _field(montantCtrl, '3000',
-                        inputType: TextInputType.number),
+                    // ── Garage (optionnel) (NOUVEAU)
+                    _label('Garage (Optionnel)'),
+                    garagesLibres.isEmpty
+                        ? _emptyDropdownBox('Aucun garage libre dans cette tranche')
+                        : _dropdownContainer(
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int?>(
+                          isExpanded: true,
+                          hint: const Text(
+                              'Aucun garage sélectionné',
+                              style: TextStyle(
+                                  color: _C.textLight, fontSize: 13)),
+                          value: selectedGarageId,
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text('Aucun',
+                                  style: TextStyle(
+                                      fontStyle: FontStyle.italic,
+                                      color: _C.textLight)),
+                            ),
+                            ...garagesLibres.map((g) =>
+                                DropdownMenuItem<int?>(
+                                  value: g.id,
+                                  child:
+                                  Text('Garage ${g.numero}'),
+                                )),
+                          ],
+                          onChanged: (val) =>
+                              setDialog(() => selectedGarageId = val),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 14),
+
+                    // ── Type
                     _label('Type *'),
                     Row(children: [
                       Expanded(
                         child: GestureDetector(
-                          onTap: () => setDialog(
-                                  () => type = 'proprietaire'),
-                          child: _typeToggle('Proprietaire',
-                              type == 'proprietaire', _C.blue),
+                          onTap: () =>
+                              setDialog(() => type = 'proprietaire'),
+                          child: _typeToggle(
+                              'Proprietaire', type == 'proprietaire', _C.blue),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: GestureDetector(
-                          onTap: () => setDialog(
-                                  () => type = 'locataire'),
-                          child: _typeToggle('Locataire',
-                              type == 'locataire', _C.amber),
+                          onTap: () =>
+                              setDialog(() => type = 'locataire'),
+                          child: _typeToggle(
+                              'Locataire', type == 'locataire', _C.amber),
                         ),
                       ),
                     ]),
                     const SizedBox(height: 24),
+
                     _dialogActions(
                       ctx: ctx,
                       saving: saving,
                       confirmLabel: 'Ajouter',
                       confirmColor: _C.coral,
                       onConfirm: () async {
+                        // Validations
                         if (prenomCtrl.text.trim().isEmpty ||
                             nomCtrl.text.trim().isEmpty ||
                             emailCtrl.text.trim().isEmpty) {
-                          setDialog(() => errorMsg =
-                          'Prenom, Nom et Email obligatoires');
+                          setDialog(() =>
+                          errorMsg = 'Prenom, Nom et Email obligatoires');
+                          return;
+                        }
+                        if (passwordCtrl.text.trim().length < 8) {
+                          setDialog(() =>
+                          errorMsg = 'Le mot de passe doit avoir au moins 8 caractères');
                           return;
                         }
                         if (selectedAppartId == null) {
-                          setDialog(() => errorMsg =
-                          'Selectionnez un appartement');
+                          setDialog(() =>
+                          errorMsg = 'Selectionnez un appartement');
                           return;
                         }
                         setDialog(() {
                           saving = true;
                           errorMsg = null;
                         });
-                        final montant =
-                            double.tryParse(montantCtrl.text) ??
-                                3000.0;
+
+                        // Le montant vient du prix annuel de la tranche
+                        final montant = _prixAnnuel ?? 0.0;
+
                         final err = await _service.addResident(
                           nom: nomCtrl.text,
                           prenom: prenomCtrl.text,
@@ -1169,12 +1456,14 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                           telephone: telCtrl.text.isEmpty
                               ? null
                               : telCtrl.text,
+                          password: passwordCtrl.text.trim(),
                           type: type,
                           trancheId: widget.trancheId,
                           appartementId: selectedAppartId!,
                           montantTotal: montant,
                           parkingId: selectedParkingId,
                           boxId: selectedBoxId,
+                          garageId: selectedGarageId,
                         );
                         if (!ctx.mounted) return;
                         if (err != null) {
@@ -1198,10 +1487,11 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     );
   }
 
-  // ── Payment Dialog
+  // ── Payment Dialog (unchanged)
   void _showPaiementDialog(ResidentModel r) {
     final montantCtrl = TextEditingController();
-    PaiementModel? selectedPaiement = r.paiements.isNotEmpty ? r.paiements.first : null;
+    PaiementModel? selectedPaiement =
+    r.paiements.isNotEmpty ? r.paiements.first : null;
     String? errorMsg;
     bool saving = false;
 
@@ -1218,8 +1508,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _dialogHeader(ctx, 'Enregistrer Paiement',
-                    icon: Icons.payments_rounded,
-                    iconColor: _C.coral),
+                    icon: Icons.payments_rounded, iconColor: _C.coral),
                 const SizedBox(height: 18),
                 Container(
                   width: double.infinity,
@@ -1235,8 +1524,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                         height: 40,
                         decoration: BoxDecoration(
                             color: _C.coralLight,
-                            borderRadius:
-                            BorderRadius.circular(12)),
+                            borderRadius: BorderRadius.circular(12)),
                         child: Center(
                           child: Text(
                             r.nomComplet.isNotEmpty
@@ -1252,8 +1540,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
-                          crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(r.nomComplet,
                                 style: const TextStyle(
@@ -1262,8 +1549,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                                     color: _C.dark)),
                             Text(r.adresseAppart,
                                 style: const TextStyle(
-                                    color: _C.textLight,
-                                    fontSize: 11)),
+                                    color: _C.textLight, fontSize: 11)),
                           ],
                         ),
                       ),
@@ -1271,44 +1557,43 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                   ),
                 ),
                 const SizedBox(height: 16),
-                
                 _label('Ligne de paiement *'),
                 const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                      color: _C.bg,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: _C.divider)),
+                _dropdownContainer(
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<PaiementModel>(
                       value: selectedPaiement,
                       isExpanded: true,
-                      onChanged: (val) => setDialog(() => selectedPaiement = val),
-                      items: r.paiements.map((p) => DropdownMenuItem(
+                      onChanged: (val) =>
+                          setDialog(() => selectedPaiement = val),
+                      items: r.paiements
+                          .map((p) => DropdownMenuItem(
                         value: p,
                         child: Text(
-                          '${p.typePaiement.name.toUpperCase()} - ${p.annee}',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                          _paiementLabel(p),
+                          style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600),
                         ),
-                      )).toList(),
+                      ))
+                          .toList(),
                     ),
                   ),
                 ),
                 const SizedBox(height: 14),
-
                 if (selectedPaiement != null) ...[
-                  _infoRow(
-                      'Total ligne', '${selectedPaiement!.montantTotal.toInt()} DH', _C.dark),
+                  _infoRow('Total ligne',
+                      '${selectedPaiement!.montantTotal.toInt()} DH', _C.dark),
+                  const SizedBox(height: 8),
+                  _infoRow('Payé ligne',
+                      '${selectedPaiement!.montantPaye.toInt()} DH', _C.green),
                   const SizedBox(height: 8),
                   _infoRow(
-                      'Payé ligne', '${selectedPaiement!.montantPaye.toInt()} DH', _C.green),
-                  const SizedBox(height: 8),
-                  _infoRow('Reste ligne', '${selectedPaiement!.resteAPayer.toInt()} DH',
+                      'Reste ligne',
+                      '${selectedPaiement!.resteAPayer.toInt()} DH',
                       _C.coral,
                       bold: true),
                 ],
-                
                 const SizedBox(height: 16),
                 if (errorMsg != null) _errorBanner(errorMsg!),
                 _label('Montant à payer (DH)'),
@@ -1322,16 +1607,15 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                   confirmColor: _C.coral,
                   onConfirm: () async {
                     final montant =
-                        double.tryParse(montantCtrl.text.trim()) ??
-                            0;
+                        double.tryParse(montantCtrl.text.trim()) ?? 0;
                     if (montant <= 0) {
-                      setDialog(() =>
-                      errorMsg = 'Entrez un montant valide');
+                      setDialog(
+                              () => errorMsg = 'Entrez un montant valide');
                       return;
                     }
                     if (selectedPaiement == null) {
-                      setDialog(
-                              () => errorMsg = 'Sélectionnez une ligne de paiement');
+                      setDialog(() =>
+                      errorMsg = 'Sélectionnez une ligne de paiement');
                       return;
                     }
                     setDialog(() {
@@ -1365,7 +1649,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     );
   }
 
-  // ── History Dialog
+  // ── History Dialog (unchanged)
   void _showHistoriqueDialog(ResidentModel r) {
     List<Map<String, dynamic>> historique = [];
     bool loadingHist = true;
@@ -1377,8 +1661,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
           if (loadingHist) {
             loadingHist = false;
             _service.getHistoriquePaiements(r.userId).then((data) {
-              if (ctx.mounted)
-                setDialog(() => historique = data);
+              if (ctx.mounted) setDialog(() => historique = data);
             });
           }
 
@@ -1396,8 +1679,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _dialogHeader(ctx, 'Historique',
-                      icon: Icons.history_rounded,
-                      iconColor: _C.blue),
+                      icon: Icons.history_rounded, iconColor: _C.blue),
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(14),
@@ -1409,8 +1691,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          mainAxisAlignment:
-                          MainAxisAlignment.spaceBetween,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(r.nomComplet,
                                 style: const TextStyle(
@@ -1430,18 +1711,16 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                           child: LinearProgressIndicator(
                             value: pct.clamp(0.0, 1.0),
                             backgroundColor: _C.divider,
-                            valueColor:
-                            AlwaysStoppedAnimation(barColor),
+                            valueColor: AlwaysStoppedAnimation(barColor),
                             minHeight: 6,
                           ),
                         ),
                         const SizedBox(height: 10),
                         Row(
-                          mainAxisAlignment:
-                          MainAxisAlignment.spaceBetween,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            _infoRow('Paye',
-                                '${r.montantPaye.toInt()} DH', _C.green),
+                            _infoRow(
+                                'Paye', '${r.montantPaye.toInt()} DH', _C.green),
                             _infoRow('Reste',
                                 '${r.resteAPayer.toInt()} DH', _C.coral),
                           ],
@@ -1461,14 +1740,12 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                             color: _C.divider, size: 40),
                         const SizedBox(height: 8),
                         const Text('Aucun historique',
-                            style:
-                            TextStyle(color: _C.textLight)),
+                            style: TextStyle(color: _C.textLight)),
                       ]),
                     ),
                   )
                       : ConstrainedBox(
-                    constraints:
-                    const BoxConstraints(maxHeight: 220),
+                    constraints: const BoxConstraints(maxHeight: 220),
                     child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: historique.length,
@@ -1476,12 +1753,11 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                           Container(height: 1, color: _C.divider),
                       itemBuilder: (_, i) {
                         final h = historique[i];
-                        final montant = double.parse(
-                            h['montant'].toString())
-                            .toInt();
+                        final montant =
+                        double.parse(h['montant'].toString()).toInt();
                         return Padding(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 10),
+                          padding:
+                          const EdgeInsets.symmetric(vertical: 10),
                           child: Row(
                             children: [
                               Container(
@@ -1490,8 +1766,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                                 decoration: BoxDecoration(
                                     color: _C.greenLight,
                                     borderRadius:
-                                    BorderRadius.circular(
-                                        10)),
+                                    BorderRadius.circular(10)),
                                 child: const Icon(
                                     Icons.arrow_downward_rounded,
                                     color: _C.green,
@@ -1504,17 +1779,14 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                                   CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      h['description'] ??
-                                          'Paiement',
+                                      h['description'] ?? 'Paiement',
                                       style: const TextStyle(
-                                          fontWeight:
-                                          FontWeight.w600,
+                                          fontWeight: FontWeight.w600,
                                           fontSize: 13,
                                           color: _C.dark),
                                     ),
                                     Text(
-                                      h['date']?.toString() ??
-                                          '',
+                                      h['date']?.toString() ?? '',
                                       style: const TextStyle(
                                           color: _C.textLight,
                                           fontSize: 11),
@@ -1538,8 +1810,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                     onTap: () => Navigator.pop(ctx),
                     child: Container(
                       width: double.infinity,
-                      padding:
-                      const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                       decoration: BoxDecoration(
                           color: _C.bg,
                           borderRadius: BorderRadius.circular(12),
@@ -1561,7 +1832,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     );
   }
 
-  // ── Edit Dialog
+  // ── Edit Dialog (unchanged)
   void _showEditDialog(ResidentModel r) {
     final nomCtrl = TextEditingController(text: r.nom);
     final prenomCtrl = TextEditingController(text: r.prenom);
@@ -1591,17 +1862,16 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                 _field(nomCtrl, ''),
                 const SizedBox(height: 14),
                 _label('Telephone'),
-                _field(telCtrl, '',
-                    inputType: TextInputType.phone),
+                _field(telCtrl, '', inputType: TextInputType.phone),
                 const SizedBox(height: 14),
                 _label('Type'),
                 Row(children: [
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => setDialog(
-                              () => type = 'proprietaire'),
-                      child: _typeToggle('Proprietaire',
-                          type == 'proprietaire', _C.blue),
+                      onTap: () =>
+                          setDialog(() => type = 'proprietaire'),
+                      child: _typeToggle(
+                          'Proprietaire', type == 'proprietaire', _C.blue),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1609,8 +1879,8 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                     child: GestureDetector(
                       onTap: () =>
                           setDialog(() => type = 'locataire'),
-                      child: _typeToggle('Locataire',
-                          type == 'locataire', _C.amber),
+                      child: _typeToggle(
+                          'Locataire', type == 'locataire', _C.amber),
                     ),
                   ),
                 ]),
@@ -1626,9 +1896,8 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                       userId: r.userId,
                       nom: nomCtrl.text,
                       prenom: prenomCtrl.text,
-                      telephone: telCtrl.text.isEmpty
-                          ? null
-                          : telCtrl.text,
+                      telephone:
+                      telCtrl.text.isEmpty ? null : telCtrl.text,
                       type: type,
                     );
                     if (!ctx.mounted) return;
@@ -1644,7 +1913,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     );
   }
 
-  // ── Delete Dialog
+  // ── Delete Dialog (unchanged)
   void _showDeleteConfirm(ResidentModel r) {
     showDialog(
       context: context,
@@ -1675,8 +1944,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
               Text(
                 'Supprimer ${r.nomComplet} de la liste ?',
                 textAlign: TextAlign.center,
-                style:
-                const TextStyle(color: _C.textMid, fontSize: 13),
+                style: const TextStyle(color: _C.textMid, fontSize: 13),
               ),
               const SizedBox(height: 24),
               Row(children: [
@@ -1684,8 +1952,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                   child: GestureDetector(
                     onTap: () => Navigator.pop(ctx),
                     child: Container(
-                      padding:
-                      const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                       decoration: BoxDecoration(
                           color: _C.bg,
                           borderRadius: BorderRadius.circular(12),
@@ -1710,8 +1977,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                       _load();
                     },
                     child: Container(
-                      padding:
-                      const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                       decoration: BoxDecoration(
                           color: _C.coral,
                           borderRadius: BorderRadius.circular(12)),
@@ -1732,6 +1998,17 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     );
   }
 
+  // ── Construit le label lisible pour une ligne de paiement
+  // Ex: "CHARGES - 2026" / "GARAGE G-A06 - 2026" / "PARKING P-03 - 2026"
+  String _paiementLabel(PaiementModel p) {
+    final type = p.typePaiement.name.toUpperCase();
+    final ref  = (p.reference != null && p.reference!.isNotEmpty)
+        ? ' ${p.reference}'
+        : '';
+    final annee = p.annee > 0 ? ' - ${p.annee}' : '';
+    return '$type$ref$annee';
+  }
+
   // ── Helpers
   Widget _label(String text) => Padding(
     padding: const EdgeInsets.only(bottom: 6),
@@ -1750,8 +2027,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
         style: const TextStyle(fontSize: 14, color: _C.dark),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle:
-          const TextStyle(color: _C.textLight, fontSize: 13),
+          hintStyle: const TextStyle(color: _C.textLight, fontSize: 13),
           filled: true,
           fillColor: _C.bg,
           border: OutlineInputBorder(
@@ -1762,28 +2038,43 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             borderRadius: BorderRadius.circular(10),
             borderSide: const BorderSide(color: _C.coral, width: 1.5),
           ),
-          contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14, vertical: 13),
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         ),
       );
 
-  Widget _typeToggle(String label, bool selected, Color accent) =>
-      Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: selected
-              ? accent.withValues(alpha: 0.1)
-              : _C.bg,
-          border: Border.all(
-              color: selected ? accent : _C.divider,
-              width: selected ? 1.5 : 1),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                color: selected ? accent : _C.textMid,
-                fontWeight: FontWeight.w700,
-                fontSize: 13)),
-      );
+  Widget _typeToggle(String label, bool selected, Color accent) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    decoration: BoxDecoration(
+      color: selected ? accent.withValues(alpha: 0.1) : _C.bg,
+      border: Border.all(
+          color: selected ? accent : _C.divider,
+          width: selected ? 1.5 : 1),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Text(label,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+            color: selected ? accent : _C.textMid,
+            fontWeight: FontWeight.w700,
+            fontSize: 13)),
+  );
+
+  Widget _emptyDropdownBox(String msg) => Container(
+    padding: const EdgeInsets.all(14),
+    width: double.infinity,
+    decoration: BoxDecoration(
+        color: _C.bg, borderRadius: BorderRadius.circular(10)),
+    child: Text(msg, style: const TextStyle(color: _C.textLight)),
+  );
+
+  Widget _dropdownContainer({required Widget child}) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14),
+    decoration: BoxDecoration(
+      color: _C.bg,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: _C.divider),
+    ),
+    child: child,
+  );
 }

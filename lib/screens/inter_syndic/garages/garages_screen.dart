@@ -14,7 +14,6 @@ class _C {
   static const textMid     = Color(0xFF5A5A6A);
   static const textLight   = Color(0xFF9A9AAF);
   static const divider     = Color(0xFFE8E8F0);
-  static const iconBg      = Color(0xFFEDEDED);
   static const blue        = Color(0xFF4B6BFB);
   static const blueLight   = Color(0xFFEEF1FF);
   static const amber       = Color(0xFFF5A623);
@@ -30,7 +29,7 @@ class GaragesScreen extends StatefulWidget {
   final String? residenceName;
 
   const GaragesScreen({
-    super.key, 
+    super.key,
     required this.trancheId,
     this.residenceId,
     this.trancheName,
@@ -44,8 +43,13 @@ class GaragesScreen extends StatefulWidget {
 class _GaragesScreenState extends State<GaragesScreen>
     with SingleTickerProviderStateMixin {
   final _service = GarageService();
+  final _residentService = ResidentService();
+
   List<GarageModel> _garages = [];
   List<GarageModel> _filtered = [];
+  // Liste de tous les résidents de la tranche, chargée une seule fois
+  List<ResidentModel> _residents = [];
+
   bool _loading = true;
   String _filterStatut = 'tous';
   final _searchCtrl = TextEditingController();
@@ -72,12 +76,15 @@ class _GaragesScreenState extends State<GaragesScreen>
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final data = await _service
-          .getGaragesByTranche(widget.trancheId)
-          .timeout(const Duration(seconds: 15));
+      // Charger les garages et les résidents en parallèle
+      final results = await Future.wait([
+        _service.getGaragesByTranche(widget.trancheId).timeout(const Duration(seconds: 15)),
+        _residentService.getResidentsByTranche(widget.trancheId).timeout(const Duration(seconds: 15)),
+      ]);
       setState(() {
-        _garages = data;
-        _loading = false;
+        _garages  = results[0] as List<GarageModel>;
+        _residents = results[1] as List<ResidentModel>;
+        _loading  = false;
       });
       _applyFilter();
       _fadeCtrl.forward(from: 0);
@@ -105,11 +112,10 @@ class _GaragesScreenState extends State<GaragesScreen>
     _applyFilter();
   }
 
-  int get _total => _garages.length;
-  int get _disponibles =>
-      _garages.where((g) => g.statut == 'disponible').length;
-  int get _occupes => _garages.where((g) => g.statut == 'occupe').length;
-  double get _revenus => _garages
+  int get _total      => _garages.length;
+  int get _disponibles => _garages.where((g) => g.statut == 'disponible').length;
+  int get _occupes    => _garages.where((g) => g.statut == 'occupe').length;
+  double get _revenus  => _garages
       .where((g) => g.statut == 'occupe')
       .fold(0.0, (s, g) => s + g.prixAnnuel);
 
@@ -184,8 +190,8 @@ class _GaragesScreenState extends State<GaragesScreen>
           decoration: BoxDecoration(
               color: _C.amberLight,
               borderRadius: BorderRadius.circular(18)),
-          child:
-          const Icon(Icons.garage_outlined, color: _C.amber, size: 30),
+          child: const Icon(Icons.garage_outlined,
+              color: _C.amber, size: 30),
         ),
         const SizedBox(height: 14),
         const Text('Aucun garage',
@@ -226,8 +232,8 @@ class _GaragesScreenState extends State<GaragesScreen>
             height: 38,
             decoration: BoxDecoration(
                 color: _C.coral, borderRadius: BorderRadius.circular(10)),
-            child:
-            const Icon(Icons.grid_view_rounded, color: _C.white, size: 20),
+            child: const Icon(Icons.grid_view_rounded,
+                color: _C.white, size: 20),
           ),
           const SizedBox(width: 10),
           const Column(
@@ -251,13 +257,13 @@ class _GaragesScreenState extends State<GaragesScreen>
           GestureDetector(
             onTap: _showAddGarageDialog,
             child: Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
               decoration: BoxDecoration(
-                  color: _C.coral, borderRadius: BorderRadius.circular(22)),
-              child: Row(
+                  color: _C.coral,
+                  borderRadius: BorderRadius.circular(22)),
+              child: const Row(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
+                children: [
                   Icon(Icons.add_rounded, size: 16, color: _C.white),
                   SizedBox(width: 6),
                   Text('Ajouter',
@@ -274,7 +280,6 @@ class _GaragesScreenState extends State<GaragesScreen>
     );
   }
 
-  // ── Page title
   Widget _buildPageTitle() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -295,7 +300,6 @@ class _GaragesScreenState extends State<GaragesScreen>
     );
   }
 
-  // ── Stats Banner — white cards like app
   Widget _buildStatsBanner() {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -329,8 +333,7 @@ class _GaragesScreenState extends State<GaragesScreen>
                             fontSize: 18,
                             letterSpacing: -0.3)),
                     const Text('dans cette tranche',
-                        style:
-                        TextStyle(color: _C.textLight, fontSize: 11)),
+                        style: TextStyle(color: _C.textLight, fontSize: 11)),
                   ],
                 ),
               ),
@@ -341,13 +344,11 @@ class _GaragesScreenState extends State<GaragesScreen>
           const SizedBox(height: 16),
           Row(
             children: [
-              _bannerStat('$_disponibles', 'Disponibles', _C.green,
-                  _C.greenLight),
+              _bannerStat('$_disponibles', 'Disponibles', _C.green, _C.greenLight),
               const SizedBox(width: 10),
               _bannerStat('$_occupes', 'Occupes', _C.coral, _C.coralLight),
               const SizedBox(width: 10),
-              _bannerStat('${_revenus.toInt()} DH', 'Revenus/an', _C.amber,
-                  _C.amberLight),
+              _bannerStat('${_revenus.toInt()} DH', 'Revenus/an', _C.amber, _C.amberLight),
             ],
           ),
         ],
@@ -355,13 +356,12 @@ class _GaragesScreenState extends State<GaragesScreen>
     );
   }
 
-  Widget _bannerStat(
-      String val, String label, Color color, Color bg) {
+  Widget _bannerStat(String val, String label, Color color, Color bg) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-        decoration: BoxDecoration(
-            color: bg, borderRadius: BorderRadius.circular(12)),
+        decoration:
+        BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -382,7 +382,6 @@ class _GaragesScreenState extends State<GaragesScreen>
     );
   }
 
-  // ── Search bar
   Widget _buildSearchBar() {
     return Container(
       decoration: BoxDecoration(
@@ -414,7 +413,6 @@ class _GaragesScreenState extends State<GaragesScreen>
     );
   }
 
-  // ── Filter tabs
   Widget _buildFilterTabs() {
     final filters = [
       ('tous', 'Tous', _total),
@@ -429,13 +427,12 @@ class _GaragesScreenState extends State<GaragesScreen>
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             margin: const EdgeInsets.only(right: 8),
-            padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: isSelected ? _C.coral : _C.white,
               borderRadius: BorderRadius.circular(22),
-              border:
-              Border.all(color: isSelected ? _C.coral : _C.divider),
+              border: Border.all(
+                  color: isSelected ? _C.coral : _C.divider),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -469,7 +466,6 @@ class _GaragesScreenState extends State<GaragesScreen>
     );
   }
 
-  // ── Section label
   Widget _buildSectionLabel(String text) => Text(
     text,
     style: const TextStyle(
@@ -483,8 +479,8 @@ class _GaragesScreenState extends State<GaragesScreen>
   Widget _buildGarageCard(GarageModel g) {
     final isOccupe = g.statut == 'occupe';
     final statusColor = isOccupe ? _C.coral : _C.green;
-    final statusBg = isOccupe ? _C.coralLight : _C.greenLight;
-    final statusLabel = isOccupe ? 'Occupé' : 'Disponible';
+    final statusBg    = isOccupe ? _C.coralLight : _C.greenLight;
+    final statusLabel = isOccupe ? 'Occupe' : 'Disponible';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -553,31 +549,27 @@ class _GaragesScreenState extends State<GaragesScreen>
                           size: 13, color: _C.textLight),
                       const SizedBox(width: 4),
                       Expanded(
-                        child: Text(g.beneficiaireNom!,
-                            style: const TextStyle(
-                                color: _C.dark,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600),
-                            overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          '${g.beneficiairePrenom ?? ''} ${g.beneficiaireNom ?? ''}'.trim(),
+                          style: const TextStyle(
+                              color: _C.dark,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 7, vertical: 2),
                         decoration: BoxDecoration(
-                          color: g.beneficiaireType == 'resident'
-                              ? _C.coralLight
-                              : _C.blueLight,
+                          color: _C.coralLight,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(
-                          g.beneficiaireType == 'resident'
-                              ? 'Resident'
-                              : 'Externe',
+                        child: const Text(
+                          'Resident',
                           style: TextStyle(
-                              color: g.beneficiaireType == 'resident'
-                                  ? _C.coral
-                                  : _C.blue,
+                              color: _C.coral,
                               fontSize: 10,
                               fontWeight: FontWeight.w600),
                         ),
@@ -593,7 +585,8 @@ class _GaragesScreenState extends State<GaragesScreen>
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                  color: _C.bg, borderRadius: BorderRadius.circular(9),
+                  color: _C.bg,
+                  borderRadius: BorderRadius.circular(9),
                   border: Border.all(color: _C.divider)),
               child: const Icon(Icons.more_horiz_rounded,
                   color: _C.textMid, size: 16),
@@ -609,11 +602,9 @@ class _GaragesScreenState extends State<GaragesScreen>
             itemBuilder: (_) => [
               _menuItem('modifier', Icons.edit_rounded, 'Modifier', _C.dark),
               if (!isOccupe)
-                _menuItem('assigner', Icons.person_add_rounded, 'Assigner',
-                    _C.coral),
+                _menuItem('assigner', Icons.person_add_rounded, 'Assigner', _C.coral),
               if (isOccupe)
-                _menuItem('liberer', Icons.person_remove_rounded, 'Liberer',
-                    _C.coral),
+                _menuItem('liberer', Icons.person_remove_rounded, 'Liberer', _C.coral),
             ],
           ),
         ],
@@ -696,347 +687,13 @@ class _GaragesScreenState extends State<GaragesScreen>
         color: _C.coralLight,
         borderRadius: BorderRadius.circular(10)),
     child: Row(children: [
-      const Icon(Icons.error_outline_rounded,
-          color: _C.coral, size: 16),
+      const Icon(Icons.error_outline_rounded, color: _C.coral, size: 16),
       const SizedBox(width: 8),
       Expanded(
           child: Text(msg,
-              style:
-              const TextStyle(color: _C.coral, fontSize: 12))),
+              style: const TextStyle(color: _C.coral, fontSize: 12))),
     ]),
   );
-
-  void _showAddGarageDialog() {
-    final numeroCtrl = TextEditingController();
-    final prixCtrl = TextEditingController(text: '600');
-    String? errorMsg;
-    bool saving = false;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialog) => Dialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20)),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _dialogHeader(ctx, 'Ajouter Garage',
-                    icon: Icons.garage_outlined, iconColor: _C.amber),
-                const SizedBox(height: 20),
-                if (errorMsg != null) _errorBanner(errorMsg!),
-                _label('Numero *'),
-                _field(numeroCtrl, 'ex: G-A06'),
-                const SizedBox(height: 14),
-                _label('Prix annuel (DH) *'),
-                _field(prixCtrl, 'ex: 600',
-                    inputType: TextInputType.number),
-                const SizedBox(height: 24),
-                _dialogActions(
-                  ctx: ctx,
-                  saving: saving,
-                  confirmLabel: 'Ajouter',
-                  confirmColor: _C.coral,
-                  onConfirm: () async {
-                    if (numeroCtrl.text.trim().isEmpty) {
-                      setDialog(
-                              () => errorMsg = 'Numero obligatoire');
-                      return;
-                    }
-                    setDialog(() {
-                      saving = true;
-                      errorMsg = null;
-                    });
-                    final err = await _service.addGarage(
-                      numero: numeroCtrl.text.trim(),
-                      trancheId: widget.trancheId,
-                      residenceId: widget.residenceId ?? 1,
-                      prixAnnuel:
-                      double.tryParse(prixCtrl.text) ?? 600,
-                    );
-                    if (!ctx.mounted) return;
-                    if (err != null) {
-                      setDialog(() {
-                        errorMsg = err;
-                        saving = false;
-                      });
-                    } else {
-                      Navigator.pop(ctx);
-                      _load();
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showEditGarageDialog(GarageModel g) {
-    final numeroCtrl = TextEditingController(text: g.numero);
-    final prixCtrl =
-    TextEditingController(text: g.prixAnnuel.toInt().toString());
-    bool saving = false;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialog) => Dialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20)),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _dialogHeader(ctx, 'Modifier Garage',
-                    icon: Icons.edit_rounded, iconColor: _C.blue),
-                const SizedBox(height: 20),
-                _label('Numero'),
-                _field(numeroCtrl, ''),
-                const SizedBox(height: 14),
-                _label('Prix annuel (DH)'),
-                _field(prixCtrl, '',
-                    inputType: TextInputType.number),
-                const SizedBox(height: 24),
-                _dialogActions(
-                  ctx: ctx,
-                  saving: saving,
-                  confirmLabel: 'Enregistrer',
-                  confirmColor: _C.blue,
-                  onConfirm: () async {
-                    setDialog(() => saving = true);
-                    await _service.updateGarage(
-                      garageId: g.id,
-                      numero: numeroCtrl.text.trim(),
-                      prixAnnuel: double.tryParse(prixCtrl.text) ??
-                          g.prixAnnuel,
-                    );
-                    if (!ctx.mounted) return;
-                    Navigator.pop(ctx);
-                    _load();
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showAssignerDialog(GarageModel g) {
-    final nomCtrl = TextEditingController();
-    final prenomCtrl = TextEditingController();
-    final telCtrl = TextEditingController();
-    ResidentModel? selectedResident;
-    String typebenef = 'resident';
-    bool saving = false;
-    String? errorMsg;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialog) => Dialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20)),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _dialogHeader(ctx, 'Assigner ${g.numero}',
-                    icon: Icons.person_add_rounded,
-                    iconColor: _C.coral),
-                const SizedBox(height: 20),
-                if (errorMsg != null) _errorBanner(errorMsg!),
-                _label('Type de bénéficiaire'),
-                const SizedBox(height: 6),
-                Row(children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () =>
-                          setDialog(() => typebenef = 'resident'),
-                      child: _typeBtn(
-                          'Résident', typebenef == 'resident', _C.coral),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () =>
-                          setDialog(() => typebenef = 'externe'),
-                      child: _typeBtn(
-                          'Externe', typebenef == 'externe', _C.blue),
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 14),
-
-                if (typebenef == 'resident') ...[
-                  _label('Chercher un résident *'),
-                  _residentAutocomplete((r) => setDialog(() => selectedResident = r)),
-                ] else ...[
-                  _label('Prénom *'),
-                  _field(prenomCtrl, 'ex: Ahmed'),
-                  const SizedBox(height: 14),
-                  _label('Nom *'),
-                  _field(nomCtrl, 'ex: Bennani'),
-                  const SizedBox(height: 14),
-                  _label('Téléphone'),
-                  _field(telCtrl, 'ex: 0612345678', inputType: TextInputType.phone),
-                ],
-
-                const SizedBox(height: 24),
-                _dialogActions(
-                  ctx: ctx,
-                  saving: saving,
-                  confirmLabel: 'Assigner',
-                  confirmColor: _C.coral,
-                  onConfirm: () async {
-                    if (typebenef == 'resident') {
-                      if (selectedResident == null) {
-                        setDialog(() => errorMsg = 'Sélectionnez un résident');
-                        return;
-                      }
-                      nomCtrl.text = selectedResident!.nom;
-                      prenomCtrl.text = selectedResident!.prenom;
-                      telCtrl.text = selectedResident!.telephone ?? '';
-                    } else {
-                      if (nomCtrl.text.trim().isEmpty || prenomCtrl.text.trim().isEmpty) {
-                        setDialog(() => errorMsg = 'Nom et Prénom obligatoires');
-                        return;
-                      }
-                    }
-
-                    setDialog(() {
-                      saving = true;
-                      errorMsg = null;
-                    });
-                    
-                    final err = await _service.assignerGarage(
-                      garageId: g.id,
-                      nom: nomCtrl.text.trim(),
-                      prenom: prenomCtrl.text.trim(),
-                      telephone: telCtrl.text.isEmpty ? null : telCtrl.text.trim(),
-                      type: typebenef,
-                      trancheId: widget.trancheId,
-                      residentId: typebenef == 'resident' ? selectedResident?.userId : null,
-                    );
-
-                    if (!ctx.mounted) return;
-                    if (err != null) {
-                      setDialog(() {
-                        errorMsg = err;
-                        saving = false;
-                      });
-                    } else {
-                      Navigator.pop(ctx);
-                      _load();
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showLiberDialog(GarageModel g) {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                    color: _C.coralLight,
-                    borderRadius: BorderRadius.circular(16)),
-                child: const Icon(Icons.person_remove_rounded,
-                    color: _C.coral, size: 26),
-              ),
-              const SizedBox(height: 16),
-              const Text('Liberer le garage',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 17,
-                      color: _C.dark)),
-              const SizedBox(height: 8),
-              Text(
-                'Liberer ${g.numero} assigné à ${g.beneficiaireNom ?? "?"}?',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    color: _C.textMid, fontSize: 13),
-              ),
-              const SizedBox(height: 24),
-              Row(children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => Navigator.pop(ctx),
-                    child: Container(
-                      padding:
-                      const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                          color: _C.bg,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: _C.divider)),
-                      child: const Text('Annuler',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: _C.dark,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () async {
-                      await _service.libererGarage(g.id);
-                      if (!ctx.mounted) return;
-                      Navigator.pop(ctx);
-                      _load();
-                    },
-                    child: Container(
-                      padding:
-                      const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                          color: _C.coral,
-                          borderRadius: BorderRadius.circular(12)),
-                      child: const Text('Liberer',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: _C.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14)),
-                    ),
-                  ),
-                ),
-              ]),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _dialogActions({
     required BuildContext ctx,
@@ -1111,8 +768,7 @@ class _GaragesScreenState extends State<GaragesScreen>
         style: const TextStyle(fontSize: 14, color: _C.dark),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle:
-          const TextStyle(color: _C.textLight, fontSize: 13),
+          hintStyle: const TextStyle(color: _C.textLight, fontSize: 13),
           filled: true,
           fillColor: _C.bg,
           border: OutlineInputBorder(
@@ -1123,48 +779,411 @@ class _GaragesScreenState extends State<GaragesScreen>
             borderRadius: BorderRadius.circular(10),
             borderSide: const BorderSide(color: _C.coral, width: 1.5),
           ),
-          contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14, vertical: 13),
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         ),
       );
 
-  Widget _typeBtn(String label, bool selected, Color accent) =>
-      Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? accent.withValues(alpha: 0.1) : _C.bg,
-          border: Border.all(
-              color: selected ? accent : _C.divider,
-              width: selected ? 1.5 : 1),
-          borderRadius: BorderRadius.circular(10),
+  // ── Add Garage Dialog (inchange)
+  void _showAddGarageDialog() {
+    final numeroCtrl = TextEditingController();
+    final prixCtrl   = TextEditingController(text: '600');
+    String? errorMsg;
+    bool saving = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => Dialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _dialogHeader(ctx, 'Ajouter Garage',
+                    icon: Icons.garage_outlined, iconColor: _C.amber),
+                const SizedBox(height: 20),
+                if (errorMsg != null) _errorBanner(errorMsg!),
+                _label('Numero *'),
+                _field(numeroCtrl, 'ex: G-A06'),
+                const SizedBox(height: 14),
+                _label('Prix annuel (DH) *'),
+                _field(prixCtrl, 'ex: 600',
+                    inputType: TextInputType.number),
+                const SizedBox(height: 24),
+                _dialogActions(
+                  ctx: ctx,
+                  saving: saving,
+                  confirmLabel: 'Ajouter',
+                  confirmColor: _C.coral,
+                  onConfirm: () async {
+                    if (numeroCtrl.text.trim().isEmpty) {
+                      setDialog(() => errorMsg = 'Numero obligatoire');
+                      return;
+                    }
+                    setDialog(() {
+                      saving  = true;
+                      errorMsg = null;
+                    });
+                    final err = await _service.addGarage(
+                      numero: numeroCtrl.text.trim(),
+                      trancheId: widget.trancheId,
+                      residenceId: widget.residenceId ?? 1,
+                      prixAnnuel: double.tryParse(prixCtrl.text) ?? 600,
+                    );
+                    if (!ctx.mounted) return;
+                    if (err != null) {
+                      setDialog(() {
+                        errorMsg = err;
+                        saving  = false;
+                      });
+                    } else {
+                      Navigator.pop(ctx);
+                      _load();
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
         ),
-        child: Text(label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                color: selected ? accent : _C.textMid,
-                fontWeight: FontWeight.w700,
-                fontSize: 13)),
-      );
-  Widget _residentAutocomplete(Function(ResidentModel) onSelected) {
-    return Container(
-      decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10)),
-      child: Autocomplete<ResidentModel>(
-        optionsBuilder: (val) async {
-          if (val.text.isEmpty) return const Iterable<ResidentModel>.empty();
-          return await ResidentService().searchResidents(val.text, trancheId: widget.trancheId);
-        },
-        displayStringForOption: (o) => '${o.prenom} ${o.nom}',
-        onSelected: onSelected,
-        fieldViewBuilder: (ctx, ctrl, focus, onSub) => TextField(
-          controller: ctrl,
-          focusNode: focus,
-          style: const TextStyle(fontSize: 14, color: _C.dark),
-          decoration: InputDecoration(
-            hintText: 'Nom ou prénom...',
-            hintStyle: const TextStyle(color: _C.textLight, fontSize: 13),
-            border: InputBorder.none,
-            prefixIcon: const Icon(Icons.search, size: 18),
-            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+      ),
+    );
+  }
+
+  // ── Edit Garage Dialog (inchange)
+  void _showEditGarageDialog(GarageModel g) {
+    final numeroCtrl = TextEditingController(text: g.numero);
+    final prixCtrl   = TextEditingController(text: g.prixAnnuel.toInt().toString());
+    bool saving = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => Dialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _dialogHeader(ctx, 'Modifier Garage',
+                    icon: Icons.edit_rounded, iconColor: _C.blue),
+                const SizedBox(height: 20),
+                _label('Numero'),
+                _field(numeroCtrl, ''),
+                const SizedBox(height: 14),
+                _label('Prix annuel (DH)'),
+                _field(prixCtrl, '', inputType: TextInputType.number),
+                const SizedBox(height: 24),
+                _dialogActions(
+                  ctx: ctx,
+                  saving: saving,
+                  confirmLabel: 'Enregistrer',
+                  confirmColor: _C.blue,
+                  onConfirm: () async {
+                    setDialog(() => saving = true);
+                    await _service.updateGarage(
+                      garageId: g.id,
+                      numero: numeroCtrl.text.trim(),
+                      prixAnnuel:
+                      double.tryParse(prixCtrl.text) ?? g.prixAnnuel,
+                    );
+                    if (!ctx.mounted) return;
+                    Navigator.pop(ctx);
+                    _load();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Assigner Dialog — RESIDENTS SEULEMENT, liste complete
+  void _showAssignerDialog(GarageModel g) {
+    ResidentModel? selectedResident;
+    bool saving    = false;
+    String? errorMsg;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => Dialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _dialogHeader(ctx, 'Assigner ${g.numero}',
+                    icon: Icons.person_add_rounded, iconColor: _C.coral),
+                const SizedBox(height: 20),
+
+                // Info garage
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                      color: _C.amberLight,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: _C.amber.withValues(alpha: 0.3))),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.garage_outlined,
+                          color: _C.amber, size: 18),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(g.numero,
+                              style: const TextStyle(
+                                  color: _C.amber,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15)),
+                          Text('${g.prixAnnuel.toInt()} DH / an',
+                              style: TextStyle(
+                                  color: _C.amber.withValues(alpha: 0.8),
+                                  fontSize: 12)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                if (errorMsg != null) _errorBanner(errorMsg!),
+
+                _label('Selectionner un resident *'),
+                const SizedBox(height: 4),
+
+                // ── Dropdown liste complete des residents de la tranche
+                _residents.isEmpty
+                    ? Container(
+                  padding: const EdgeInsets.all(14),
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                      color: _C.bg,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: const Text(
+                    'Aucun resident dans cette tranche',
+                    style: TextStyle(color: _C.textLight),
+                  ),
+                )
+                    : Container(
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: _C.bg,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _C.divider),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<ResidentModel>(
+                      isExpanded: true,
+                      hint: const Text(
+                        'Choisir un resident...',
+                        style: TextStyle(
+                            color: _C.textLight, fontSize: 13),
+                      ),
+                      value: selectedResident,
+                      items: _residents.map((r) {
+                        return DropdownMenuItem<ResidentModel>(
+                          value: r,
+                          child: Row(
+                            children: [
+                              // Avatar initiale
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: _C.coralLight,
+                                  borderRadius:
+                                  BorderRadius.circular(8),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    r.nomComplet.isNotEmpty
+                                        ? r.nomComplet[0]
+                                        .toUpperCase()
+                                        : '?',
+                                    style: const TextStyle(
+                                        color: _C.coral,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 13),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      r.nomComplet,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                          color: _C.dark),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (r.appartementNumero != null &&
+                                        r.appartementNumero!.isNotEmpty)
+                                      Text(
+                                        r.appartementNumero!,
+                                        style: const TextStyle(
+                                            color: _C.textLight,
+                                            fontSize: 11),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (val) =>
+                          setDialog(() => selectedResident = val),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+                _dialogActions(
+                  ctx: ctx,
+                  saving: saving,
+                  confirmLabel: 'Assigner',
+                  confirmColor: _C.coral,
+                  onConfirm: () async {
+                    if (selectedResident == null) {
+                      setDialog(
+                              () => errorMsg = 'Selectionnez un resident');
+                      return;
+                    }
+                    setDialog(() {
+                      saving   = true;
+                      errorMsg = null;
+                    });
+                    final err = await _service.assignerGarage(
+                      garageId:   g.id,
+                      nom:        selectedResident!.nom,
+                      prenom:     selectedResident!.prenom,
+                      telephone:  selectedResident!.telephone,
+                      type:       'resident',
+                      trancheId:  widget.trancheId,
+                      residentId: selectedResident!.userId,
+                    );
+                    if (!ctx.mounted) return;
+                    if (err != null) {
+                      setDialog(() {
+                        errorMsg = err;
+                        saving   = false;
+                      });
+                    } else {
+                      Navigator.pop(ctx);
+                      _load();
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Liberer Dialog (inchange)
+  void _showLiberDialog(GarageModel g) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                    color: _C.coralLight,
+                    borderRadius: BorderRadius.circular(16)),
+                child: const Icon(Icons.person_remove_rounded,
+                    color: _C.coral, size: 26),
+              ),
+              const SizedBox(height: 16),
+              const Text('Liberer le garage',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17,
+                      color: _C.dark)),
+              const SizedBox(height: 8),
+              Text(
+                'Liberer ${g.numero} assigne a ${g.beneficiaireNom ?? "?"}?',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: _C.textMid, fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              Row(children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.pop(ctx),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                          color: _C.bg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _C.divider)),
+                      child: const Text('Annuler',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: _C.dark,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () async {
+                      await _service.libererGarage(g.id);
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      _load();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                          color: _C.coral,
+                          borderRadius: BorderRadius.circular(12)),
+                      child: const Text('Liberer',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: _C.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14)),
+                    ),
+                  ),
+                ),
+              ]),
+            ],
           ),
         ),
       ),
