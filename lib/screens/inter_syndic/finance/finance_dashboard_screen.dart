@@ -341,8 +341,21 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              await _service.deleteInterSyndicExpense(expense['id'], expense['montant']);
-              _refresh();
+              try {
+                await _service.deleteInterSyndicExpense(expense['id'], expense['montant']);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Dépense supprimée avec succès')),
+                  );
+                }
+                _refresh();
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Erreur lors de la suppression : $e')),
+                  );
+                }
+              }
             },
             child: const Text("Supprimer", style: TextStyle(color: Colors.red)),
           ),

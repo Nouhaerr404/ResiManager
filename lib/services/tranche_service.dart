@@ -99,20 +99,6 @@ class TrancheService {
         totalDepenses += double.parse(d['montant'].toString());
       }
 
-      // 2. Total Revenus de la Tranche (Paiements perçus)
-      // Note: On pourrait filtrer par type_paiement if needed
-      final paiementsRes = await _db
-          .from('paiements')
-          .select('montant_paye')
-          .filter('appartement_id', 'in', 
-            _db.from('appartements')
-               .select('id')
-               .filter('immeuble_id', 'in', 
-                 _db.from('immeubles')
-                    .select('id')
-                    .eq('tranche_id', trancheId)
-               )
-          );
       
       // Since complex subqueries in Supabase might be tricky, let's use the immeubleIds we already have
       double totalRevenus = 0;
