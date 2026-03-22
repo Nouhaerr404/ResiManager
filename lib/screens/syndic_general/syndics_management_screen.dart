@@ -25,11 +25,8 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
     _loadData();
   }
 
-  // Dans _SyndicsManagementScreenState
-
   void _loadData() {
     setState(() {
-      // On utilise la nouvelle fonction qui passe par la table de liaison
       _syndicsFuture = _service.getMyInterSyndics(widget.syndicId);
     });
   }
@@ -37,50 +34,43 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
-    bool isMobile = screenWidth < 700;
+    bool isWeb = screenWidth >= 900;
 
     return MainLayout(
-      title: '', 
+      title: 'Gestion des Syndics', 
       activePage: 'Syndics',
       residenceId: widget.residenceId,
       syndicId: widget.syndicId,
       body: SingleChildScrollView(
         padding: EdgeInsets.only(
-            left: isMobile ? 15 : 30,
-            right: isMobile ? 15 : 30,
+            left: !isWeb ? 15 : 30,
+            right: !isWeb ? 15 : 30,
             bottom: 30,
-            top: isMobile ? 10 : 25
+            top: !isWeb ? 10 : 25
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildActionHeader(isMobile),
+            _buildActionHeader(isWeb),
             const SizedBox(height: 25),
 
             _buildSearchBar(),
             const SizedBox(height: 25),
 
-            _buildTopKPIs(isMobile),
+            _buildTopKPIs(!isWeb),
             const SizedBox(height: 35),
 
-            _buildSyndicsTable(isMobile, screenWidth),
+            _buildSyndicsTable(!isWeb, screenWidth),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildActionHeader(bool isMobile) {
-    if (isMobile) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text("Gestion des Syndics", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: darkGrey)),
-          const Text("Gérez les syndics et leurs affectations", style: TextStyle(color: Colors.grey, fontSize: 13)),
-          const SizedBox(height: 15),
-          _addButton(true),
-        ],
-      );
+  Widget _buildActionHeader(bool isWeb) {
+    if (!isWeb) {
+      // Sur Mobile, on ne garde que le bouton d'ajout car le titre est déjà dans l'AppBar
+      return _addButton(true);
     }
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -211,18 +201,13 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
   }
 
   Widget _buildTranchesCell(dynamic tranchesData) {
-    // 1. Si le syndic n'a aucune tranche du tout
     if (tranchesData == null || tranchesData is! List || tranchesData.isEmpty) {
       return const Text("Aucune affectation", style: TextStyle(color: Colors.grey, fontSize: 12));
     }
-
-    // 2. On filtre pour ne garder que les tranches de CETTE résidence (residenceId)
     final List filteredTranches = tranchesData.where((t) => t['residence_id'] == widget.residenceId).toList();
-
     if (filteredTranches.isEmpty) {
       return const Text("Non affecté ici", style: TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold));
     }
-
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,7 +247,7 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
 
     showDialog(
       context: context,
-      barrierDismissible: false, // Empêche de fermer en cliquant à côté pendant le chargement
+      barrierDismissible: false,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -327,59 +312,29 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: isLoading ? null : () async {
-                      // VALIDATION
-                      if (nomController.text.trim().isEmpty ||
-                          prenomController.text.trim().isEmpty ||
-                          (!isEdit && emailController.text.trim().isEmpty)) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Veuillez remplir le Prénom, le Nom et l'Email"), backgroundColor: Colors.orange),
-                        );
+                      if (nomController.text.trim().isEmpty || prenomController.text.trim().isEmpty || (!isEdit && emailController.text.trim().isEmpty)) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Veuillez remplir le Prénom, le Nom et l'Email"), backgroundColor: Colors.orange));
                         return;
                       }
-
                       setDialogState(() => isLoading = true);
-
                       try {
                         if (isEdit) {
-                          await _service.updateInterSyndic(
-                              syndic['id'],
-                              nomController.text.trim(),
-                              prenomController.text.trim(),
-                              phoneController.text.trim()
-                          );
+                          await _service.updateInterSyndic(syndic['id'], nomController.text.trim(), prenomController.text.trim(), phoneController.text.trim());
                         } else {
-                          await _service.createAndInviteSyndic(
-                            email: emailController.text.trim(),
-                            nom: nomController.text.trim(),
-                            prenom: prenomController.text.trim(),
-                            telephone: phoneController.text.trim(),
-                            mySyndicGeneralId: widget.syndicId,
-                          );
+                          await _service.createAndInviteSyndic(email: emailController.text.trim(), nom: nomController.text.trim(), prenom: prenomController.text.trim(), telephone: phoneController.text.trim(), mySyndicGeneralId: widget.syndicId);
                         }
-
                         if (mounted) {
                           Navigator.pop(context);
                           _loadData();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(isEdit ? "Modifié avec succès" : "Syndic ajouté avec succès"), backgroundColor: Colors.green),
-                          );
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEdit ? "Modifié avec succès" : "Syndic ajouté avec succès"), backgroundColor: Colors.green));
                         }
                       } catch (e) {
                         setDialogState(() => isLoading = false);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text("Erreur : ${e.toString()}"), backgroundColor: Colors.red),
-                        );
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : ${e.toString()}"), backgroundColor: Colors.red));
                       }
                     },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryOrange,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: isLoading
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : Text(isEdit ? "Enregistrer" : "Ajouter", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(backgroundColor: primaryOrange, padding: const EdgeInsets.symmetric(vertical: 15), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    child: isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : Text(isEdit ? "Enregistrer" : "Ajouter", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -391,29 +346,10 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
   }
 
   Widget _buildFieldLabel(String label) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6.0),
-      child: Text(
-        label,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF4A4E69)),
-      ),
-    );
+    return Padding(padding: const EdgeInsets.only(bottom: 6.0), child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF4A4E69))));
   }
 
   InputDecoration _buildInputDecoration(String hint) {
-    return InputDecoration(
-      hintText: hint,
-      filled: true,
-      fillColor: const Color(0xFFF8F9FA),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: primaryOrange, width: 1.5),
-      ),
-    );
+    return InputDecoration(hintText: hint, filled: true, fillColor: const Color(0xFFF8F9FA), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: primaryOrange, width: 1.5)));
   }
 }

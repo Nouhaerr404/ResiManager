@@ -11,7 +11,7 @@ class TrancheModel {
   final int nombreParkings;
   final int nombreGarages;
   final int nombreBoxes;
-  final double prixAnnuel; // Ajouté
+  final double prixAnnuel;
   final DateTime? createdAt;
 
   // Données jointes optionnelles
@@ -29,7 +29,7 @@ class TrancheModel {
     required this.nombreParkings,
     required this.nombreGarages,
     required this.nombreBoxes,
-    required this.prixAnnuel, // Ajouté
+    this.prixAnnuel = 0.0,
     this.createdAt,
     this.residenceNom,
     this.interSyndicNom,
@@ -50,7 +50,7 @@ class TrancheModel {
       nombreParkings: j['nombre_parkings'] ?? 0,
       nombreGarages: j['nombre_garages'] ?? 0,
       nombreBoxes: j['nombre_boxes'] ?? 0,
-      prixAnnuel: double.parse((j['prix_annuel'] ?? 0).toString()), // Ajouté
+      prixAnnuel: double.parse((j['prix_annuel'] ?? 0).toString()),
       createdAt: j['created_at'] != null
           ? DateTime.tryParse(j['created_at'])
           : null,
@@ -71,6 +71,6 @@ class TrancheModel {
     'nombre_parkings': nombreParkings,
     'nombre_garages': nombreGarages,
     'nombre_boxes': nombreBoxes,
-    'prix_annuel': prixAnnuel, // Ajouté
+    'prix_annuel': prixAnnuel,
   };
-}
+}

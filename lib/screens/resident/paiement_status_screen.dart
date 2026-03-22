@@ -322,7 +322,8 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
         // ── BANNER STATUT ──
         _statutBanner(statut, reste),
         const SizedBox(height: 16),
-
+        const SizedBox(height: 16),
+        _buildLignesDetail(),
         // ── INFO BOX ──
         Container(
           width: double.infinity,
@@ -344,7 +345,116 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
       ]),
     );
   }
+  Widget _buildLignesDetail() {
+    final List lignes = (_overview!['lignes'] as List?) ?? [];
+    if (lignes.isEmpty) return const SizedBox();
 
+    // Icône + couleur selon type
+    IconData _typeIcon(String type) {
+      switch (type) {
+        case 'parking': return Icons.local_parking_rounded;
+        case 'garage':  return Icons.garage_rounded;
+        case 'box':     return Icons.inventory_2_rounded;
+        default:        return Icons.home_work_rounded;
+      }
+    }
+
+    String _typeLabel(String type, String? ref) {
+      switch (type) {
+        case 'parking': return 'Parking${ref != null ? ' $ref' : ''}';
+        case 'garage':  return 'Garage${ref != null ? ' $ref' : ''}';
+        case 'box':     return 'Box${ref != null ? ' $ref' : ''}';
+        default:        return 'Charges';
+      }
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12, offset: const Offset(0, 4))],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Détail des cotisations',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        const SizedBox(height: 14),
+        ...lignes.map((l) {
+          final String type   = l['type']  as String? ?? 'charges';
+          final String? ref   = l['reference'] as String?;
+          final double  mt    = (l['montant_total'] as num?)?.toDouble() ?? 0;
+          final double  mp    = (l['montant_paye']  as num?)?.toDouble() ?? 0;
+          final double  reste = (l['reste']         as num?)?.toDouble() ?? 0;
+          final String  stat  = l['statut']         as String? ?? 'impaye';
+          final double  pct   = mt > 0 ? (mp / mt).clamp(0.0, 1.0) : 0.0;
+
+          Color color;
+          switch (stat) {
+            case 'complet': color = _green;  break;
+            case 'partiel': color = _yellow; break;
+            default:        color = _orange;
+          }
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withOpacity(0.2)),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(_typeIcon(type), color: color, size: 15),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Text(
+                  _typeLabel(type, ref),
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                )),
+                _statutChip(stat),
+              ]),
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: pct,
+                  minHeight: 6,
+                  backgroundColor: Colors.grey.shade100,
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _ligneMontant('Payé',  mp,     _green),
+                  _ligneMontant('Reste', reste,  _orange),
+                  _ligneMontant('Total', mt,     _purple),
+                ],
+              ),
+            ]),
+          );
+        }).toList(),
+      ]),
+    );
+  }
+
+  Widget _ligneMontant(String label, double amount, Color color) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 10)),
+        Text('${_format(amount)} DH',
+            style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+      ]);
   Widget _montantCard(String label, double amount, Color color) {
     return Expanded(child: Container(
       padding: const EdgeInsets.all(12),
@@ -613,10 +723,13 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
             Text(dateLabel, style: const TextStyle(
                 fontWeight: FontWeight.w600, fontSize: 13)),
             const SizedBox(height: 2),
-            Text('Année ${year ?? "???"}',
-                style: TextStyle(
-                    color: Colors.grey.shade500, fontSize: 11)),
-            const SizedBox(height: 6),
+            Row(children: [
+              _typeBadgeHistorique(item['type_paiement']?.toString() ?? 'charges',
+                  item['reference'] as String?),
+              const SizedBox(width: 6),
+              Text('${year ?? "???"}',
+                  style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+            ]),            const SizedBox(height: 6),
             Container(
               padding: const EdgeInsets.symmetric(
                   horizontal: 8, vertical: 3),
@@ -643,7 +756,40 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
       ),
     );
   }
+  Widget _typeBadgeHistorique(String type, String? ref) {
+    IconData icon;
+    Color color;
+    String label;
 
+    switch (type) {
+      case 'parking':
+        icon = Icons.local_parking_rounded; color = _purple;
+        label = 'Parking${ref != null ? ' $ref' : ''}'; break;
+      case 'garage':
+        icon = Icons.garage_rounded; color = Color(0xFF0891B2);
+        label = 'Garage${ref != null ? ' $ref' : ''}'; break;
+      case 'box':
+        icon = Icons.inventory_2_rounded; color = _yellow;
+        label = 'Box${ref != null ? ' $ref' : ''}'; break;
+      default:
+        icon = Icons.home_work_rounded; color = _orange;
+        label = 'Charges';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 10, color: color),
+        const SizedBox(width: 3),
+        Text(label, style: TextStyle(
+            color: color, fontSize: 10, fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
   Widget _btnRecu() => GestureDetector(
     onTap: () => ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Téléchargement du reçu...'),

@@ -474,8 +474,7 @@ class _HistoriquePaiementsScreenState extends State<HistoriquePaiementsScreen>
           Text('${_format(amount)} DH',
               style: const TextStyle(
                   color: _green, fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 4),
-          hasDoc ? _btnRecu() : _btnRecuDisabled(),
+
         ]),
       ]),
     );

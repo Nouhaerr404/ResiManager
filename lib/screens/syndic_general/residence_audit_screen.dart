@@ -14,7 +14,7 @@ class ResidenceAuditScreen extends StatefulWidget {
 class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
   final AccountingService _service = AccountingService();
   int _selectedAnnee = DateTime.now().year;
-  String _searchQuery = ""; // Valeur de recherche
+  String _searchQuery = ""; 
 
   final Color primaryOrange = const Color(0xFFFF6F4A);
   final Color darkGrey = const Color(0xFF2C2C2C);
@@ -25,6 +25,7 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
     bool isWeb = width > 900;
 
     return MainLayout(
+      title: 'Audit Financier',
       activePage: 'Audit',
       residenceId: widget.residenceId,
       syndicId: widget.syndicId,
@@ -38,37 +39,31 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
           final List allPayments = data['payments'];
           final List tranches = data['tranches'];
 
-          // --- LOGIQUE DE FILTRAGE GLOBALE ---
           final query = _searchQuery.toLowerCase();
 
-          // 1. Filtrer les dépenses globales
           final filteredGlobalExpenses = allExpenses.where((e) {
             bool isGlobal = e['tranches'] == null;
             if (!isGlobal) return false;
             return e['categories']['nom'].toString().toLowerCase().contains(query);
           }).toList();
 
-          // 2. Filtrer les tranches
           final filteredTranches = tranches.where((t) {
             String tName = t['nom'].toString().toLowerCase();
-            // Une tranche reste si son nom correspond OU si un de ses résidents correspond
             bool trancheMatches = tName.contains(query);
             bool residentInTrancheMatches = allPayments.any((p) =>
             p['appartements']?['immeubles']?['tranches']?['nom'] == t['nom'] &&
                 p['resident']['nom'].toString().toLowerCase().contains(query));
-
             return trancheMatches || residentInTrancheMatches;
           }).toList();
 
           return ListView(
             padding: EdgeInsets.all(isWeb ? 40 : 15),
             children: [
-              _buildHeader(),
+              _buildHeader(isWeb),
               const SizedBox(height: 20),
-              _buildSearchBar(), // NOUVELLE BARRE DE RECHERCHE
+              _buildSearchBar(), 
               const SizedBox(height: 30),
 
-              // SECTION FRAIS GÉNÉRAUX (Visible seulement si on ne cherche pas un résident précis ou si le nom correspond)
               if (filteredGlobalExpenses.isNotEmpty) ...[
                 _buildGlobalAuditCard(filteredGlobalExpenses),
                 const SizedBox(height: 30),
@@ -81,7 +76,6 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
 
               ...filteredTranches.map((t) {
                 final tExp = allExpenses.where((e) => e['tranche_id'] == t['id']).toList();
-                // Filtrer les paiements de la tranche selon la recherche
                 final tPay = allPayments.where((p) {
                   bool isThisTranche = p['appartements']?['immeubles']?['tranches']?['nom'] == t['nom'];
                   bool matchesQuery = p['resident']['nom'].toString().toLowerCase().contains(query) ||
@@ -100,12 +94,12 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
     );
   }
 
-  // --- HEADER SANS BOUTONS NAVIGATION ---
-  Widget _buildHeader() {
+  Widget _buildHeader(bool isWeb) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text("Audit Financier", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+        if (isWeb) const Text("Audit Financier", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+        if (!isWeb) const SizedBox(), // Espaceur pour garder le dropdown à droite sur mobile
         DropdownButton<int>(
           value: _selectedAnnee,
           underline: const SizedBox(),
@@ -116,12 +110,11 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
     );
   }
 
-  // --- BARRE DE RECHERCHE ---
   Widget _buildSearchBar() {
     return TextField(
       onChanged: (value) => setState(() => _searchQuery = value),
       decoration: InputDecoration(
-        hintText: "Rechercher une tranche, un résident, une catégorie...",
+        hintText: "Rechercher une tranche, un résident...",
         prefixIcon: const Icon(Icons.search, size: 20),
         filled: true,
         fillColor: Colors.white,
@@ -132,7 +125,6 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
     );
   }
 
-  // --- LES CARTES ET TABLEAUX (Gardent le même style optimisé) ---
   Widget _buildGlobalAuditCard(List expenses) {
     double total = expenses.fold(0, (sum, e) => sum + (e['montant'] as num).toDouble());
     return Container(
@@ -186,9 +178,6 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
       ),
     );
   }
-
-  // --- REPRENDS TES AUTRES FONCTIONS (_buildImmeubleGrouping, _buildExpenseTable, etc.) ICI ---
-  // Elles restent identiques car elles sont déjà parfaites.
 
   Widget _buildImmeubleGrouping(List payments) {
     Map<String, List<Map<String, dynamic>>> immGroups = {};
@@ -298,22 +287,6 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         const Text("BILAN FINAL TRANCHE", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey)),
         Text("${solde.toInt()} DH", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: solde >= 0 ? Colors.green : Colors.red)),
-      ]),
-    );
-  }
-
-  Widget _buildGlobalSoldeCard(double totalExp, double totalPay, double solde) {
-    bool pos = solde >= 0;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: darkGrey, borderRadius: BorderRadius.circular(15)),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text("BILAN GÉNÉRAL RÉSIDENCE", style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 5),
-          Text("Entrées: +${totalPay.toInt()} | Sorties: -${totalExp.toInt()}", style: const TextStyle(color: Colors.white54, fontSize: 9)),
-        ]),
-        Text("${solde.toInt()} DH", style: TextStyle(color: pos ? Colors.greenAccent : Colors.redAccent, fontSize: 20, fontWeight: FontWeight.w900)),
       ]),
     );
   }
