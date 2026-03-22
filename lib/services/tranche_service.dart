@@ -87,19 +87,52 @@ class TrancheService {
           .select('id')
           .eq('tranche_id', trancheId);
 
-      // Finances
-      final finances = await _db
-          .from('finances_summary')
-          .select('*')
-          .eq('tranche_id', trancheId)
-          .maybeSingle();
+      // ── Finances (On-the-fly calculation) ──────────────────
+      // 1. Total Dépenses de la Tranche (Spécifiques)
+      final depensesRes = await _db
+          .from('depenses')
+          .select('montant')
+          .eq('tranche_id', trancheId);
+      
+      double totalDepenses = 0;
+      for (var d in (depensesRes as List)) {
+        totalDepenses += double.parse(d['montant'].toString());
+      }
 
-      // Reunions planifiees
-      final reunions = await _db
-          .from('reunions')
-          .select('id')
-          .eq('tranche_id', trancheId)
-          .eq('statut', 'planifiee');
+      // 2. Total Revenus de la Tranche (Paiements perçus)
+      // Note: On pourrait filtrer par type_paiement if needed
+      final paiementsRes = await _db
+          .from('paiements')
+          .select('montant_paye')
+          .filter('appartement_id', 'in', 
+            _db.from('appartements')
+               .select('id')
+               .filter('immeuble_id', 'in', 
+                 _db.from('immeubles')
+                    .select('id')
+                    .eq('tranche_id', trancheId)
+               )
+          );
+      
+      // Since complex subqueries in Supabase might be tricky, let's use the immeubleIds we already have
+      double totalRevenus = 0;
+      if (immeubleIds.isNotEmpty) {
+        final appartementsRev = await _db
+            .from('appartements')
+            .select('id')
+            .inFilter('immeuble_id', immeubleIds);
+        final appartIdsRev = (appartementsRev as List).map((a) => a['id'] as int).toList();
+        
+        if (appartIdsRev.isNotEmpty) {
+          final payRes = await _db
+              .from('paiements')
+              .select('montant_paye')
+              .inFilter('appartement_id', appartIdsRev);
+          for (var p in (payRes as List)) {
+            totalRevenus += double.parse(p['montant_paye'].toString());
+          }
+        }
+      }
 
       // ── NOUVEAU : Reclamations en cours ──────────────────
       final reclamations = await _db
@@ -107,6 +140,13 @@ class TrancheService {
           .select('id')
           .eq('tranche_id', trancheId)
           .eq('statut', 'en_cours');
+
+      // Reunions planifiees
+      final reunions = await _db
+          .from('reunions')
+          .select('id')
+          .eq('tranche_id', trancheId)
+          .eq('statut', 'planifiee');
 
       // ── Annonces publiées ─────────────────────────────────
       final annonces = await _db
@@ -125,9 +165,9 @@ class TrancheService {
         'nbReunions':      (reunions as List).length,
         'nbReclamations':  (reclamations as List).length,
         'nbAnnonces':      (annonces as List).length,
-        'solde':    finances?['solde'] ?? 0,
-        'revenus':  finances?['revenus_total'] ?? 0,
-        'depenses': finances?['depenses_total'] ?? 0,
+        'solde':    totalRevenus - totalDepenses,
+        'revenus':  totalRevenus,
+        'depenses': totalDepenses,
       };
 
       print('>>> Stats: $stats');

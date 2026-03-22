@@ -165,44 +165,44 @@ class FinanceService {
     }
 
     var depQuery = _db.from('depenses')
-        .select('montant, tranche_id')
-        .eq('inter_syndic_id', interSyndicId);
+        .select('montant, tranche_id, syndic_general_id, inter_syndic_id')
+        .eq('residence_id', residenceId);
     if (annee != null) depQuery = depQuery.eq('annee', annee);
 
-    final depensesInter = await depQuery;
+    final allDepenses = await depQuery;
 
-    double totalDepenses = 0;
+    double totalDepensesSpecifiques = 0;
+    double totalDepensesGlobalesResidence = 0;
     Map<int, double> depByTranche = {};
-    for (var d in depensesInter) {
+
+    for (var d in allDepenses) {
       double val = double.parse(d['montant'].toString());
-      totalDepenses += val;
-      if (d['tranche_id'] != null) {
-        int tId = d['tranche_id'];
-        depByTranche[tId] = (depByTranche[tId] ?? 0) + val;
+      
+      // Si c'est une dépense de l'inter-syndic actuel
+      if (d['inter_syndic_id'] == interSyndicId) {
+        totalDepensesSpecifiques += val;
+        if (d['tranche_id'] != null) {
+          int tId = d['tranche_id'];
+          depByTranche[tId] = (depByTranche[tId] ?? 0) + val;
+        }
+      } 
+      // Si c'est une dépense globale du syndic général pour cette résidence
+      else if (d['syndic_general_id'] != null) {
+        totalDepensesGlobalesResidence += val;
       }
     }
 
     var payQuery = _db.from('paiements')
-        .select('montant_paye')
+        .select('montant_paye, montant_total')
         .eq('inter_syndic_id', interSyndicId);
     if (annee != null) payQuery = payQuery.eq('annee', annee);
 
     final paiementsRes = await payQuery;
 
     double totalRevenus = 0;
+    double totalObjectif = 0;
     for (var p in paiementsRes) {
       totalRevenus += double.parse(p['montant_paye'].toString());
-    }
-
-    var objQuery = _db.from('paiements')
-        .select('montant_total')
-        .eq('inter_syndic_id', interSyndicId);
-    if (annee != null) objQuery = objQuery.eq('annee', annee);
-
-    final targetRes = await objQuery;
-
-    double totalObjectif = 0;
-    for (var p in targetRes) {
       totalObjectif += double.parse(p['montant_total'].toString());
     }
 
@@ -233,10 +233,11 @@ class FinanceService {
     }).toList();
 
     return {
-      'total_depenses': totalDepenses,
+      'total_depenses': totalDepensesSpecifiques,
+      'total_depenses_globales': totalDepensesGlobalesResidence,
       'total_revenus': totalRevenus,
       'objectif_annuel': totalObjectif,
-      'solde': totalRevenus - totalDepenses,
+      'solde': totalRevenus - totalDepensesSpecifiques,
       'recent_expenses': recentExpenses,
       'depenses_par_tranche': tranches.map((t) => {
         'nom': t['nom'],
