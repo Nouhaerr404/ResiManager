@@ -8,6 +8,7 @@ import 'resident_reunions_screen.dart';
 import 'historique_paiements_screen.dart';
 import 'resident_reclamations_screen.dart';
 import 'paiement_status_screen.dart';
+
 class ResidentLayout extends StatefulWidget {
   final int userId;
   final int initialIndex;
@@ -59,6 +60,7 @@ class _ResidentLayoutState extends State<ResidentLayout> {
           userId: widget.userId, onNavigate: _goTo);
       case 5: return ResidentReclamationsScreen(
           userId: widget.userId, onNavigate: _goTo);
+
       default: return ResidentDashboardScreen(
           userId: widget.userId, onNavigate: _goTo);
     }
@@ -225,6 +227,7 @@ class _ResidentLayoutState extends State<ResidentLayout> {
                 _drawerItem(3, Icons.article, 'Annonces'),
                 _drawerItem(4, Icons.calendar_today, 'Réunions'),
                 _drawerItem(5, Icons.report_problem, 'Réclamations'),
+
               ],
             ),
           ),
