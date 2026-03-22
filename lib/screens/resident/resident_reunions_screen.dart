@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/resident_service.dart';
 import 'resident_dashboard_screen.dart';
-
+import '../../../services/convocation_pdf_service.dart';
+import 'dart:typed_data';
+import 'package:http/http.dart' as http;
 class ResidentReunionsScreen extends StatefulWidget {
   final int userId;
   final Function(int)? onNavigate;
@@ -602,6 +604,9 @@ class _ResidentReunionsScreenState extends State<ResidentReunionsScreen>
                   Icons.location_on_rounded, const Color(0xFF059669)),
             ]),
             const SizedBox(height: 24),
+              const SizedBox(height: 12),
+              _buildConvocationBtn(r['id'] as int),
+
 
             AnimatedContainer(
               duration: const Duration(milliseconds: 250),
@@ -762,6 +767,101 @@ class _ResidentReunionsScreenState extends State<ResidentReunionsScreen>
     );
   }
 
+
+  Widget _buildConvocationBtn(int reunionId) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: ConvocationPdfService.getConvocationsResident(userId),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox();
+
+        // Cherche la convocation pour cette réunion
+        final conv = snapshot.data!.firstWhere(
+              (c) => c['reunion_id'] == reunionId,
+          orElse: () => {},
+        );
+
+        if (conv.isEmpty || conv['pdf_url'] == null) return const SizedBox();
+
+        final bool lu = conv['lu'] as bool? ?? false;
+
+        return GestureDetector(
+          onTap: () async {
+            await ConvocationPdfService.marquerLu(conv['id'] as int);
+            try {
+              final response = await http.get(Uri.parse(conv['pdf_url']));
+              if (response.statusCode == 200) {
+                await ConvocationPdfService.share(
+                    Uint8List.fromList(response.bodyBytes),
+                    conv['titre'] ?? 'convocation');
+              }
+            } catch (e) {
+              _snack("Erreur ouverture PDF : $e", Colors.red);
+            }
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: lu
+                  ? const Color(0xFFEEF1FF)
+                  : const Color(0xFFFFF0EB),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: lu
+                      ? const Color(0xFF4B6BFB).withOpacity(0.3)
+                      : _orange.withOpacity(0.3)),
+            ),
+            child: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                    color: lu
+                        ? const Color(0xFF4B6BFB).withOpacity(0.1)
+                        : _orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8)),
+                child: Icon(Icons.picture_as_pdf_rounded,
+                    color: lu ? const Color(0xFF4B6BFB) : _orange,
+                    size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Convocation officielle",
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: lu
+                                ? const Color(0xFF4B6BFB)
+                                : _orange)),
+                    Text(
+                        lu
+                            ? "Déjà consultée — Appuyer pour re-télécharger"
+                            : "Nouvelle convocation — Appuyer pour télécharger",
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade500)),
+                  ])),
+              if (!lu)
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                      color: _orange,
+                      shape: BoxShape.circle),
+                ),
+              const SizedBox(width: 8),
+              Icon(Icons.download_rounded,
+                  color: lu
+                      ? const Color(0xFF4B6BFB)
+                      : _orange,
+                  size: 20),
+            ]),
+          ),
+        );
+      },
+    );
+  }
   // ─────────────────────────────────────────────
   // WIDGETS HELPERS (identiques à l'original)
   // ─────────────────────────────────────────────
