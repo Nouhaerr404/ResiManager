@@ -144,16 +144,56 @@ class TrancheService {
   }
 
   Future<List<TrancheModel>> getTranchesByResidence(int residenceId) async {
+    // On demande à Supabase de compter les lignes liées (immeubles et appartements)
     final response = await _db
         .from('tranches')
-        .select('*, residences(*), users(nom, prenom)')
+        .select('''
+          *, 
+          users(nom, prenom),
+          immeubles(count),
+          appartements_count:immeubles(appartements(count))
+        ''')
         .eq('residence_id', residenceId);
 
-    return (response as List)
-        .map((e) => TrancheModel.fromJson(e))
-        .toList();
-  }
+    final List list = response as List;
 
+    return list.map((e) {
+      // 1. On récupère le compte réel des immeubles de cette tranche
+      int realImmCount = 0;
+      if (e['immeubles'] != null && (e['immeubles'] as List).isNotEmpty) {
+        realImmCount = e['immeubles'][0]['count'] ?? 0;
+      }
+
+      // 2. On calcule le compte réel des appartements (somme des apparts de chaque immeuble)
+      int totalApparts = 0;
+      if (e['appartements_count'] != null) {
+        for (var imm in e['appartements_count']) {
+          if (imm['appartements'] != null && (imm['appartements'] as List).isNotEmpty) {
+            totalApparts += (imm['appartements'][0]['count'] as int);
+          }
+        }
+      }
+
+      // 3. On crée le modèle avec les données de comptage RÉELLES
+      return TrancheModel(
+        id: e['id'],
+        nom: e['nom'] ?? '',
+        description: e['description'],
+        residenceId: e['residence_id'],
+        interSyndicId: e['inter_syndic_id'],
+        // ON UTILISE NOS CALCULS RÉELS ICI
+        nombreImmeubles: realImmCount,
+        nombreAppartements: totalApparts,
+        // On garde les autres compteurs tels quels (ou on fera la même chose plus tard)
+        nombreParkings: e['nombre_parkings'] ?? 0,
+        nombreGarages: e['nombre_garages'] ?? 0,
+        nombreBoxes: e['nombre_boxes'] ?? 0,
+        interSyndicNom: e['users'] != null
+            ? "${e['users']['prenom']} ${e['users']['nom']}"
+            : null,
+      );
+    }).toList();
+  }
   Future<void> createTrancheComplet(
       int residenceId,
       String nom,
