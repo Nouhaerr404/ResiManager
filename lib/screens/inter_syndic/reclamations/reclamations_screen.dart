@@ -80,8 +80,8 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
 
   // ── Compteurs pour les stats ──────────────────────────────
   int get _nbEnCours => _all.where((r) => r.statut == 'en_cours').length;
-  int get _nbResolu  => _all.where((r) => r.statut == 'resolu').length;
-  int get _nbRejete  => _all.where((r) => r.statut == 'rejete').length;
+  int get _nbResolu  => _all.where((r) => r.statut == 'resolue').length;
+  int get _nbRejete  => _all.where((r) => r.statut == 'rejetee').length;
 
   @override
   Widget build(BuildContext context) {
@@ -215,8 +215,8 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
     final filters = [
       ('tous',     'Tous',      _all.length),
       ('en_cours', 'En cours',  _nbEnCours),
-      ('resolu',   'Resolus',   _nbResolu),
-      ('rejete',   'Rejetes',   _nbRejete),
+      ('resolue',   'Resolus',   _nbResolu),
+      ('rejetee',   'Rejetes',   _nbRejete),
     ];
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -617,36 +617,36 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
 
   Color _statutColor(String s) {
     switch (s) {
-      case 'resolu': return _C.green;
-      case 'rejete': return _C.red;
+      case 'resolue': return _C.green;
+      case 'rejetee': return _C.red;
       default:       return _C.amber;
     }
   }
 
   Color _statutBg(String s) {
     switch (s) {
-      case 'resolu': return _C.greenLight;
-      case 'rejete': return _C.redLight;
+      case 'resolue': return _C.greenLight;
+      case 'rejetee': return _C.redLight;
       default:       return _C.amberLight;
     }
   }
 
   IconData _statutIcon(String s) {
     switch (s) {
-      case 'resolu': return Icons.check_circle_rounded;
-      case 'rejete': return Icons.cancel_rounded;
+      case 'resolue': return Icons.check_circle_rounded;
+      case 'rejetee': return Icons.cancel_rounded;
       default:       return Icons.hourglass_empty_rounded;
     }
   }
 
-  Color _statutColorFromEnum(StatutReclamation s) => _statutColor(s.name);
-  Color _statutBgFromEnum(StatutReclamation s)    => _statutBg(s.name);
+  Color _statutColorFromEnum(StatutReclamation s) => _statutColor(s.dbValue);
+  Color _statutBgFromEnum(StatutReclamation s)    => _statutBg(s.dbValue);
 
   String _statutDesc(StatutReclamation s) {
     switch (s) {
       case StatutReclamation.en_cours: return 'Reclamation en attente de traitement';
-      case StatutReclamation.resolu:   return 'Reclamation resolue avec succes';
-      case StatutReclamation.rejete:   return 'Reclamation refusee ou non valide';
+      case StatutReclamation.resolue:   return 'Reclamation resolue avec succes';
+      case StatutReclamation.rejetee:   return 'Reclamation refusee ou non valide';
     }
   }
 
