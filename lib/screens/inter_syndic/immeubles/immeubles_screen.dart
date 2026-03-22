@@ -288,7 +288,6 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
     final bool isEdit = immeuble != null;
     final nomCtrl = TextEditingController(text: isEdit ? immeuble.nom : '');
     final countCtrl = TextEditingController(text: isEdit ? immeuble.nombreAppartements.toString() : '');
-    final priceCtrl = TextEditingController(text: isEdit ? (immeuble.prixAnnuel > 0 ? immeuble.prixAnnuel.toString() : '') : '');
     bool saving = false;
 
     showModalBottomSheet(
@@ -324,28 +323,28 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
               _buildFieldLabel('Nom de l\'immeuble (ex: Immeuble A1)'),
               _buildTextField(nomCtrl, 'Ex: Immeuble A1'),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildFieldLabel('Nombre d\'unités'),
-                        _buildTextField(countCtrl, 'Ex: 24', keyboardType: TextInputType.number),
-                      ],
+              _buildFieldLabel('Nombre d\'unités'),
+              _buildTextField(countCtrl, 'Ex: 24', keyboardType: TextInputType.number),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _C.coral.withOpacity(0.07),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _C.coral.withOpacity(0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded, color: _C.coral, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Le prix annuel est défini au niveau de la tranche (${widget.tranche.prixAnnuel.toStringAsFixed(0)} DH)',
+                        style: TextStyle(color: _C.coral, fontSize: 11, fontWeight: FontWeight.w500),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildFieldLabel('Prix Annuel / Appt'),
-                        _buildTextField(priceCtrl, 'Ex: 2400', keyboardType: TextInputType.number),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(height: 32),
               SizedBox(
@@ -355,12 +354,11 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
                   onPressed: saving ? null : () async {
                     if (nomCtrl.text.isEmpty) return;
                     setModalState(() => saving = true);
+                    // Seules les colonnes qui existent dans la table Supabase
                     final data = {
-                      'nom': nomCtrl.text,
+                      'nom': nomCtrl.text.trim(),
                       'nombre_appartements': int.tryParse(countCtrl.text) ?? 0,
-                      'prix_annuel': double.tryParse(priceCtrl.text) ?? 0.0,
                       'tranche_id': widget.tranche.id,
-                      'charges_generales': 0.0, // Default for now
                     };
                     try {
                       if (isEdit) {
