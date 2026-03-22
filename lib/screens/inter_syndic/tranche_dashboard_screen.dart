@@ -575,7 +575,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       label: 'Garages',
       value: '${_num(_stats?['nbGarages'] ?? 0)}',
       sub: 'places',
-      icon: Icons.garage_outlined,
+      icon: Icons.storefront_outlined,
       iconBg: _C.amberLight,
       valueColor: _C.amber,
       interactive: true,
@@ -653,6 +653,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(m.label,

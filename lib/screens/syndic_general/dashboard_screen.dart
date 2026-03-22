@@ -26,68 +26,98 @@ class _DashboardScreenState extends State<DashboardScreen> {
     bool isWeb = width > 900;
 
     return MainLayout(
+      title: 'Statistiques Globales',
       activePage: 'Dashboard',
       residenceId: widget.residenceId,
       syndicId: widget.syndicId,
-      body: FutureBuilder<List<dynamic>>(
-        // ON CHARGE LES DEUX SOURCES DE DONNÉES EN MÊME TEMPS
-        future: Future.wait([
-          _service.fetchDashboardStats(widget.residenceId),
-          _service.getChartsData(widget.residenceId),
-        ]),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) return Center(child: Text("Erreur: ${snapshot.error}"));
-          if (!snapshot.hasData) return const Center(child: Text("Aucune donnée"));
-
-          // Extraction des données réelles
-          final DashboardStats stats = snapshot.data![0];
-          final Map<String, dynamic> chartData = snapshot.data![1];
-          final List<double> expenses = chartData['expenses'];
-          final List<double> revenues = chartData['revenues'];
-
-          return SingleChildScrollView(
-            padding: EdgeInsets.all(isWeb ? 40 : 15),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("Statistiques Globales", style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900)),
-                const Text("Analyse en temps réel de votre résidence", style: TextStyle(color: Colors.grey, fontSize: 13)),
-                const SizedBox(height: 25),
-
-                // 1. LES CARTES KPI UNIFORMES
-                _buildKpiSection(stats, isWeb),
-                const SizedBox(height: 30),
-
-                // 2. LES ANALYSES (Graphiques)
-                if (isWeb)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 2, child: _buildMonthlyBalanceChart(revenues, expenses)),
-                      const SizedBox(width: 25),
-                      Expanded(flex: 1, child: _buildRecoveryGauge(stats.recoveryRate, true)),
-                    ],
-                  )
-                else
-                  Column(
-                    children: [
-                      _buildMonthlyBalanceChart(revenues, expenses),
-                      const SizedBox(height: 20),
-                      _buildRecoveryGauge(stats.recoveryRate, false),
-                    ],
-                  ),
-              ],
+      body: Stack(
+        children: [
+          // 1. IMAGE D'ARRIÈRE-PLAN
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/residence_bg.png',
+              fit: BoxFit.cover,
             ),
-          );
-        },
+          ),
+          // 2. VOILE SOMBRE POUR LA LISIBILITÉ
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.3),
+                    Colors.black.withOpacity(0.7),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // 3. CONTENU DU DASHBOARD
+          FutureBuilder<List<dynamic>>(
+            future: Future.wait([
+              _service.fetchDashboardStats(widget.residenceId),
+              _service.getChartsData(widget.residenceId),
+            ]),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: Colors.white));
+              }
+              if (snapshot.hasError) return Center(child: Text("Erreur: ${snapshot.error}", style: const TextStyle(color: Colors.white)));
+              if (!snapshot.hasData) return const Center(child: Text("Aucune donnée", style: TextStyle(color: Colors.white)));
+
+              final DashboardStats stats = snapshot.data![0];
+              final Map<String, dynamic> chartData = snapshot.data![1];
+              final List<double> expenses = chartData['expenses'];
+              final List<double> revenues = chartData['revenues'];
+
+              return SingleChildScrollView(
+                padding: EdgeInsets.all(isWeb ? 40 : 15),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // N'affiche le titre que sur WEB pour éviter la répétition sur Mobile
+                    if (isWeb) ...[
+                      const Text("Statistiques Globales", 
+                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white)),
+                      const Text("Analyse en temps réel de votre résidence", 
+                        style: TextStyle(color: Colors.white70, fontSize: 14)),
+                      const SizedBox(height: 30),
+                    ],
+
+                    // CARTES KPI
+                    _buildKpiSection(stats, isWeb),
+                    const SizedBox(height: 35),
+
+                    // ANALYSES (Graphiques)
+                    if (isWeb)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 2, child: _buildMonthlyBalanceChart(revenues, expenses)),
+                          const SizedBox(width: 25),
+                          Expanded(flex: 1, child: _buildRecoveryGauge(stats.recoveryRate, true)),
+                        ],
+                      )
+                    else
+                      Column(
+                        children: [
+                          _buildMonthlyBalanceChart(revenues, expenses),
+                          const SizedBox(height: 25),
+                          _buildRecoveryGauge(stats.recoveryRate, false),
+                        ],
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 
-  // --- SECTION 1 : CARTES KPI UNIFORMES ---
   Widget _buildKpiSection(DashboardStats stats, bool isWeb) {
     double cardWidth = isWeb ? 220 : (MediaQuery.of(context).size.width / 2) - 25;
 
@@ -99,7 +129,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _miniCard("Immeubles", stats.immeubles.toString(), Icons.apartment, Colors.indigo, cardWidth),
         _miniCard("Appartements", stats.appartements.toString(), Icons.home, Colors.teal, cardWidth),
         _miniCard("Parkings", stats.parkings.toString(), Icons.local_parking, Colors.blueGrey, cardWidth),
-        _miniCard("Garages", stats.garages.toString(), Icons.garage, Colors.brown, cardWidth),
+        _miniCard("Garages", stats.garages.toString(), Icons.storefront, Colors.brown, cardWidth),
         _miniCard("Boxes", stats.boxes.toString(), Icons.inventory_2, Colors.blueGrey, cardWidth),
         _miniCard("Total Dépenses", "${stats.chargesTotales.toInt()} DH", Icons.outbond, Colors.redAccent, cardWidth),
         _miniCard("Total Paiements", "${stats.revenusParkings.toInt()} DH", Icons.payments, Colors.green, cardWidth),
@@ -113,10 +143,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       width: width,
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+        color: Colors.white.withOpacity(0.9), // Effet Glassmorphism léger
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -124,37 +153,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: const TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w600)),
-              Icon(icon, color: color.withOpacity(0.5), size: 16),
+              Text(title, style: const TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.w700)),
+              Icon(icon, color: color, size: 18),
             ],
           ),
-          const SizedBox(height: 10),
-          FittedBox(child: Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkGrey))),
+          const SizedBox(height: 12),
+          FittedBox(child: Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: darkGrey))),
         ],
       ),
     );
   }
 
-  // --- SECTION 2 : JAUGE DE RECOUVREMENT ---
   Widget _buildRecoveryGauge(double percentage, bool isLarge) {
     return Container(
-      padding: const EdgeInsets.all(20),
-      height: isLarge ? 400 : 250, // On augmente un peu la hauteur pour l'explication
+      padding: const EdgeInsets.all(22),
+      height: isLarge ? 420 : 280,
       decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)]
+          color: Colors.white.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
         children: [
-          // 1. TITRE DU DIAGRAMME
-          const Text(
-              "Performance de Collecte",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
-          ),
+          const Text("Performance de Collecte", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 20),
-
-          // 2. LE DIAGRAMME (L'ANNEAU)
           Expanded(
             child: Stack(
               alignment: Alignment.center,
@@ -163,10 +184,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   PieChartData(
                     startDegreeOffset: 270,
                     sectionsSpace: 0,
-                    centerSpaceRadius: isLarge ? 80 : 50,
+                    centerSpaceRadius: isLarge ? 85 : 55,
                     sections: [
-                      PieChartSectionData(value: percentage, color: primaryOrange, radius: 12, showTitle: false),
-                      PieChartSectionData(value: (100 - percentage).clamp(0, 100), color: Colors.grey.shade100, radius: 12, showTitle: false),
+                      PieChartSectionData(value: percentage, color: primaryOrange, radius: 14, showTitle: false),
+                      PieChartSectionData(value: (100 - percentage).clamp(0, 100), color: Colors.grey.shade200, radius: 14, showTitle: false),
                     ],
                   ),
                 ),
@@ -174,104 +195,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text("${percentage.toStringAsFixed(1)}%",
-                        style: TextStyle(fontSize: isLarge ? 32 : 22, fontWeight: FontWeight.bold, color: darkGrey)),
-                    Text("Payé", style: TextStyle(color: Colors.grey, fontSize: isLarge ? 12 : 10)),
+                        style: TextStyle(fontSize: isLarge ? 34 : 24, fontWeight: FontWeight.bold, color: darkGrey)),
+                    const Text("Payé", style: TextStyle(color: Colors.grey, fontSize: 12)),
                   ],
                 )
               ],
             ),
           ),
-
-          // 3. EXPLICATION (Le "Pourquoi")
           const SizedBox(height: 15),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(10)
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline, size: 16, color: Colors.blue),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    "Ce taux compare l'argent encaissé par rapport au total des charges dues par les résidents.",
-                    style: TextStyle(fontSize: isLarge ? 11 : 9, color: Colors.blueGrey),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const Text("Taux de recouvrement par rapport aux charges dues.", textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: Colors.blueGrey)),
         ],
       ),
     );
   }
-  // --- SECTION 3 : BILAN MENSUEL ---
+
   Widget _buildMonthlyBalanceChart(List<double> revenues, List<double> expenses) {
     double maxVal = 0;
     for (var v in [...revenues, ...expenses]) { if (v > maxVal) maxVal = v; }
     double calculatedMaxY = maxVal == 0 ? 1000 : maxVal * 1.2;
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(22),
       height: 400,
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), borderRadius: BorderRadius.circular(22)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text("Bilan Mensuel Réel", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 30),
+          const SizedBox(height: 35),
           Expanded(
             child: BarChart(
               BarChartData(
                 maxY: calculatedMaxY,
-                barTouchData: BarTouchData(enabled: true),
                 titlesData: FlTitlesData(
                   show: true,
                   bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, m) => Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(['Jan','Fev','Mar','Avr','Mai','Jun','Jul','Aou','Sep','Oct','Nov','Dec'][v.toInt() % 12], style: const TextStyle(fontSize: 10, color: Colors.grey)),
                   ))),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 45, // Plus d'espace pour que les chiffres ne touchent pas le bord
-
-                      // CORRECTION : On définit un intervalle fixe (ex: une graduation tous les 1/5ème de la valeur max)
-                      interval: calculatedMaxY / 4,
-
-                      getTitlesWidget: (value, meta) {
-                        if (value == 0) return const Text("");
-
-                        // Formatage intelligent
-                        String text = "";
-                        if (value >= 1000000) {
-                          text = "${(value / 1000000).toStringAsFixed(1)}M";
-                        } else if (value >= 1000) {
-                          text = "${(value / 1000).toInt()}k";
-                        } else {
-                          text = value.toInt().toString();
-                        }
-
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: Text(
-                            text,
-                            style: const TextStyle(color: Colors.grey, fontSize: 10),
-                            textAlign: TextAlign.right,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+                  leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40, interval: calculatedMaxY / 4, getTitlesWidget: (v, m) {
+                    if (v == 0) return const Text("");
+                    return Text(v >= 1000 ? "${(v/1000).toInt()}k" : v.toInt().toString(), style: const TextStyle(color: Colors.grey, fontSize: 10));
+                  })),
                   topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 ),
                 gridData: const FlGridData(show: false),
                 borderData: FlBorderData(show: false),
-                // ON GÉNÈRE 6 MOIS POUR LE TEST
-                barGroups: List.generate(6, (i) => _makeGroupData(i, revenues[i], expenses[i])),
+                barGroups: List.generate(revenues.length > 6 ? 6 : revenues.length, (i) => _makeGroupData(i, revenues[i], expenses[i])),
               ),
             ),
           ),
@@ -282,8 +253,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   BarChartGroupData _makeGroupData(int x, double income, double expense) {
     return BarChartGroupData(x: x, barRods: [
-      BarChartRodData(toY: income, color: successGreen, width: 10, borderRadius: BorderRadius.circular(2)),
-      BarChartRodData(toY: expense, color: primaryOrange, width: 10, borderRadius: BorderRadius.circular(2)),
+      BarChartRodData(toY: income, color: successGreen, width: 10, borderRadius: BorderRadius.circular(3)),
+      BarChartRodData(toY: expense, color: primaryOrange, width: 10, borderRadius: BorderRadius.circular(3)),
     ]);
   }
 }

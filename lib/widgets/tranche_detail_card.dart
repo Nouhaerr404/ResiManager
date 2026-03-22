@@ -6,9 +6,10 @@ class TrancheDetailCard extends StatefulWidget {
   final TrancheModel tranche;
   final TrancheService service;
   final VoidCallback onEditTap;
+  final VoidCallback onDeleteTap;
   final VoidCallback onAssignTap;
 
-  const TrancheDetailCard({Key? key, required this.tranche, required this.service, required this.onEditTap, required this.onAssignTap}) : super(key: key);
+  const TrancheDetailCard({Key? key, required this.tranche, required this.service, required this.onEditTap, required this.onDeleteTap, required this.onAssignTap}) : super(key: key);
 
   @override
   State<TrancheDetailCard> createState() => _TrancheDetailCardState();
@@ -54,18 +55,41 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(widget.tranche.nom, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkGrey)),
-              IconButton(onPressed: widget.onEditTap, icon: const Icon(Icons.edit_outlined, color: Colors.blue, size: 20)),
-            ],
+              Row(
+                children: [
+                  // BOUTON MODIFIER (Bleu)
+                  IconButton(
+                      onPressed: widget.onEditTap,
+                      icon: const Icon(Icons.edit_outlined, color: Colors.blue, size: 20)
+                  ),
+                  // BOUTON SUPPRIMER (Rouge/Orange)
+                  IconButton(
+                      onPressed: widget.onDeleteTap,
+                      icon: Icon(Icons.delete_outline_rounded, color: primaryOrange, size: 20)
+                  ),
+                ],
+              )            ],
           ),
+
+          if (widget.tranche.prixAnnuel != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                "Objectif Annuel : ${widget.tranche.prixAnnuel!.toInt()} DH",
+                style: TextStyle(color: primaryOrange, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
 
           // 2. RESPONSABLE
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(color: const Color(0xFFF8F9FA), borderRadius: BorderRadius.circular(10)),
             child: Row(children: [
               Icon(Icons.person_outline, size: 16, color: primaryOrange),
               const SizedBox(width: 8),
-              Text(widget.tranche.interSyndicNom ?? "Non assigné", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              Expanded(
+                child: Text(widget.tranche.interSyndicNom ?? "Non assigné", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              ),
             ]),
           ),
 

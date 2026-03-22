@@ -188,6 +188,7 @@ class TrancheService {
         nombreParkings: e['nombre_parkings'] ?? 0,
         nombreGarages: e['nombre_garages'] ?? 0,
         nombreBoxes: e['nombre_boxes'] ?? 0,
+        prixAnnuel: e['prix_annuel'] != null ? (e['prix_annuel'] as num).toDouble() : null,
         interSyndicNom: e['users'] != null
             ? "${e['users']['prenom']} ${e['users']['nom']}"
             : null,
@@ -199,17 +200,13 @@ class TrancheService {
       String nom,
       String description,
       int? interSyndicId,
-      int nbImm, int nbApp, int nbPark, int nbGar, int nbBox) async {
+      double? prixAnnuel) async {
 
     await _db.from('tranches').insert({
       'residence_id':      residenceId,
       'nom':               nom,
       'inter_syndic_id':   interSyndicId,
-      'nombre_immeubles':  nbImm,
-      'nombre_appartements': nbApp,
-      'nombre_parkings':   nbPark,
-      'nombre_garages':    nbGar,
-      'nombre_boxes':      nbBox,
+      'prix_annuel' :      prixAnnuel,
     });
   }
 
@@ -250,18 +247,20 @@ class TrancheService {
   Future<void> updateTrancheComplet(
       int trancheId,
       String nom,
+      String? description,
       int? interSyndicId,
-      int nbImm, int nbApp, int nbPark, int nbGar, int nbBox) async {
+      double? prixAnnuel) async {
 
     await _db.from('tranches').update({
-      'nom':               nom,
-      'inter_syndic_id':   interSyndicId,
-      'nombre_immeubles':  nbImm,
-      'nombre_appartements': nbApp,
-      'nombre_parkings':   nbPark,
-      'nombre_garages':    nbGar,
-      'nombre_boxes':      nbBox,
+      'nom': nom,
+      'description': description,
+      'inter_syndic_id': interSyndicId,
+      'prix_annuel': prixAnnuel,
     }).eq('id', trancheId);
+  }
+
+  Future<void> deleteTranche(int trancheId) async {
+    await _db.from('tranches').delete().eq('id', trancheId);
   }
 
   Future<List<String>> getAppartementNumeros(int trancheId) async {
