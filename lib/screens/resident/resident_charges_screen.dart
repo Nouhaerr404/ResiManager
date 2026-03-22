@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/resident_service.dart';
 import 'resident_dashboard_screen.dart'; // ← GARDE
-
+import 'package:url_launcher/url_launcher.dart';
 class ResidentChargesScreen extends StatefulWidget {
   final int userId;
   final Function(int)? onNavigate;
@@ -34,8 +34,26 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: _coral));
         }
-        if (snapshot.hasError)
-          return Center(child: Text("Erreur : ${snapshot.error}"));
+        if (snapshot.hasError || !snapshot.hasData) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.info_outline_rounded,
+                    color: Colors.orange.shade400, size: 48),
+                const SizedBox(height: 16),
+                const Text("Aucune dépense disponible",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 8),
+                Text("Sélectionnez une autre année",
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                const SizedBox(height: 20),
+                _buildAnneeSelector(),
+              ],
+            ),
+          );
+        }
+
 
         final data = snapshot.data!;
         final List allDeps = data['depenses'];
@@ -84,12 +102,12 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
                   child: Column(children: [
                     _buildTableHeader(),
                     ...filteredDeps.asMap().entries.map((e) => _buildTableRow(e.value, e.key)).toList(),
-                    _buildTableFooter(data['total'].toInt()),
+                    _buildTableFooter(((data['total'] as num?) ?? 0).toInt()),
+
                   ]),
                 ),
               ),
-              const SizedBox(height: 24),
-              _buildInfoBox(),
+
             ],
           ),
         );
@@ -139,13 +157,16 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
 
   Widget _buildKpis(Map data) {
     return Row(children: [
-      Expanded(child: _kpiCard("Total Tranche", "${data['total'].toInt()} DH",
+      Expanded(child: _kpiCard("Total Tranche",
+          "${((data['total'] as num?) ?? 0).toInt()} DH",
           Icons.account_balance_wallet_outlined, _dark, const Color(0xFFEEF2FF))),
       const SizedBox(width: 12),
-      Expanded(child: _kpiCard("Payé", "${data['payees'].toInt()} DH",
+      Expanded(child: _kpiCard("Payé",
+          "${((data['payees'] as num?) ?? 0).toInt()} DH",
           Icons.check_circle_outline, Colors.green, const Color(0xFFECFDF5))),
       const SizedBox(width: 12),
-      Expanded(child: _kpiCard("En attente", "${data['attente'].toInt()} DH",
+      Expanded(child: _kpiCard("En attente",
+          "${((data['attente'] as num?) ?? 0).toInt()} DH",
           Icons.timer_outlined, _coral, const Color(0xFFFFF5F3))),
     ]);
   }
@@ -231,9 +252,9 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: Row(children: const [
-        Expanded(flex: 1, child: Text("TYPE", style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1))),
+        Expanded(flex: 1, child: Text("TYPE",style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1))),
         Expanded(flex: 3, child: Text("DESCRIPTION", style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1))),
-        Expanded(flex: 2, child: Text("CATÉGORIE", textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1))),
+        Expanded(flex: 2, child: Text("PORTÉE", textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1))),
         Expanded(flex: 2, child: Text("DATE", textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1))),
         Expanded(flex: 2, child: Text("MONTANT", textAlign: TextAlign.right, style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1))),
         Expanded(flex: 2, child: Text("STATUT", textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1))),
@@ -257,10 +278,22 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
       ),
       child: Row(children: [
         Expanded(flex: 1, child: Container(
-          padding: const EdgeInsets.all(7),
-          decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
-          child: Icon(_getIcon(catName), color: Colors.blue.shade400, size: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+          decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8)),
+          child: Text(
+            catName,
+            style: TextStyle(
+                color: Colors.blue.shade600,
+                fontSize: 10,
+                fontWeight: FontWeight.w700),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
         )),
+
         // ✅ CORRECT
         Expanded(flex: 3, child: Padding(
           padding: const EdgeInsets.only(left: 8),
@@ -276,7 +309,15 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
         Expanded(flex: 2, child: _statusBadge(isPaye)),
         Expanded(flex: 1, child: IconButton(
-          icon: Icon(Icons.visibility_outlined, size: 18, color: Colors.grey.shade400),
+          icon: Icon(
+            d['facture_path'] != null
+                ? Icons.receipt_long_rounded
+                : Icons.visibility_outlined,
+            size: 18,
+            color: d['facture_path'] != null
+                ? Colors.red.shade400
+                : Colors.grey.shade300,
+          ),
           onPressed: () => _showFacture(d),
           alignment: Alignment.centerRight,
         )),
@@ -333,33 +374,131 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
     return Icons.receipt_long;
   }
 
-  void _showFacture(Map d) {
-    showDialog(context: context, builder: (c) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Text(d['categories']?['nom'] ?? "Facture"),
-      content: Container(height: 300, width: 300, color: Colors.grey.shade50,
-          child: const Icon(Icons.picture_as_pdf, size: 80, color: Colors.grey)),
-      actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("Fermer"))],
-    ));
-  }
+  void _showFacture(Map d) async {
+    final String? url = d['facture_path']?.toString();
 
-  Widget _buildInfoBox() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [Colors.blue.shade50, Colors.indigo.shade50]),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.blue.shade100),
+    if (url == null || url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Aucune facture disponible'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // ── Afficher dans un dialog ──
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── HEADER ──
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1A1A2E),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.receipt_long_rounded, color: Colors.white, size: 20),
+
+                const SizedBox(width: 10),
+                Expanded(child: Text(
+                  d['description']?.toString() ?? 'Facture',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14),
+                )),
+                GestureDetector(
+                  onTap: () => Navigator.pop(ctx),
+                  child: const Icon(Icons.close_rounded,
+                      color: Colors.white70, size: 20),
+                ),
+              ]),
+            ),
+
+            // ── IMAGE/PDF ──
+            Container(
+              constraints: const BoxConstraints(
+                  maxHeight: 500, maxWidth: 600),
+              child: InteractiveViewer(
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (ctx, child, progress) {
+                    if (progress == null) return child;
+                    return const Padding(
+                      padding: EdgeInsets.all(40),
+                      child: CircularProgressIndicator(
+                          color: Color(0xFFFF6B4A)),
+                    );
+                  },
+                  errorBuilder: (ctx, error, stack) => Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(children: [
+                      const Icon(Icons.broken_image_outlined,
+                          size: 48, color: Colors.grey),
+                      const SizedBox(height: 8),
+                      const Text('Format non supporté',
+                          style: TextStyle(color: Colors.grey)),
+                      const SizedBox(height: 12),
+                      // ── Bouton ouvrir dans navigateur ──
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          final uri = Uri.parse(url);
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri,
+                                mode: LaunchMode.externalApplication);
+                          }
+                        },
+                        icon: const Icon(Icons.open_in_browser, size: 16),
+                        label: const Text('Ouvrir dans le navigateur'),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFF6B4A)),
+                      ),
+                    ]),
+                  ),
+                ),
+              ),
+            ),
+
+            // ── FOOTER ──
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(children: [
+                Expanded(child: ElevatedButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    final uri = Uri.parse(url);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri,
+                          mode: LaunchMode.externalApplication);
+                    }
+                  },
+                  icon: const Icon(Icons.download_rounded, size: 16),
+                  label: const Text('Agrandir'),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF6B4A),
+                      foregroundColor: Colors.white),
+                )),
+                const SizedBox(width: 8),
+                Expanded(child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Fermer'),
+                )),
+              ]),
+            ),
+          ],
+        ),
       ),
-      child: Row(children: [
-        Icon(Icons.verified_outlined, color: Colors.blue.shade400, size: 18),
-        const SizedBox(width: 10),
-        const Expanded(child: Text("Les dépenses sont certifiées par le Syndic Général.",
-            style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.w500))),
-      ]),
     );
-  }
+}
 }
 //karim.moussaoui99@gmail.com
 //hashed_password

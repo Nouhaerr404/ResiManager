@@ -322,26 +322,8 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
         // ── BANNER STATUT ──
         _statutBanner(statut, reste),
         const SizedBox(height: 16),
-        const SizedBox(height: 16),
         _buildLignesDetail(),
-        // ── INFO BOX ──
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: _purple.withOpacity(0.07),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _purple.withOpacity(0.2)),
-          ),
-          child: Row(children: [
-            Icon(Icons.info_outline, color: _purple, size: 18),
-            const SizedBox(width: 10),
-            Expanded(child: Text(
-                'Les paiements sont certifiés par l\'Inter-Syndic de votre tranche.',
-                style: TextStyle(color: _purple,
-                    fontSize: 11, fontWeight: FontWeight.w500))),
-          ]),
-        ),
+
       ]),
     );
   }

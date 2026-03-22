@@ -132,7 +132,17 @@ class SuperAdminService {
       return e.toString();
     }
   }
-
+  Future<String?> annulerRefus(int demandeId) async {
+    try {
+      await _supabase.from('demandes_inscription').update({
+        'statut': 'en_attente',
+        'motif_refus': null,
+      }).eq('id', demandeId);
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
   Future<String?> refuserDemande(int demandeId, {String? motif}) async {
     try {
       await _supabase.from('demandes_inscription').update({
