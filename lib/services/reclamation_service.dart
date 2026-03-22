@@ -4,23 +4,23 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // ── Valeurs EXACTES de l'enum statut_reclam_enum dans Supabase ──
 // Si l'erreur persiste, va dans Supabase → Database → Types → statut_reclam_enum
 // et remplace les valeurs ci-dessous par celles affichées.
-enum StatutReclamation { en_cours, resolu, rejete }
+enum StatutReclamation { en_cours, resolue, rejetee }
 
 extension StatutReclamationExt on StatutReclamation {
   // Valeur envoyée à Supabase — doit correspondre EXACTEMENT à l'enum SQL
   String get dbValue {
     switch (this) {
       case StatutReclamation.en_cours: return 'en_cours';
-      case StatutReclamation.resolu:   return 'resolu';
-      case StatutReclamation.rejete:   return 'rejete';
+      case StatutReclamation.resolue:   return 'resolue';
+      case StatutReclamation.rejetee:   return 'rejetee';
     }
   }
 
   String get label {
     switch (this) {
       case StatutReclamation.en_cours: return 'En cours';
-      case StatutReclamation.resolu:   return 'Resolu';
-      case StatutReclamation.rejete:   return 'Rejete';
+      case StatutReclamation.resolue:   return 'Resolu';
+      case StatutReclamation.rejetee:   return 'Rejete';
     }
   }
 }
@@ -54,8 +54,8 @@ class ReclamationModel {
 
   StatutReclamation get statutEnum {
     switch (statut) {
-      case 'resolu':  return StatutReclamation.resolu;
-      case 'rejete':  return StatutReclamation.rejete;
+      case 'resolue':  return StatutReclamation.resolue;
+      case 'rejetee':  return StatutReclamation.rejetee;
       default:        return StatutReclamation.en_cours;
     }
   }
@@ -139,8 +139,8 @@ class ReclamationService {
       int enCours = 0, resolu = 0, rejete = 0;
       for (final r in rows) {
         switch (r['statut']?.toString()) {
-          case 'resolu':  resolu++;  break;
-          case 'rejete':  rejete++;  break;
+          case 'resolue':  resolu++;  break;
+          case 'rejetee':  rejete++;  break;
           default:        enCours++; break;
         }
       }
