@@ -15,28 +15,48 @@ class AuthService {
   // ✅ LOGIN
   Future<Map<String, dynamic>?> login(String email, String password) async {
     try {
-      // 1. Connexion via Supabase Auth
-      final authRes = await _db.auth.signInWithPassword(email: email.trim(), password: password);
+      // 1. Vérifier le statut AVANT de connecter
+      final res = await _db.from('users')
+          .select('id, role, statut')
+          .eq('email', email.trim())
+          .maybeSingle();
+
+      if (res == null) return {'error': 'Email introuvable.'};
+
+      // ✅ VÉRIFICATION STATUT AVANT AUTH
+      if (res['statut'] == 'inactif') {
+        return {'error': 'Compte désactivé. Contactez l\'administrateur.'};
+      }
+
+      // 2. Connexion via Supabase Auth seulement si actif
+      final authRes = await _db.auth.signInWithPassword(
+          email: email.trim(), password: password);
 
       if (authRes.user != null) {
-        // 2. Chercher les infos dans public.users par EMAIL (car ID public est bigint et ID auth est uuid)
-        final res = await _db.from('users').select('id, role, statut').eq('email', email.trim()).maybeSingle();
-
-        if (res != null && res['statut'] == 'inactif') return {'error': 'Compte désactivé.'};
-        return {'id': res?['id'], 'role': res?['role']};
+        return {'id': res['id'], 'role': res['role']};
       }
+
     } catch (e) {
       // Fallback anciens comptes
       try {
-        final res = await _db.from('users').select().eq('email', email.trim()).maybeSingle();
+        final res = await _db.from('users')
+            .select()
+            .eq('email', email.trim())
+            .maybeSingle();
         if (res == null) return {'error': 'Email introuvable.'};
-        final isValid = await _db.rpc('check_password', params: {'password': password, 'hash': res['password']});
+
+        // ✅ VÉRIFICATION STATUT DANS FALLBACK AUSSI
+        if (res['statut'] == 'inactif') {
+          return {'error': 'Compte désactivé. Contactez l\'administrateur.'};
+        }
+
+        final isValid = await _db.rpc('check_password',
+            params: {'password': password, 'hash': res['password']});
         if (isValid) return {'id': res['id'], 'role': res['role']};
       } catch (_) {}
     }
     return {'error': 'Identifiants incorrects.'};
   }
-
   Future<void> signOut() async { await _db.auth.signOut(); }
 
   // ✅ REGISTER
