@@ -54,15 +54,44 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
       body: FutureBuilder<Map<String, dynamic>>(
         future: _service.getFullResidenceAudit(widget.residenceId, _selectedAnnee),
         builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 60),
+                  const SizedBox(height: 16),
+                  Text("Une erreur est survenue :", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(snapshot.error.toString(), textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[700])),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => setState(() {}),
+                    child: const Text("Réessayer"),
+                  )
+                ],
+              ),
+            );
+          }
+
+          if (!snapshot.hasData || snapshot.data == null) {
+            return const Center(child: Text("Aucune donnée disponible"));
+          }
 
           final data = snapshot.data!;
-          final List allExpenses = data['expenses'];
-          final List allPayments = data['payments'];
-          final List tranches = data['tranches'];
+          final List allExpenses = data['expenses'] ?? [];
+          final List allPayments = data['payments'] ?? [];
+          final List tranches = data['tranches'] ?? [];
 
           final query = _searchQuery.toLowerCase();
-          final globalExpenses = allExpenses.where((e) => e['tranches'] == null && e['categories']['nom'].toString().toLowerCase().contains(query)).toList();
+          final globalExpenses = allExpenses.where((e) => e['tranches'] == null && (e['categories']?['nom'] ?? "").toString().toLowerCase().contains(query)).toList();
 
           // CALCULS GLOBAUX
           final stats = _getPaymentStats(allPayments);
@@ -89,10 +118,10 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
               ),
 
               // 2. LISTE DES TRANCHES (CONTOUR NOIR)
-              ...tranches.where((t) => t['nom'].toString().toLowerCase().contains(query)).map((t) {
+              ...tranches.where((t) => (t['nom'] ?? "").toString().toLowerCase().contains(query)).map((t) {
                 final tExp = allExpenses.where((e) => e['tranche_id'] == t['id']).toList();
                 final tPay = allPayments.where((p) => p['appartements']?['immeubles']?['tranches']?['nom'] == t['nom']).toList();
-                return _buildTrancheAuditCard(t['nom'], t['statut'], tExp, tPay);
+                return _buildTrancheAuditCard(t['nom'] ?? "Sans nom", t['statut'], tExp, tPay);
               }),
 
               // 3. BILAN FINAL NOIR
@@ -310,7 +339,7 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
     ); 
   }
   
-  Widget _buildExpenseTable(List data) { return SizedBox(width: double.infinity, child: DataTable(columnSpacing: 15, headingRowHeight: 35, dataRowMinHeight: 40, dataRowMaxHeight: 40, columns: const [DataColumn(label: Text('CATÉGORIE', style: TextStyle(fontSize: 8))), DataColumn(label: Text('DATE', style: TextStyle(fontSize: 8))), DataColumn(label: Text('MONTANT', style: TextStyle(fontSize: 8)))], rows: data.map((e) => DataRow(cells: [DataCell(Text(e['categories']['nom'], style: const TextStyle(fontSize: 10))), DataCell(Text(e['date'], style: const TextStyle(fontSize: 10))), DataCell(Text("${e['montant']} DH", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.redAccent)))])).toList())); }
+  Widget _buildExpenseTable(List data) { return SizedBox(width: double.infinity, child: DataTable(columnSpacing: 15, headingRowHeight: 35, dataRowMinHeight: 40, dataRowMaxHeight: 40, columns: const [DataColumn(label: Text('CATÉGORIE', style: TextStyle(fontSize: 8))), DataColumn(label: Text('DATE', style: TextStyle(fontSize: 8))), DataColumn(label: Text('MONTANT', style: TextStyle(fontSize: 8)))], rows: data.map((e) => DataRow(cells: [DataCell(Text(e['categories']?['nom'] ?? 'Inconnue', style: const TextStyle(fontSize: 10))), DataCell(Text(e['date'] ?? '-', style: const TextStyle(fontSize: 10))), DataCell(Text("${e['montant']} DH", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.redAccent)))])).toList())); }
   
   Widget _buildSubTile(String title, String amountText, Color color, Widget content) { 
     return ExpansionTile(

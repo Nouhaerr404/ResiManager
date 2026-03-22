@@ -11,7 +11,7 @@ class AccountingService {
       // Paiements (On récupère tout pour le calcul par appartement)
       _db.from('paiements').select('*, resident:resident_id(nom, prenom), appartements(id, numero, immeubles(id, nom, tranches(id, nom)))').eq('residence_id', residenceId).eq('annee', annee),
       // Tranches
-      _db.from('tranches').select('id, nom').eq('residence_id', residenceId),
+      _db.from('tranches').select('id, nom, "statut"').eq('residence_id', residenceId),
     ]);
 
     return {
