@@ -104,13 +104,28 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
           ),
 
           if (_selectedType != null) ...[
-            const SizedBox(height: 20),
+            const SizedBox(height: 15),
             const Divider(),
             const SizedBox(height: 10),
-            Text("Détails ${_selectedType == 'imm' ? 'Immeubles' : _selectedType == 'app' ? 'Appartements' : 'Espaces'} :", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+            Text("Détails ${_selectedType == 'imm' ? 'Immeubles' : _selectedType == 'app' ? 'Appartements' : 'Espaces'} :", 
+                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
             const SizedBox(height: 10),
-            if (_isLoading) const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
-            else Wrap(spacing: 6, runSpacing: 6, children: (_currentList ?? []).map((n) => _buildDetailTag(n)).toList()),
+            if (_isLoading) 
+              const Center(child: Padding(
+                padding: EdgeInsets.all(10.0),
+                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+              ))
+            else 
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 120), // Empêche le dépassement vertical
+                child: SingleChildScrollView(
+                  child: Wrap(
+                    spacing: 6, 
+                    runSpacing: 6, 
+                    children: (_currentList ?? []).map((n) => _buildDetailTag(n)).toList()
+                  ),
+                ),
+              ),
           ]
         ],
       ),
@@ -157,9 +172,9 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
 
   Widget _buildDetailTag(String name) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(color: primaryOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-      child: Text(name, style: TextStyle(fontSize: 12, color: primaryOrange, fontWeight: FontWeight.bold)),
+      child: Text(name, style: TextStyle(fontSize: 11, color: primaryOrange, fontWeight: FontWeight.bold)),
     );
   }
 }

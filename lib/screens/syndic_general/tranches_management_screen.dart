@@ -48,7 +48,7 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
 
     showDialog(
       context: context,
-      barrierDismissible: false, // Empêche de fermer en cliquant à côté pendant l'enregistrement
+      barrierDismissible: false,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -244,14 +244,31 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
                   ));
                 }
 
+                // CHANGEMENT : Utilisation d'une Column sur mobile pour éviter les overflows de grille
+                if (isMobile) {
+                  return Column(
+                    children: tranches.map((tranche) => Padding(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: TrancheDetailCard(
+                        tranche: tranche,
+                        service: _service,
+                        onAssignTap: () => _showEditTrancheDialog(tranche),
+                        onEditTap: () => _showEditTrancheDialog(tranche),
+                        onDeleteTap: () => _confirmToggleTrancheStatut(tranche),
+                      ),
+                    )).toList(),
+                  );
+                }
+
+                // Desktop Grid
                 return GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: tranches.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: isMobile ? 1 : 3,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
                     crossAxisSpacing: 20, mainAxisSpacing: 20,
-                    mainAxisExtent: isMobile ? 320 : 380,
+                    mainAxisExtent: 480, // Hauteur augmentée pour éviter les coupures
                   ),
                   itemBuilder: (context, index) {
                     final tranche = tranches[index];
