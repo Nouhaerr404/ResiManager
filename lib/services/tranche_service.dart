@@ -87,12 +87,44 @@ class TrancheService {
           .select('id')
           .eq('tranche_id', trancheId);
 
-      // Finances
-      final finances = await _db
-          .from('finances_summary')
-          .select('*')
-          .eq('tranche_id', trancheId)
-          .maybeSingle();
+      // Finances — calculées directement (pas besoin de vue SQL)
+      // Revenus : montant_paye dans les paiements liés aux appartements de cette tranche
+      double revenus = 0;
+      double depenses = 0;
+
+      if (immeubleIds.isNotEmpty) {
+        // Tous les appartements de la tranche (déjà récupérés plus haut via appartIds)
+        if (immeubleIds.isNotEmpty) {
+          final appartements2 = await _db
+              .from('appartements')
+              .select('id')
+              .inFilter('immeuble_id', immeubleIds);
+          final appartIds2 = (appartements2 as List)
+              .map((a) => a['id'] as int)
+              .toList();
+
+          if (appartIds2.isNotEmpty) {
+            final paiements = await _db
+                .from('paiements')
+                .select('montant_paye')
+                .inFilter('appartement_id', appartIds2);
+            for (var p in paiements as List) {
+              revenus += (p['montant_paye'] as num).toDouble();
+            }
+          }
+        }
+      }
+
+      // Dépenses : depenses liées à cette tranche (tranche_id)
+      final depensesRes = await _db
+          .from('depenses')
+          .select('montant')
+          .eq('tranche_id', trancheId);
+      for (var d in depensesRes as List) {
+        depenses += (d['montant'] as num).toDouble();
+      }
+
+      final double solde = revenus - depenses;
 
       // Reunions planifiees
       final reunions = await _db
@@ -125,9 +157,9 @@ class TrancheService {
         'nbReunions':      (reunions as List).length,
         'nbReclamations':  (reclamations as List).length,
         'nbAnnonces':      (annonces as List).length,
-        'solde':    finances?['solde'] ?? 0,
-        'revenus':  finances?['revenus_total'] ?? 0,
-        'depenses': finances?['depenses_total'] ?? 0,
+        'solde':    solde,
+        'revenus':  revenus,
+        'depenses': depenses,
       };
 
       print('>>> Stats: $stats');
