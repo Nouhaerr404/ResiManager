@@ -12,6 +12,7 @@ class TrancheModel {
   final int nombreGarages;
   final int nombreBoxes;
   final double prixAnnuel;
+  final String statut; // Garde 'statut' dans le code pour la simplicité, mais mappé sur 'statut_tranche'
   final DateTime? createdAt;
 
   // Données jointes optionnelles
@@ -30,6 +31,7 @@ class TrancheModel {
     required this.nombreGarages,
     required this.nombreBoxes,
     this.prixAnnuel = 0.0,
+    this.statut = 'Actif',
     this.createdAt,
     this.residenceNom,
     this.interSyndicNom,
@@ -51,6 +53,7 @@ class TrancheModel {
       nombreGarages: j['nombre_garages'] ?? 0,
       nombreBoxes: j['nombre_boxes'] ?? 0,
       prixAnnuel: double.parse((j['prix_annuel'] ?? 0).toString()),
+      statut: j['statut_tranche'] ?? 'Actif', // CHANGÉ ICI
       createdAt: j['created_at'] != null
           ? DateTime.tryParse(j['created_at'])
           : null,
@@ -72,5 +75,6 @@ class TrancheModel {
     'nombre_garages': nombreGarages,
     'nombre_boxes': nombreBoxes,
     'prix_annuel': prixAnnuel,
+    'statut_tranche': statut, // CHANGÉ ICI
   };
-}
+}
