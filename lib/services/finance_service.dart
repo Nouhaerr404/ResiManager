@@ -165,44 +165,44 @@ class FinanceService {
     }
 
     var depQuery = _db.from('depenses')
-        .select('montant, tranche_id')
-        .eq('inter_syndic_id', interSyndicId);
+        .select('montant, tranche_id, syndic_general_id, inter_syndic_id')
+        .eq('residence_id', residenceId);
     if (annee != null) depQuery = depQuery.eq('annee', annee);
 
-    final depensesInter = await depQuery;
+    final allDepenses = await depQuery;
 
-    double totalDepenses = 0;
+    double totalDepensesSpecifiques = 0;
+    double totalDepensesGlobalesResidence = 0;
     Map<int, double> depByTranche = {};
-    for (var d in depensesInter) {
+
+    for (var d in allDepenses) {
       double val = double.parse(d['montant'].toString());
-      totalDepenses += val;
-      if (d['tranche_id'] != null) {
-        int tId = d['tranche_id'];
-        depByTranche[tId] = (depByTranche[tId] ?? 0) + val;
+      
+      // Si c'est une dépense de l'inter-syndic actuel
+      if (d['inter_syndic_id'] == interSyndicId) {
+        totalDepensesSpecifiques += val;
+        if (d['tranche_id'] != null) {
+          int tId = d['tranche_id'];
+          depByTranche[tId] = (depByTranche[tId] ?? 0) + val;
+        }
+      } 
+      // Si c'est une dépense globale du syndic général pour cette résidence
+      else if (d['syndic_general_id'] != null) {
+        totalDepensesGlobalesResidence += val;
       }
     }
 
     var payQuery = _db.from('paiements')
-        .select('montant_paye')
+        .select('montant_paye, montant_total')
         .eq('inter_syndic_id', interSyndicId);
     if (annee != null) payQuery = payQuery.eq('annee', annee);
 
     final paiementsRes = await payQuery;
 
     double totalRevenus = 0;
+    double totalObjectif = 0;
     for (var p in paiementsRes) {
       totalRevenus += double.parse(p['montant_paye'].toString());
-    }
-
-    var objQuery = _db.from('paiements')
-        .select('montant_total')
-        .eq('inter_syndic_id', interSyndicId);
-    if (annee != null) objQuery = objQuery.eq('annee', annee);
-
-    final targetRes = await objQuery;
-
-    double totalObjectif = 0;
-    for (var p in targetRes) {
       totalObjectif += double.parse(p['montant_total'].toString());
     }
 
@@ -233,10 +233,11 @@ class FinanceService {
     }).toList();
 
     return {
-      'total_depenses': totalDepenses,
+      'total_depenses': totalDepensesSpecifiques,
+      'total_depenses_globales': totalDepensesGlobalesResidence,
       'total_revenus': totalRevenus,
       'objectif_annuel': totalObjectif,
-      'solde': totalRevenus - totalDepenses,
+      'solde': totalRevenus - totalDepensesSpecifiques,
       'recent_expenses': recentExpenses,
       'depenses_par_tranche': tranches.map((t) => {
         'nom': t['nom'],
@@ -313,57 +314,72 @@ class FinanceService {
     }
   }
 
-  // 7c. Supprimer une dépense Inter-Syndic (RESTAURÉ)
+  // 7c. Supprimer une dépense Inter-Syndic (RESTAURÉ & ROBUSTIFIÉ)
   Future<void> deleteInterSyndicExpense(int expenseId, double montant) async {
-    final depense = await _db.from('depenses').select('*').eq('id', expenseId).single();
-    int? tId = depense['tranche_id'];
-    int resId = depense['residence_id'];
-    int isId = depense['inter_syndic_id'];
-    int annee = depense['annee'];
-    int mois = depense['mois'];
+    try {
+      final depense = await _db.from('depenses').select('*').eq('id', expenseId).single();
+      int? tId = depense['tranche_id'];
+      int resId = depense['residence_id'];
+      int isId = depense['inter_syndic_id'];
+      int annee = depense['annee'];
+      int mois = depense['mois'];
 
-    List<int> tranchesIds = [];
-    if (tId != null) {
-      tranchesIds = [tId];
-    } else {
-      final resTranches = await _db.from('tranches').select('id').eq('inter_syndic_id', isId).eq('residence_id', resId);
-      tranchesIds = (resTranches as List).map((t) => t['id'] as int).toList();
-    }
+      // Wrap charge adjustment in try-catch to avoid blocking the deletion
+      try {
+        List<int> tranchesIds = [];
+        if (tId != null) {
+          tranchesIds = [tId];
+        } else {
+          final resTranches = await _db.from('tranches')
+              .select('id')
+              .eq('inter_syndic_id', isId)
+              .eq('residence_id', resId);
+          tranchesIds = (resTranches as List).map((t) => t['id'] as int).toList();
+        }
 
-    if (tranchesIds.isNotEmpty) {
-      final immeublesRes = await _db.from('immeubles').select('id').inFilter('tranche_id', tranchesIds);
-      final listImmIds = (immeublesRes as List).map((i) => i['id'] as int).toList();
+        if (tranchesIds.isNotEmpty) {
+          final immeublesRes = await _db.from('immeubles').select('id').inFilter('tranche_id', tranchesIds);
+          final listImmIds = (immeublesRes as List).map((i) => i['id'] as int).toList();
 
-      if (listImmIds.isNotEmpty) {
-        final appartRes = await _db.from('appartements').select('id').inFilter('immeuble_id', listImmIds);
-        final listAppartIds = (appartRes as List).map((a) => a['id'] as int).toList();
+          if (listImmIds.isNotEmpty) {
+            final appartRes = await _db.from('appartements').select('id').inFilter('immeuble_id', listImmIds);
+            final listAppartIds = (appartRes as List).map((a) => a['id'] as int).toList();
 
-        if (listAppartIds.isNotEmpty) {
-          double shareToDelete = montant / listAppartIds.length;
+            if (listAppartIds.isNotEmpty) {
+              double shareToDelete = montant / listAppartIds.length;
 
-          for (int appartId in listAppartIds) {
-            final pRes = await _db.from('paiements')
-                .select('id, montant_total, montant_paye')
-                .eq('appartement_id', appartId)
-                .eq('annee', annee)
-                .eq('mois', mois)
-                .maybeSingle();
+              for (int appartId in listAppartIds) {
+                final pRes = await _db.from('paiements')
+                    .select('id, montant_total, montant_paye')
+                    .eq('appartement_id', appartId)
+                    .eq('annee', annee)
+                    .eq('mois', mois)
+                    .maybeSingle();
 
-            if (pRes != null) {
-              double currentTotal = double.parse(pRes['montant_total'].toString());
-              double paid = double.parse(pRes['montant_paye'].toString());
-              double updatedTotal = (currentTotal - shareToDelete).clamp(0, double.infinity);
+                if (pRes != null) {
+                  double currentTotal = double.parse(pRes['montant_total'].toString());
+                  double paid = double.parse(pRes['montant_paye'].toString());
+                  double updatedTotal = (currentTotal - shareToDelete).clamp(0, double.infinity);
 
-              await _db.from('paiements').update({
-                'montant_total': updatedTotal,
-                'statut': (updatedTotal <= 0) ? 'complet' : (paid >= updatedTotal ? 'complet' : (paid > 0 ? 'partiel' : 'impaye')),
-              }).eq('id', pRes['id']);
+                  await _db.from('paiements').update({
+                    'montant_total': updatedTotal,
+                    'statut': (updatedTotal <= 0) ? 'complet' : (paid >= updatedTotal ? 'complet' : (paid > 0 ? 'partiel' : 'impaye')),
+                  }).eq('id', pRes['id']);
+                }
+              }
             }
           }
         }
+      } catch (e) {
+        print('>>> ERROR adjusting payments during expense deletion: $e');
+        // We continue to delete the expense anyway
       }
+    } catch (e) {
+       print('>>> ERROR fetching expense for deletion: $e');
+       // This might happen if expense already deleted, we still try to delete by id below
     }
 
+    // ALWAYS try to delete the expense record at the end
     await _db.from('depenses').delete().eq('id', expenseId);
   }
 

@@ -48,6 +48,9 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   List<ResidentModel> _filtered = [];
   bool _loading = true;
   String _filterStatut = 'tous';
+  int _selectedAnnee = DateTime.now().year;
+  List<int> _anneesDisponibles = [];   // annees reelles depuis paiements
+  bool _loadingAnnees = true;
   final _searchCtrl = TextEditingController();
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
@@ -63,7 +66,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
         vsync: this, duration: const Duration(milliseconds: 450));
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _loadPrixAnnuel();
-    _load();
+    _loadAnnees();   // charger les annees disponibles d'abord
     _searchCtrl.addListener(_applyFilter);
   }
 
@@ -74,8 +77,78 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     super.dispose();
   }
 
+  // ── Charger les annees disponibles depuis paiements pour cette tranche
+  Future<void> _loadAnnees() async {
+    try {
+      final db = Supabase.instance.client;
+
+      // 1. Recuperer les immeuble_ids de la tranche
+      final immRes = await db
+          .from('immeubles')
+          .select('id')
+          .eq('tranche_id', widget.trancheId);
+      final immIds = (immRes as List).map((i) => i['id']).toList();
+      if (immIds.isEmpty) {
+        setState(() {
+          _anneesDisponibles = [DateTime.now().year];
+          _loadingAnnees     = false;
+        });
+        _load();
+        return;
+      }
+
+      // 2. Recuperer les appartement_ids
+      final appRes = await db
+          .from('appartements')
+          .select('id')
+          .inFilter('immeuble_id', immIds);
+      final appIds = (appRes as List).map((a) => a['id']).toList();
+      if (appIds.isEmpty) {
+        setState(() {
+          _anneesDisponibles = [DateTime.now().year];
+          _loadingAnnees     = false;
+        });
+        _load();
+        return;
+      }
+
+      // 3. Recuperer les annees distinctes dans paiements
+      final paiRes = await db
+          .from('paiements')
+          .select('annee')
+          .inFilter('appartement_id', appIds)
+          .not('annee', 'is', null);
+
+      final List paiList = paiRes as List? ?? [];
+      final Set<int> anneesSet = paiList
+          .map((p) => p['annee'])
+          .whereType<int>()
+          .toSet();
+
+      // Toujours inclure l'annee courante
+      anneesSet.add(DateTime.now().year);
+      final anneesSorted = anneesSet.toList()..sort((a, b) => b.compareTo(a));
+
+      // Selectionner l'annee la plus recente ayant des paiements
+      final defaultAnnee = anneesSorted.first;
+
+      setState(() {
+        _anneesDisponibles = anneesSorted;
+        _selectedAnnee     = defaultAnnee;
+        _loadingAnnees     = false;
+      });
+    } catch (e) {
+      debugPrint('>>> ERREUR _loadAnnees: $e');
+      setState(() {
+        _anneesDisponibles = [DateTime.now().year];
+        _loadingAnnees     = false;
+      });
+    }
+    _load();
+  }
+
   // ── Charger le prix annuel depuis la table tranches
-  // La colonne s'appelle "prix annuel" (avec espace) dans Supabase
+  // La colonne s'appelle prix_annuel dans Supabase
   Future<void> _loadPrixAnnuel() async {
     try {
       final db = Supabase.instance.client;
@@ -108,7 +181,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     setState(() => _loading = true);
     try {
       final data = await _service
-          .getResidentsByTranche(widget.trancheId)
+          .getResidentsByTranche(widget.trancheId, annee: _selectedAnnee)
           .timeout(const Duration(seconds: 15));
       setState(() {
         _residents = data;
@@ -145,6 +218,104 @@ class _ResidentsScreenState extends State<ResidentsScreen>
       _residents.where((r) => r.statutPaiement == 'complet').length;
   int get _impayes =>
       _residents.where((r) => r.statutPaiement == 'impaye').length;
+
+  // ── Ajouter un nouveau prix annuel a la tranche
+  void _showAddPrixAnnuelDialog() {
+    final prixCtrl = TextEditingController();
+    bool saving   = false;
+    String? errorMsg;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _dialogHeader(ctx, 'Ajouter Prix Annuel',
+                    icon: Icons.add_circle_outline_rounded, iconColor: _C.amber),
+                const SizedBox(height: 16),
+
+                // Info box
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                      color: _C.amberLight, borderRadius: BorderRadius.circular(12)),
+                  child: Row(children: [
+                    const Icon(Icons.info_outline_rounded, color: _C.amber, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('Prix actuel', style: TextStyle(color: _C.amber, fontSize: 11, fontWeight: FontWeight.w600)),
+                        Text(
+                          (_prixAnnuel ?? 0) > 0
+                              ? '${_prixAnnuel!.toInt()} DH / an'
+                              : 'Aucun prix defini',
+                          style: const TextStyle(color: _C.amber, fontSize: 14, fontWeight: FontWeight.w800),
+                        ),
+                      ]),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 16),
+
+                if (errorMsg != null) ...[_errorBanner(errorMsg!), const SizedBox(height: 12)],
+
+                _label('Nouveau prix annuel (DH) *'),
+                _field(prixCtrl, 'ex: 3600', inputType: TextInputType.number),
+                const SizedBox(height: 8),
+
+                // Note
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10)),
+                  child: const Row(children: [
+                    Icon(Icons.check_circle_outline_rounded, color: _C.green, size: 14),
+                    SizedBox(width: 8),
+                    Expanded(child: Text(
+                      'Ce prix sera enregistre dans la tranche et applique aux nouveaux residents.',
+                      style: TextStyle(color: _C.textMid, fontSize: 11),
+                    )),
+                  ]),
+                ),
+                const SizedBox(height: 24),
+
+                _dialogActions(
+                  ctx: ctx,
+                  saving: saving,
+                  confirmLabel: 'Enregistrer',
+                  confirmColor: _C.amber,
+                  onConfirm: () async {
+                    final val = double.tryParse(prixCtrl.text.trim());
+                    if (val == null || val <= 0) {
+                      setDialog(() => errorMsg = 'Entrez un prix valide');
+                      return;
+                    }
+                    setDialog(() { saving = true; errorMsg = null; });
+                    try {
+                      await Supabase.instance.client
+                          .from('tranches')
+                          .update({'prix_annuel': val})
+                          .eq('id', widget.trancheId);
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      setState(() => _prixAnnuel = val);
+                    } catch (e) {
+                      setDialog(() { errorMsg = e.toString(); saving = false; });
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   // ── Modifier le prix annuel de la tranche
   void _showEditPrixAnnuelDialog() {
@@ -258,6 +429,8 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                       _buildPageTitle(),
                       const SizedBox(height: 16),
                       _buildPrixAnnuelBanner(),
+                      const SizedBox(height: 12),
+                      _buildAnneeSelectorBanner(),
                       const SizedBox(height: 16),
                       _buildStatsBanner(),
                       const SizedBox(height: 20),
@@ -400,8 +573,9 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     );
   }
 
-  // ── Prix Annuel Banner
+  // ── Prix Annuel Banner — boutons Ajouter ET Modifier
   Widget _buildPrixAnnuelBanner() {
+    final hasPrix = (_prixAnnuel ?? 0) > 0;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
@@ -449,9 +623,32 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             ),
           ),
           GestureDetector(
+            onTap: _showAddPrixAnnuelDialog,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                  color: hasPrix ? _C.bg : _C.amber,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: hasPrix ? _C.divider : _C.amber)),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add_rounded, size: 13, color: hasPrix ? _C.textMid : _C.white),
+                  const SizedBox(width: 4),
+                  Text('Ajouter',
+                      style: TextStyle(
+                          color: hasPrix ? _C.textMid : _C.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
             onTap: _showEditPrixAnnuelDialog,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                   color: _C.amberLight,
                   borderRadius: BorderRadius.circular(10),
@@ -460,7 +657,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.edit_rounded, size: 13, color: _C.amber),
-                  SizedBox(width: 5),
+                  SizedBox(width: 4),
                   Text('Modifier',
                       style: TextStyle(
                           color: _C.amber,
@@ -473,6 +670,128 @@ class _ResidentsScreenState extends State<ResidentsScreen>
         ],
       ),
     );
+  }
+
+  // ── Selecteur d'annee — dropdown avec les annees reelles depuis paiements
+  Widget _buildAnneeSelectorBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: _C.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _C.divider),
+      ),
+      child: Row(
+        children: [
+          // Icone
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+                color: _C.blueLight, borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.calendar_month_rounded,
+                color: _C.blue, size: 18),
+          ),
+          const SizedBox(width: 12),
+
+          // Label
+          const Text('Paiements de l\'annee :',
+              style: TextStyle(
+                  color: _C.textMid,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500)),
+          const Spacer(),
+
+          // Dropdown bouton
+          _loadingAnnees
+              ? const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+                color: _C.blue, strokeWidth: 2),
+          )
+              : GestureDetector(
+            onTap: () => _showAnneePickerMenu(),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: _C.blue,
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$_selectedAnnee',
+                    style: const TextStyle(
+                        color: _C.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.keyboard_arrow_down_rounded,
+                      color: _C.white, size: 18),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Menu déroulant pour sélectionner l'année
+  void _showAnneePickerMenu() {
+    final RenderBox button = context.findRenderObject() as RenderBox;
+    final RenderBox overlay =
+    Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
+
+    // Utiliser showMenu de Flutter pour avoir le dropdown natif
+    showMenu<int>(
+      context: context,
+      color: const Color(0xFF2C2C2A),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      elevation: 12,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(
+          button.localToGlobal(Offset.zero, ancestor: overlay).dx +
+              button.size.width -
+              140,
+          button.localToGlobal(Offset.zero, ancestor: overlay).dy + 180,
+          140,
+          0,
+        ),
+        Offset.zero & overlay.size,
+      ),
+      items: _anneesDisponibles
+          .map((annee) => PopupMenuItem<int>(
+        value: annee,
+        height: 52,
+        child: Container(
+          width: double.infinity,
+          alignment: Alignment.center,
+          child: Text(
+            '$annee',
+            style: TextStyle(
+              color: annee == _selectedAnnee
+                  ? _C.blue
+                  : Colors.white,
+              fontWeight: annee == _selectedAnnee
+                  ? FontWeight.w800
+                  : FontWeight.w500,
+              fontSize: 15,
+            ),
+          ),
+        ),
+      ))
+          .toList(),
+    ).then((annee) {
+      if (annee != null && annee != _selectedAnnee) {
+        setState(() => _selectedAnnee = annee);
+        _load();
+      }
+    });
   }
 
   // ── Page title
@@ -1649,98 +1968,209 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     );
   }
 
-  // ── History Dialog (unchanged)
+  // ── History Dialog
   void _showHistoriqueDialog(ResidentModel r) {
     List<Map<String, dynamic>> historique = [];
-    bool loadingHist = true;
+    bool fetchDone   = false;   // true quand la requete est completee
+    bool fetchLaunched = false; // pour eviter de lancer 2x
+    int? selectedAnnee;
+    final int anneeActuelle = DateTime.now().year;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialog) {
-          if (loadingHist) {
-            loadingHist = false;
+          // Lancer le chargement une seule fois
+          if (!fetchLaunched) {
+            fetchLaunched = true;
             _service.getHistoriquePaiements(r.userId).then((data) {
-              if (ctx.mounted) setDialog(() => historique = data);
+              if (ctx.mounted) {
+                setDialog(() {
+                  historique    = data;
+                  fetchDone     = true;
+                  // Selectionner l'annee courante si elle a des entrees,
+                  // sinon prendre la plus recente disponible
+                  final anneesDispo = data
+                      .map((h) {
+                    final d = h['date']?.toString() ?? '';
+                    return d.length >= 4 ? int.tryParse(d.substring(0, 4)) : null;
+                  })
+                      .whereType<int>()
+                      .toSet()
+                      .toList()
+                    ..sort((a, b) => b.compareTo(a));
+                  if (anneesDispo.contains(anneeActuelle)) {
+                    selectedAnnee = anneeActuelle;
+                  } else if (anneesDispo.isNotEmpty) {
+                    selectedAnnee = anneesDispo.first;
+                  } else {
+                    selectedAnnee = anneeActuelle;
+                  }
+                });
+              }
             });
           }
 
-          final pct = r.pourcentagePaiement;
-          final Color barColor =
-          pct >= 1.0 ? _C.green : pct > 0 ? _C.orange : _C.coral;
+          // Extraire les annees depuis les donnees chargees
+          final anneesSet = historique
+              .map((h) {
+            final d = h['date']?.toString() ?? '';
+            return d.length >= 4 ? int.tryParse(d.substring(0, 4)) : null;
+          })
+              .whereType<int>()
+              .toSet()
+              .toList()
+            ..sort((a, b) => b.compareTo(a));
+
+          // Toujours inclure l'annee courante
+          if (!anneesSet.contains(anneeActuelle)) {
+            anneesSet.insert(0, anneeActuelle);
+          }
+
+          // Filtrer par annee selectionnee
+          final filtered = selectedAnnee == null
+              ? historique
+              : historique.where((h) {
+            final d = h['date']?.toString() ?? '';
+            return d.startsWith(selectedAnnee.toString());
+          }).toList();
+
+          // Total paye pour l'annee/filtre courant
+          final totalAnnee = filtered.fold<double>(
+              0, (sum, h) => sum + (double.tryParse(h['montant'].toString()) ?? 0));
+
+          final pct      = r.pourcentagePaiement;
+          final barColor = pct >= 1.0 ? _C.green : pct > 0 ? _C.orange : _C.coral;
 
           return Dialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _dialogHeader(ctx, 'Historique',
+                  _dialogHeader(ctx, 'Historique Paiements',
                       icon: Icons.history_rounded, iconColor: _C.blue),
                   const SizedBox(height: 16),
+
+                  // Recap paiement global
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                        color: _C.bg,
-                        borderRadius: BorderRadius.circular(12),
+                        color: _C.bg, borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: _C.divider)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(r.nomComplet,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 14,
-                                    color: _C.dark)),
-                            Text('${(pct * 100).toInt()}% payé',
-                                style: TextStyle(
-                                    color: barColor,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12)),
-                          ],
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        Text(r.nomComplet, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: _C.dark)),
+                        Text('${(pct * 100).toInt()}% paye',
+                            style: TextStyle(color: barColor, fontWeight: FontWeight.w700, fontSize: 12)),
+                      ]),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(5),
+                        child: LinearProgressIndicator(
+                          value: pct.clamp(0.0, 1.0),
+                          backgroundColor: _C.divider,
+                          valueColor: AlwaysStoppedAnimation(barColor),
+                          minHeight: 6,
                         ),
-                        const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(5),
-                          child: LinearProgressIndicator(
-                            value: pct.clamp(0.0, 1.0),
-                            backgroundColor: _C.divider,
-                            valueColor: AlwaysStoppedAnimation(barColor),
-                            minHeight: 6,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _infoRow(
-                                'Paye', '${r.montantPaye.toInt()} DH', _C.green),
-                            _infoRow('Reste',
-                                '${r.resteAPayer.toInt()} DH', _C.coral),
-                          ],
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        _infoRow('Paye', '${r.montantPaye.toInt()} DH', _C.green),
+                        _infoRow('Reste', '${r.resteAPayer.toInt()} DH', _C.coral),
+                      ]),
+                    ]),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
+
+                  // ── Tabs filtres par annee — affichees seulement quand les donnees sont chargees
+                  if (fetchDone) ...[
+                    SizedBox(
+                      height: 34,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          // Tab "Toutes"
+                          GestureDetector(
+                            onTap: () => setDialog(() => selectedAnnee = null),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: selectedAnnee == null ? _C.blue : _C.bg,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: selectedAnnee == null ? _C.blue : _C.divider),
+                              ),
+                              child: Text('Toutes',
+                                  style: TextStyle(
+                                      color: selectedAnnee == null ? _C.white : _C.textMid,
+                                      fontWeight: FontWeight.w600, fontSize: 12)),
+                            ),
+                          ),
+                          // Tab par annee
+                          ...anneesSet.map((annee) => GestureDetector(
+                            onTap: () => setDialog(() => selectedAnnee = annee),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: selectedAnnee == annee ? _C.blue : _C.bg,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: selectedAnnee == annee ? _C.blue : _C.divider),
+                              ),
+                              child: Text('$annee',
+                                  style: TextStyle(
+                                      color: selectedAnnee == annee ? _C.white : _C.textMid,
+                                      fontWeight: FontWeight.w600, fontSize: 12)),
+                            ),
+                          )),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Total annee selectionnee
+                    if (selectedAnnee != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                            color: _C.greenLight,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: _C.green.withValues(alpha: 0.3))),
+                        child: Row(children: [
+                          const Icon(Icons.calendar_today_outlined, size: 14, color: _C.green),
+                          const SizedBox(width: 8),
+                          Text('Total $selectedAnnee',
+                              style: const TextStyle(color: _C.green, fontSize: 12, fontWeight: FontWeight.w600)),
+                          const Spacer(),
+                          Text('${totalAnnee.toInt()} DH',
+                              style: const TextStyle(color: _C.green, fontSize: 15, fontWeight: FontWeight.w800)),
+                        ]),
+                      ),
+                    const SizedBox(height: 10),
+                  ],
+
                   Container(height: 1, color: _C.divider),
-                  const SizedBox(height: 12),
-                  historique.isEmpty
+                  const SizedBox(height: 10),
+
+                  // Liste des paiements filtres
+                  !fetchDone
+                      ? const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: _C.blue)))
+                      : filtered.isEmpty
                       ? Center(
                     child: Padding(
                       padding: const EdgeInsets.all(20),
                       child: Column(children: [
-                        Icon(Icons.history_rounded,
-                            color: _C.divider, size: 40),
+                        Icon(Icons.receipt_long_outlined, color: _C.divider, size: 40),
                         const SizedBox(height: 8),
-                        const Text('Aucun historique',
-                            style: TextStyle(color: _C.textLight)),
+                        Text(
+                          selectedAnnee != null ? 'Aucun paiement en $selectedAnnee' : 'Aucun historique',
+                          style: const TextStyle(color: _C.textLight, fontSize: 13),
+                        ),
                       ]),
                     ),
                   )
@@ -1748,63 +2178,46 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                     constraints: const BoxConstraints(maxHeight: 220),
                     child: ListView.separated(
                       shrinkWrap: true,
-                      itemCount: historique.length,
-                      separatorBuilder: (_, __) =>
-                          Container(height: 1, color: _C.divider),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => Container(height: 1, color: _C.divider),
                       itemBuilder: (_, i) {
-                        final h = historique[i];
-                        final montant =
-                        double.parse(h['montant'].toString()).toInt();
+                        final h       = filtered[i];
+                        final montant = double.parse(h['montant'].toString()).toInt();
+                        final dateStr = h['date']?.toString() ?? '';
+                        // Formatter la date JJ/MM/AAAA
+                        String dateFormatee = dateStr;
+                        try {
+                          final d = DateTime.parse(dateStr);
+                          dateFormatee = '${d.day.toString().padLeft(2,'0')}/${d.month.toString().padLeft(2,'0')}/${d.year}';
+                        } catch (_) {}
+
                         return Padding(
-                          padding:
-                          const EdgeInsets.symmetric(vertical: 10),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                    color: _C.greenLight,
-                                    borderRadius:
-                                    BorderRadius.circular(10)),
-                                child: const Icon(
-                                    Icons.arrow_downward_rounded,
-                                    color: _C.green,
-                                    size: 16),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      h['description'] ?? 'Paiement',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 13,
-                                          color: _C.dark),
-                                    ),
-                                    Text(
-                                      h['date']?.toString() ?? '',
-                                      style: const TextStyle(
-                                          color: _C.textLight,
-                                          fontSize: 11),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Text('+$montant DH',
-                                  style: const TextStyle(
-                                      color: _C.green,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 14)),
-                            ],
-                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          child: Row(children: [
+                            Container(
+                              width: 38, height: 38,
+                              decoration: BoxDecoration(
+                                  color: _C.greenLight, borderRadius: BorderRadius.circular(10)),
+                              child: const Icon(Icons.arrow_downward_rounded, color: _C.green, size: 16),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(h['description'] ?? 'Paiement',
+                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: _C.dark)),
+                              Text(dateFormatee, style: const TextStyle(color: _C.textLight, fontSize: 11)),
+                            ])),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(color: _C.greenLight, borderRadius: BorderRadius.circular(20)),
+                              child: Text('+$montant DH',
+                                  style: const TextStyle(color: _C.green, fontWeight: FontWeight.w800, fontSize: 13)),
+                            ),
+                          ]),
                         );
                       },
                     ),
                   ),
+
                   const SizedBox(height: 16),
                   GestureDetector(
                     onTap: () => Navigator.pop(ctx),
@@ -1812,15 +2225,11 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       decoration: BoxDecoration(
-                          color: _C.bg,
-                          borderRadius: BorderRadius.circular(12),
+                          color: _C.bg, borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: _C.divider)),
                       child: const Text('Fermer',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: _C.dark,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14)),
+                          style: TextStyle(color: _C.dark, fontWeight: FontWeight.w700, fontSize: 14)),
                     ),
                   ),
                 ],

@@ -168,31 +168,31 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
       runSpacing: 15,
       children: [
         KpiCard(
-          title: 'Solde Total',
+          title: 'Solde Tranche',
           value: '${data['solde']?.toStringAsFixed(0) ?? 0}',
           icon: Icons.account_balance_wallet,
           iconColor: Colors.blue,
           isCurrency: true,
         ),
         KpiCard(
-          title: 'Total Revenus',
+          title: 'Revenus (Paiements)',
           value: '${data['total_revenus']?.toStringAsFixed(0) ?? 0}',
           icon: Icons.trending_up,
           iconColor: Colors.green,
           isCurrency: true,
         ),
         KpiCard(
-          title: 'Total Dépenses',
+          title: 'Dépenses Tranche',
           value: '${data['total_depenses']?.toStringAsFixed(0) ?? 0}',
           icon: Icons.trending_down,
           iconColor: Colors.red,
           isCurrency: true,
         ),
         KpiCard(
-          title: 'Objectif Annuel',
-          value: '${data['objectif_annuel']?.toStringAsFixed(0) ?? 0}',
-          icon: Icons.track_changes,
-          iconColor: Colors.amber,
+          title: 'Dépenses Globales',
+          value: '${data['total_depenses_globales']?.toStringAsFixed(0) ?? 0}',
+          icon: Icons.public,
+          iconColor: Colors.orange,
           isCurrency: true,
         ),
       ],
@@ -341,8 +341,21 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              await _service.deleteInterSyndicExpense(expense['id'], expense['montant']);
-              _refresh();
+              try {
+                await _service.deleteInterSyndicExpense(expense['id'], expense['montant']);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Dépense supprimée avec succès')),
+                  );
+                }
+                _refresh();
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Erreur lors de la suppression : $e')),
+                  );
+                }
+              }
             },
             child: const Text("Supprimer", style: TextStyle(color: Colors.red)),
           ),

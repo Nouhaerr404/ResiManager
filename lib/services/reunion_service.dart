@@ -7,7 +7,7 @@ class ReunionService {
   final _db = Supabase.instance.client;
 
   // ─────────────────────────────────────────────────────────
-  // Charger les vrais noms (residence, tranche, inter-syndic)
+
   // Utilise pour personnaliser les PDFs de convocation
   // ─────────────────────────────────────────────────────────
   Future<Map<String, String>> getTrancheInfo(int trancheId) async {
