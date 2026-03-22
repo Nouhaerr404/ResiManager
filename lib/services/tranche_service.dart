@@ -87,45 +87,12 @@ class TrancheService {
           .select('id')
           .eq('tranche_id', trancheId);
 
-      // ── Finances (On-the-fly calculation) ──────────────────
-      // 1. Total Dépenses de la Tranche (Spécifiques)
-      final depensesRes = await _db
-          .from('depenses')
-          .select('montant')
-          .eq('tranche_id', trancheId);
-      
-      double totalDepenses = 0;
-      for (var d in (depensesRes as List)) {
-        totalDepenses += double.parse(d['montant'].toString());
-      }
-
-      
-      // Since complex subqueries in Supabase might be tricky, let's use the immeubleIds we already have
-      double totalRevenus = 0;
-      if (immeubleIds.isNotEmpty) {
-        final appartementsRev = await _db
-            .from('appartements')
-            .select('id')
-            .inFilter('immeuble_id', immeubleIds);
-        final appartIdsRev = (appartementsRev as List).map((a) => a['id'] as int).toList();
-        
-        if (appartIdsRev.isNotEmpty) {
-          final payRes = await _db
-              .from('paiements')
-              .select('montant_paye')
-              .inFilter('appartement_id', appartIdsRev);
-          for (var p in (payRes as List)) {
-            totalRevenus += double.parse(p['montant_paye'].toString());
-          }
-        }
-      }
-
-      // ── NOUVEAU : Reclamations en cours ──────────────────
-      final reclamations = await _db
-          .from('reclamations')
-          .select('id')
+      // Finances
+      final finances = await _db
+          .from('finances_summary')
+          .select('*')
           .eq('tranche_id', trancheId)
-          .eq('statut', 'en_cours');
+          .maybeSingle();
 
       // Reunions planifiees
       final reunions = await _db
@@ -134,7 +101,14 @@ class TrancheService {
           .eq('tranche_id', trancheId)
           .eq('statut', 'planifiee');
 
-      // ── Annonces publiées ─────────────────────────────────
+      // Reclamations en cours
+      final reclamations = await _db
+          .from('reclamations')
+          .select('id')
+          .eq('tranche_id', trancheId)
+          .eq('statut', 'en_cours');
+
+      // Annonces publiées
       final annonces = await _db
           .from('annonces')
           .select('id')
@@ -151,9 +125,9 @@ class TrancheService {
         'nbReunions':      (reunions as List).length,
         'nbReclamations':  (reclamations as List).length,
         'nbAnnonces':      (annonces as List).length,
-        'solde':    totalRevenus - totalDepenses,
-        'revenus':  totalRevenus,
-        'depenses': totalDepenses,
+        'solde':    finances?['solde'] ?? 0,
+        'revenus':  finances?['revenus_total'] ?? 0,
+        'depenses': finances?['depenses_total'] ?? 0,
       };
 
       print('>>> Stats: $stats');
@@ -179,7 +153,6 @@ class TrancheService {
   }
 
   Future<List<TrancheModel>> getTranchesByResidence(int residenceId) async {
-    // On demande à Supabase de compter les lignes liées (immeubles et appartements)
     final response = await _db
         .from('tranches')
         .select('''
@@ -193,13 +166,11 @@ class TrancheService {
     final List list = response as List;
 
     return list.map((e) {
-      // 1. On récupère le compte réel des immeubles de cette tranche
       int realImmCount = 0;
       if (e['immeubles'] != null && (e['immeubles'] as List).isNotEmpty) {
         realImmCount = e['immeubles'][0]['count'] ?? 0;
       }
 
-      // 2. On calcule le compte réel des appartements (somme des apparts de chaque immeuble)
       int totalApparts = 0;
       if (e['appartements_count'] != null) {
         for (var imm in e['appartements_count']) {
@@ -209,27 +180,26 @@ class TrancheService {
         }
       }
 
-      // 3. On crée le modèle avec les données de comptage RÉELLES
       return TrancheModel(
         id: e['id'],
         nom: e['nom'] ?? '',
         description: e['description'],
         residenceId: e['residence_id'],
         interSyndicId: e['inter_syndic_id'],
-        // ON UTILISE NOS CALCULS RÉELS ICI
         nombreImmeubles: realImmCount,
         nombreAppartements: totalApparts,
-        // On garde les autres compteurs tels quels (ou on fera la même chose plus tard)
         nombreParkings: e['nombre_parkings'] ?? 0,
         nombreGarages: e['nombre_garages'] ?? 0,
         nombreBoxes: e['nombre_boxes'] ?? 0,
         prixAnnuel: e['prix_annuel'] != null ? (e['prix_annuel'] as num).toDouble() : 0.0,
+        statut: e['Statut'] ?? 'Actif',
         interSyndicNom: e['users'] != null
             ? "${e['users']['prenom']} ${e['users']['nom']}"
             : null,
       );
     }).toList();
   }
+
   Future<void> createTrancheComplet(
       int residenceId,
       String nom,
@@ -238,10 +208,10 @@ class TrancheService {
       double? prixAnnuel) async {
 
     await _db.from('tranches').insert({
-      'residence_id':      residenceId,
-      'nom':               nom,
-      'inter_syndic_id':   interSyndicId,
-      'prix_annuel' :      prixAnnuel,
+      'residence_id':    residenceId,
+      'nom':             nom,
+      'inter_syndic_id': interSyndicId,
+      'prix_annuel':     (prixAnnuel != null && prixAnnuel > 0) ? prixAnnuel : null,
     });
   }
 
@@ -287,11 +257,15 @@ class TrancheService {
       double? prixAnnuel) async {
 
     await _db.from('tranches').update({
-      'nom': nom,
-      'description': description,
+      'nom':             nom,
+      'description':     description,
       'inter_syndic_id': interSyndicId,
-      'prix_annuel': prixAnnuel,
+      'prix_annuel':     (prixAnnuel != null && prixAnnuel > 0) ? prixAnnuel : null,
     }).eq('id', trancheId);
+  }
+
+  Future<void> setTrancheStatut(int trancheId, String statut) async {
+    await _db.from('tranches').update({'Statut': statut}).eq('id', trancheId);
   }
 
   Future<void> deleteTranche(int trancheId) async {
@@ -363,15 +337,15 @@ class TrancheService {
     required int trancheId,
     required String titre,
     required String contenu,
-    required String type, // 'normale' | 'urgente'
+    required String type,
   }) async {
     try {
       await _db.from('annonces').insert({
         'tranche_id': trancheId,
-        'titre': titre.trim(),
-        'contenu': contenu.trim(),
-        'type': type,
-        'statut': 'brouillon',
+        'titre':      titre.trim(),
+        'contenu':    contenu.trim(),
+        'type':       type,
+        'statut':     'brouillon',
       });
       return null;
     } catch (e) {
@@ -388,10 +362,10 @@ class TrancheService {
   }) async {
     try {
       await _db.from('annonces').update({
-        'titre': titre.trim(),
+        'titre':   titre.trim(),
         'contenu': contenu.trim(),
-        'type': type,
-        'statut': statut,
+        'type':    type,
+        'statut':  statut,
       }).eq('id', id);
       return null;
     } catch (e) {
