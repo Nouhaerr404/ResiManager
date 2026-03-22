@@ -194,7 +194,8 @@ class FinanceService {
 
     var payQuery = _db.from('paiements')
         .select('montant_paye, montant_total')
-        .eq('inter_syndic_id', interSyndicId);
+        .eq('inter_syndic_id', interSyndicId)
+        .eq('residence_id', residenceId); // ← filtre par résidence pour éviter les doublons inter-résidences
     if (annee != null) payQuery = payQuery.eq('annee', annee);
 
     final paiementsRes = await payQuery;

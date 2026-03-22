@@ -88,38 +88,38 @@ class TrancheService {
           .eq('tranche_id', trancheId);
 
       // Finances — calculées directement (pas besoin de vue SQL)
-      // Revenus : montant_paye dans les paiements liés aux appartements de cette tranche
+      // Revenus : montant_paye dans les paiements liés aux appartements de cette tranche (année en cours)
+      final int anneeEnCours = DateTime.now().year;
       double revenus = 0;
       double depenses = 0;
 
       if (immeubleIds.isNotEmpty) {
-        // Tous les appartements de la tranche (déjà récupérés plus haut via appartIds)
-        if (immeubleIds.isNotEmpty) {
-          final appartements2 = await _db
-              .from('appartements')
-              .select('id')
-              .inFilter('immeuble_id', immeubleIds);
-          final appartIds2 = (appartements2 as List)
-              .map((a) => a['id'] as int)
-              .toList();
+        final appartements2 = await _db
+            .from('appartements')
+            .select('id')
+            .inFilter('immeuble_id', immeubleIds);
+        final appartIds2 = (appartements2 as List)
+            .map((a) => a['id'] as int)
+            .toList();
 
-          if (appartIds2.isNotEmpty) {
-            final paiements = await _db
-                .from('paiements')
-                .select('montant_paye')
-                .inFilter('appartement_id', appartIds2);
-            for (var p in paiements as List) {
-              revenus += (p['montant_paye'] as num).toDouble();
-            }
+        if (appartIds2.isNotEmpty) {
+          final paiements = await _db
+              .from('paiements')
+              .select('montant_paye')
+              .inFilter('appartement_id', appartIds2)
+              .eq('annee', anneeEnCours); // ← filtre par année en cours
+          for (var p in paiements as List) {
+            revenus += (p['montant_paye'] as num).toDouble();
           }
         }
       }
 
-      // Dépenses : depenses liées à cette tranche (tranche_id)
+      // Dépenses : depenses liées à cette tranche (tranche_id) pour l'année en cours
       final depensesRes = await _db
           .from('depenses')
           .select('montant')
-          .eq('tranche_id', trancheId);
+          .eq('tranche_id', trancheId)
+          .eq('annee', anneeEnCours); // ← filtre par année en cours
       for (var d in depensesRes as List) {
         depenses += (d['montant'] as num).toDouble();
       }
