@@ -186,41 +186,39 @@ class _AddGlobalExpenseScreenState extends State<AddGlobalExpenseScreen> {
   }
 
   void _submitForm() async {
-    if (_montantController.text.isEmpty || _selectedCategoryId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Veuillez choisir une catégorie et un montant"), backgroundColor: Colors.orange));
-      return;
-    }
+    if (_montantController.text.isEmpty || _selectedCategoryId == null) return;
 
     setState(() => _isUploading = true);
 
     try {
-      String? finalPath;
+      String? fileUrl;
 
+      // ÉTAPE A : On envoie l'image d'abord
       if (_pickedFile != null) {
-        // SUR WINDOWS/MOBILE : On enregistre le chemin complet du fichier sur ton PC
-        // SUR WEB : On utilise le nom de fichier (car pas de chemin local)
-        finalPath = kIsWeb ? _pickedFile!.name : _pickedFile!.path;
+        // On récupère le chemin pour Windows ou les bytes pour le Web
+        final dynamic fileData = kIsWeb ? _pickedFile!.bytes : _pickedFile!.path;
+
+        fileUrl = await _service.uploadInvoice(_pickedFile!.name, fileData);
+
+        if (fileUrl == null) {
+          throw Exception("L'upload a échoué, vérifiez votre connexion ou le bucket Supabase");
+        }
       }
 
-      // Enregistrement direct en base de données
+      // ÉTAPE B : On enregistre avec le lien reçu (fileUrl)
       await _service.addGlobalExpense(
         residenceId: widget.residenceId,
         montant: double.parse(_montantController.text.replaceAll(',', '.')),
         categorieId: _selectedCategoryId!,
         annee: _selectedAnnee,
         syndicId: widget.syndicId,
-        facturePath: finalPath,
+        facturePath: fileUrl, // <--- C'est ici que le "Oui" se joue !
         description: _descController.text,
       );
 
-      if (!mounted) return;
       Navigator.pop(context);
-
     } catch (e) {
       setState(() => _isUploading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erreur lors de l'enregistrement : $e"), backgroundColor: Colors.red),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red));
     }
-  }
-}
+  }}

@@ -270,11 +270,7 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(children: [
-          NavButtons(residenceId: widget.residenceId, syndicId : widget.syndicId, ),
-          const SizedBox(width: 15),
-          Text("Tranches", style: TextStyle(fontSize: isMobile ? 22 : 32, fontWeight: FontWeight.bold, color: darkGrey)),
-        ]),
+
         if (!isMobile) _addButton(false),
       ],
     );
@@ -294,15 +290,22 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
   }
 
   Widget _buildTopSummary(List<TrancheModel> list) {
+    // On fait la somme des vrais comptes de chaque tranche
     int totalImm = list.fold(0, (sum, t) => sum + t.nombreImmeubles);
     int totalApp = list.fold(0, (sum, t) => sum + t.nombreAppartements);
-    return SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
-      _kpiItem("Tranches", list.length.toString(), Icons.domain, Colors.blue),
-      const SizedBox(width: 15),
-      _kpiItem("Immeubles", totalImm.toString(), Icons.apartment, Colors.green),
-      const SizedBox(width: 15),
-      _kpiItem("Appartements", totalApp.toString(), Icons.home_work, Colors.orange),
-    ]));
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _kpiItem("Total Tranches", list.length.toString(), Icons.domain, Colors.blue),
+          const SizedBox(width: 15),
+          _kpiItem("Immeubles", totalImm.toString(), Icons.apartment, Colors.green),
+          const SizedBox(width: 15),
+          _kpiItem("Appartements", totalApp.toString(), Icons.home_work, Colors.orange),
+        ],
+      ),
+    );
   }
 
   Widget _kpiItem(String title, String val, IconData icon, Color color) {
