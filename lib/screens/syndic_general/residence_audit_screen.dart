@@ -92,7 +92,7 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
               ...tranches.where((t) => t['nom'].toString().toLowerCase().contains(query)).map((t) {
                 final tExp = allExpenses.where((e) => e['tranche_id'] == t['id']).toList();
                 final tPay = allPayments.where((p) => p['appartements']?['immeubles']?['tranches']?['nom'] == t['nom']).toList();
-                return _buildTrancheAuditCard(t['nom'], tExp, tPay);
+                return _buildTrancheAuditCard(t['nom'], t['statut'], tExp, tPay);
               }),
 
               // 3. BILAN FINAL NOIR
@@ -107,7 +107,7 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
   }
 
   // --- COMPOSANT : CARTE DE TRANCHE ---
-  Widget _buildTrancheAuditCard(String name, List expenses, List payments) {
+  Widget _buildTrancheAuditCard(String name, String? status, List expenses, List payments) {
     double totalExp = expenses.fold(0, (sum, e) => sum + (e['montant'] as num).toDouble());
     final stats = _getPaymentStats(payments);
     double totalPay = stats['paye']!;
@@ -127,6 +127,10 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
           iconColor: primaryOrange,
           title: Row(children: [
             Text(name.toUpperCase(), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: darkGrey)),
+            if (status != null) ...[
+              const SizedBox(width: 8),
+              _buildStatusBadge(status),
+            ],
             const SizedBox(width: 8),
             const Icon(Icons.keyboard_arrow_down, size: 18, color: Colors.grey),
           ]),
@@ -148,9 +152,29 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
     );
   }
 
+  Widget _buildStatusBadge(String status) {
+    Color color = Colors.grey;
+    String label = status.toLowerCase();
+    if (label == 'actif' || label == 'ouverte') color = Colors.green;
+    if (label == 'terminé' || label == 'cloturée') color = Colors.blue;
+    if (label == 'archivé') color = Colors.orange;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: color),
+      ),
+    );
+  }
+
   // --- TABLEAU DES PAIEMENTS (APPAREMENT + BOX + FRAIS FIXES) ---
   Widget _buildPaymentTable(List data) {
-    // 1. On regroupe toutes les lignes par appartement (E-03 aura ses charges, son box, etc.)
     Map<int, List<Map<String, dynamic>>> groupedByApp = {};
     for (var p in data) {
       int appId = p['appartements']?['id'] ?? 0;
@@ -162,7 +186,7 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
       bool isLarge = constraints.maxWidth > 800;
 
       return SingleChildScrollView(
-        scrollDirection: Axis.horizontal, // Indispensable pour le Web et Mobile
+        scrollDirection: Axis.horizontal,
         child: ConstrainedBox(
           constraints: BoxConstraints(minWidth: constraints.maxWidth),
           child: DataTable(
@@ -180,9 +204,6 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
             ],
             rows: groupedByApp.entries.map<DataRow>((entry) {
               final pays = entry.value;
-
-              // --- CALCUL MATHÉMATIQUE RÉEL (Somme de la ligne) ---
-              // On additionne les montants de TOUTES les lignes de cet appartement
               const types = ['charges', 'parking', 'garage', 'box'];
               double totalLignePaye = 0;
               double totalLigneDu = 0;
@@ -193,21 +214,14 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
                   totalLigneDu += (match.first['montant_total'] as num).toDouble();
                 }
               }
-              // Une ligne est "verte" seulement si tout est payé
               bool isLigneComplete = totalLignePaye >= totalLigneDu && totalLigneDu > 0;
 
               return DataRow(cells: [
-                // Colonne APPARTEMENT
-                DataCell(Text(pays.first['appartements']?['numero'] ?? "-",
-                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
-
-                // Colonnes de catégories (Ratios individuels)
+                DataCell(Text(pays.first['appartements']?['numero'] ?? "-", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
                 _buildRatioCell(pays, 'charges'),
                 _buildRatioCell(pays, 'parking'),
                 _buildRatioCell(pays, 'garage'),
                 _buildRatioCell(pays, 'box'),
-
-                // --- COLONNE TOTAL (Consolidation de la ligne) ---
                 DataCell(
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -217,11 +231,7 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
                       ),
                       child: Text(
                         "${totalLignePaye.toInt()} / ${totalLigneDu.toInt()} DH",
-                        style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: isLigneComplete ? Colors.green : primaryOrange
-                        ),
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isLigneComplete ? Colors.green : primaryOrange),
                       ),
                     )
                 ),
@@ -231,7 +241,7 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
         ),
       );
     });
-  }  // --- HELPERS STYLES & RATIOS ---
+  }
 
   DataCell _buildRatioCell(List<Map<String, dynamic>> items, String type) {
     final pList = items.where((e) => e['type_paiement'] == type).toList();
@@ -269,11 +279,11 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
     );
   }
 
-  // --- AUTRES HELPERS (Header, Search, GlobalCard, ImmeubleGrouping...) ---
   Widget _buildHeader() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
+        const Text("Audit Financier", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
         DropdownButton<int>(
           value: _selectedAnnee,
           underline: const SizedBox(),
