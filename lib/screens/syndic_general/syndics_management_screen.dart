@@ -26,8 +26,9 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
   }
 
   void _loadData() {
+    print(">>> JE DEMANDE LES SYNDICS DE LA RESIDENCE : ${widget.residenceId}");
     setState(() {
-      _syndicsFuture = _service.getMyInterSyndics(widget.syndicId);
+      _syndicsFuture = _service.getMyInterSyndics(widget.syndicId, widget.residenceId);
     });
   }
 
@@ -275,15 +276,13 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
                 ),
                 const SizedBox(height: 15),
 
-                if (!isEdit) ...[
-                  _buildFieldLabel("Email professionnel"),
-                  TextField(
-                    controller: emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: _buildInputDecoration("exemple@syndic.ma"),
-                  ),
-                  const SizedBox(height: 15),
-                ],
+                _buildFieldLabel("Email professionnel"),
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: _buildInputDecoration("exemple@syndic.ma"),
+                ),
+                const SizedBox(height: 15),
 
                 _buildFieldLabel("Téléphone"),
                 TextField(
@@ -312,16 +311,29 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: isLoading ? null : () async {
-                      if (nomController.text.trim().isEmpty || prenomController.text.trim().isEmpty || (!isEdit && emailController.text.trim().isEmpty)) {
+                      if (nomController.text.trim().isEmpty || prenomController.text.trim().isEmpty || emailController.text.trim().isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Veuillez remplir le Prénom, le Nom et l'Email"), backgroundColor: Colors.orange));
                         return;
                       }
                       setDialogState(() => isLoading = true);
                       try {
                         if (isEdit) {
-                          await _service.updateInterSyndic(syndic['id'], nomController.text.trim(), prenomController.text.trim(), phoneController.text.trim());
+                          await _service.updateInterSyndic(
+                            syndic['id'], 
+                            nomController.text.trim(), 
+                            prenomController.text.trim(), 
+                            emailController.text.trim(),
+                            phoneController.text.trim()
+                          );
                         } else {
-                          await _service.createAndInviteSyndic(email: emailController.text.trim(), nom: nomController.text.trim(), prenom: prenomController.text.trim(), telephone: phoneController.text.trim(), mySyndicGeneralId: widget.syndicId);
+                          await _service.createAndInviteSyndic(
+                            email: emailController.text.trim(), 
+                            nom: nomController.text.trim(), 
+                            prenom: prenomController.text.trim(), 
+                            telephone: phoneController.text.trim(), 
+                            mySyndicGeneralId: widget.syndicId, 
+                            residenceId: widget.residenceId,
+                          );
                         }
                         if (mounted) {
                           Navigator.pop(context);
