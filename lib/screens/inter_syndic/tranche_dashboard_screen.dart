@@ -10,6 +10,8 @@ import 'apartments/apartments_screen.dart';
 import 'parkings/parkings_screen.dart';
 import 'boxes/boxes_screen.dart';
 import 'reclamations/reclamations_screen.dart';
+import 'immeubles/immeubles_screen.dart'; // Ajouté
+
 // ── Palette de couleurs
 class _C {
   static const coral       = Color(0xFFE8603C);
@@ -546,6 +548,17 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       valueColor: _C.dark,
       interactive: true,
       onTap: () => setState(() => _selectedView = 'apartments'),
+    ),
+    _ModuleData(
+      label: 'Immeubles',
+      value: '${widget.tranche.nombreImmeubles}',
+      sub: 'batiments',
+      icon: Icons.business_rounded,
+      iconBg: _C.blueLight,
+      valueColor: _C.blue,
+      interactive: true,
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => InterSyndicImmeublesScreen(tranche: widget.tranche))),
     ),
     _ModuleData(
       label: 'Personnel',

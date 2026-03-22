@@ -20,10 +20,10 @@ class ResidentService {
       // Recuperer le prix annuel de la tranche (colonne avec espace)
       final trancheRes = await _db
           .from('tranches')
-          .select('"prix annuel"')
+          .select('prix_annuel')
           .eq('id', trancheId)
           .maybeSingle();
-      final rawPrix = trancheRes?['prix annuel'] ?? trancheRes?['"prix annuel"'] ?? 0;
+      final rawPrix = trancheRes?['prix_annuel'] ?? 0;
       final double tranchePrixAnnuel = double.tryParse(rawPrix.toString()) ?? 0.0;
 
       final immeublesRes = await _db
@@ -453,13 +453,13 @@ class ResidentService {
       // La colonne "prix annuel" a un espace — on selectionne tout avec *
       final trData = await _db
           .from('tranches')
-          .select('residence_id, inter_syndic_id, "prix annuel"')
+          .select('residence_id, inter_syndic_id, prix_annuel')
           .eq('id', trancheId)
           .maybeSingle();
       final residenceId = trData?['residence_id'] ?? 1;
       final isId = trData?['inter_syndic_id'] ?? 1;
       // Lire le prix annuel de la tranche (cle avec espace)
-      final rawPrix = trData?['prix annuel'] ?? trData?['"prix annuel"'] ?? 0;
+      final rawPrix = trData?['prix_annuel'] ?? 0;
       final double tranchePrix = double.tryParse(rawPrix.toString()) ?? 0.0;
       // Utiliser le prix de la tranche si montantTotal non fourni ou nul
       final double montantEffectif = montantTotal > 0 ? montantTotal : tranchePrix;

@@ -72,7 +72,7 @@ CREATE TABLE tranches (
     nombre_boxes        INT          NOT NULL DEFAULT 0,
     created_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-    prix annuel         NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+    prix_annuel         NUMERIC(10,2) NOT NULL DEFAULT 0.00,
 
     CONSTRAINT fk_tranche_residence
         FOREIGN KEY (residence_id)    REFERENCES residences(id) ON DELETE CASCADE,
@@ -89,8 +89,6 @@ CREATE TABLE immeubles (
     adresse             VARCHAR(255)  NULL,
     tranche_id          BIGINT        NOT NULL,
     nombre_appartements INT           NOT NULL DEFAULT 0,
-    charges_generales   NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-    prix_annuel         NUMERIC(10,2) NOT NULL DEFAULT 0.00,
     created_at          TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
 
