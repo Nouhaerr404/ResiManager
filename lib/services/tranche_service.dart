@@ -372,12 +372,22 @@ class TrancheService {
     required String type,
   }) async {
     try {
+      // Récupération de l'inter_syndic_id, requis par la BD
+      final trancheInfo = await _db
+          .from('tranches')
+          .select('inter_syndic_id')
+          .eq('id', trancheId)
+          .maybeSingle();
+
+      final interSyndicId = trancheInfo?['inter_syndic_id'] ?? 1;
+
       await _db.from('annonces').insert({
         'tranche_id': trancheId,
+        'inter_syndic_id': interSyndicId,
         'titre':      titre.trim(),
         'contenu':    contenu.trim(),
         'type':       type,
-        'statut':     'brouillon',
+        'statut':     'archivee',
       });
       return null;
     } catch (e) {

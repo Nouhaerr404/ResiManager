@@ -35,7 +35,7 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
   List<Map<String, dynamic>> _all      = [];
   List<Map<String, dynamic>> _filtered = [];
   bool   _loading      = true;
-  String _filterType   = 'tous'; // 'tous' | 'publiee' | 'brouillon' | 'urgente'
+  String _filterType   = 'tous'; // 'tous' | 'publiee' | 'archivee' | 'urgente'
   final  _searchCtrl   = TextEditingController();
 
   @override
@@ -81,7 +81,7 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
 
   // ── Compteurs ──────────────────────────────────────────────
   int get _nbPubliee   => _all.where((a) => a['statut'] == 'publiee').length;
-  int get _nbBrouillon => _all.where((a) => a['statut'] == 'brouillon').length;
+  int get _nbArchivee  => _all.where((a) => a['statut'] == 'archivee').length;
   int get _nbUrgente   => _all.where((a) => a['type'] == 'urgente').length;
 
   @override
@@ -177,7 +177,7 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
     return Row(children: [
       _statCard(Icons.check_circle_outline_rounded, '$_nbPubliee', 'Publiées', _C.green, _C.greenLight),
       const SizedBox(width: 10),
-      _statCard(Icons.edit_note_rounded, '$_nbBrouillon', 'Brouillons', _C.blue, _C.blueLight),
+      _statCard(Icons.edit_note_rounded, '$_nbArchivee', 'Archivées', _C.blue, _C.blueLight),
       const SizedBox(width: 10),
       _statCard(Icons.warning_amber_rounded, '$_nbUrgente', 'Urgentes', _C.coral, _C.coralLight),
     ]);
@@ -229,7 +229,7 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
     final filters = [
       ('tous',      'Tous',        _all.length),
       ('publiee',   'Publiées',    _nbPubliee),
-      ('brouillon', 'Brouillons',  _nbBrouillon),
+      ('archivee',  'Archivées',   _nbArchivee),
       ('urgente',   'Urgentes',    _nbUrgente),
     ];
     return SingleChildScrollView(
@@ -355,7 +355,7 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
                         border: Border.all(color: isPubliee ? _C.green.withValues(alpha: 0.4) : _C.divider),
                       ),
                       child: Text(
-                        isPubliee ? 'Publiée' : 'Brouillon',
+                        isPubliee ? 'Publiée' : 'Archivée',
                         style: TextStyle(color: isPubliee ? _C.green : _C.textLight, fontSize: 9, fontWeight: FontWeight.w700),
                       ),
                     ),
@@ -449,7 +449,7 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
   // ── Actions ────────────────────────────────────────────────
 
   Future<void> _togglePublish(Map<String, dynamic> a) async {
-    final newStatut = a['statut'] == 'publiee' ? 'brouillon' : 'publiee';
+    final newStatut = a['statut'] == 'publiee' ? 'archivee' : 'publiee';
     final err = await _service.updateAnnonce(
       id: a['id'],
       titre: a['titre'],
@@ -632,7 +632,7 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
                         titre: titre,
                         contenu: contenu,
                         type: selectedType,
-                        statut: existing['statut'] ?? 'brouillon',
+                        statut: existing['statut'] ?? 'archivee',
                       );
                     } else {
                       err = await _service.addAnnonce(
