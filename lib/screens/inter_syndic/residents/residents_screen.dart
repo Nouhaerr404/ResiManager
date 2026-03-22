@@ -83,14 +83,14 @@ class _ResidentsScreenState extends State<ResidentsScreen>
       // selectionnees avec guillemets doubles dans la requete
       final res = await db
           .from('tranches')
-          .select('"prix annuel"')
+          .select('prix_annuel')
           .eq('id', widget.trancheId)
           .maybeSingle();
       if (mounted) {
         setState(() {
           if (res != null) {
             // Supabase peut retourner la cle avec espace ou sans
-            final raw = res['prix annuel'] ?? res['"prix annuel"'] ?? 0;
+            final raw = res['prix_annuel'] ?? 0;
             _prixAnnuel = double.tryParse(raw.toString()) ?? 0.0;
           } else {
             _prixAnnuel = 0.0;
@@ -214,7 +214,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                     try {
                       await Supabase.instance.client
                           .from('tranches')
-                          .update({'prix annuel': val}).eq(
+                          .update({'prix_annuel': val}).eq(
                           'id', widget.trancheId);
                       if (!ctx.mounted) return;
                       Navigator.pop(ctx);

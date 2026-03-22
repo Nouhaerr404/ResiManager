@@ -108,6 +108,13 @@ class TrancheService {
           .eq('tranche_id', trancheId)
           .eq('statut', 'en_cours');
 
+      // ── Annonces publiées ─────────────────────────────────
+      final annonces = await _db
+          .from('annonces')
+          .select('id')
+          .eq('tranche_id', trancheId)
+          .eq('statut', 'publiee');
+
       final stats = {
         'nbResidents':     nbResidents,
         'nbAppartements':  nbAppartements,
@@ -116,7 +123,8 @@ class TrancheService {
         'nbGarages':       (garages as List).length,
         'nbBoxes':         (boxes as List).length,
         'nbReunions':      (reunions as List).length,
-        'nbReclamations':  (reclamations as List).length, // ← NOUVEAU
+        'nbReclamations':  (reclamations as List).length,
+        'nbAnnonces':      (annonces as List).length,
         'solde':    finances?['solde'] ?? 0,
         'revenus':  finances?['revenus_total'] ?? 0,
         'depenses': finances?['depenses_total'] ?? 0,
@@ -135,7 +143,8 @@ class TrancheService {
         'nbGarages':      0,
         'nbBoxes':        0,
         'nbReunions':     0,
-        'nbReclamations': 0, // ← NOUVEAU
+        'nbReclamations': 0,
+        'nbAnnonces':     0,
         'solde':          0,
         'revenus':        0,
         'depenses':       0,
@@ -188,7 +197,7 @@ class TrancheService {
         nombreParkings: e['nombre_parkings'] ?? 0,
         nombreGarages: e['nombre_garages'] ?? 0,
         nombreBoxes: e['nombre_boxes'] ?? 0,
-        prixAnnuel: e['prix_annuel'] != null ? (e['prix_annuel'] as num).toDouble() : null,
+        prixAnnuel: e['prix_annuel'] != null ? (e['prix_annuel'] as num).toDouble() : 0.0,
         interSyndicNom: e['users'] != null
             ? "${e['users']['prenom']} ${e['users']['nom']}"
             : null,
@@ -305,6 +314,71 @@ class TrancheService {
     } catch (e) {
       print("ERREUR getMyAvailableInterSyndics : $e");
       return [];
+    }
+  }
+
+  // ─── CRUD Annonces ────────────────────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> getAnnoncesByTranche(int trancheId) async {
+    try {
+      final res = await _db
+          .from('annonces')
+          .select()
+          .eq('tranche_id', trancheId)
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(res as List);
+    } catch (e) {
+      print('>>> ERREUR getAnnoncesByTranche: $e');
+      return [];
+    }
+  }
+
+  Future<String?> addAnnonce({
+    required int trancheId,
+    required String titre,
+    required String contenu,
+    required String type, // 'normale' | 'urgente'
+  }) async {
+    try {
+      await _db.from('annonces').insert({
+        'tranche_id': trancheId,
+        'titre': titre.trim(),
+        'contenu': contenu.trim(),
+        'type': type,
+        'statut': 'brouillon',
+      });
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> updateAnnonce({
+    required int id,
+    required String titre,
+    required String contenu,
+    required String type,
+    required String statut,
+  }) async {
+    try {
+      await _db.from('annonces').update({
+        'titre': titre.trim(),
+        'contenu': contenu.trim(),
+        'type': type,
+        'statut': statut,
+      }).eq('id', id);
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> deleteAnnonce(int id) async {
+    try {
+      await _db.from('annonces').delete().eq('id', id);
+      return null;
+    } catch (e) {
+      return e.toString();
     }
   }
 }

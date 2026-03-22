@@ -10,6 +10,9 @@ import 'apartments/apartments_screen.dart';
 import 'parkings/parkings_screen.dart';
 import 'boxes/boxes_screen.dart';
 import 'reclamations/reclamations_screen.dart';
+import 'immeubles/immeubles_screen.dart'; // Ajouté
+import 'annonces/annonces_screen.dart';
+
 // ── Palette de couleurs
 class _C {
   static const coral       = Color(0xFFE8603C);
@@ -548,6 +551,17 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       onTap: () => setState(() => _selectedView = 'apartments'),
     ),
     _ModuleData(
+      label: 'Immeubles',
+      value: '${widget.tranche.nombreImmeubles}',
+      sub: 'batiments',
+      icon: Icons.business_rounded,
+      iconBg: _C.blueLight,
+      valueColor: _C.blue,
+      interactive: true,
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => InterSyndicImmeublesScreen(tranche: widget.tranche))),
+    ),
+    _ModuleData(
       label: 'Personnel',
       value: '${_num(_stats?['nbPersonnel'] ?? 0)}',
       sub: 'employes',
@@ -614,17 +628,29 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       onTap: () => Navigator.push(context,
           MaterialPageRoute(builder: (_) => ReunionsScreen(trancheId: widget.tranche.id))),
     ),
-    // ── NOUVEAU MODULE RECLAMATIONS ──────────────────────────
+    // ── MODULE RECLAMATIONS ──────────────────────────────────
     _ModuleData(
       label: 'Reclamations',
       value: '${_num(_stats?['nbReclamations'] ?? 0)}',
       sub: 'en cours',
       icon: Icons.report_problem_rounded,
-      iconBg: const Color(0xFFFFF8EC),   // amberLight
-      valueColor: const Color(0xFFF5A623), // amber
+      iconBg: const Color(0xFFFFF8EC),
+      valueColor: const Color(0xFFF5A623),
       interactive: true,
       onTap: () => Navigator.push(context,
           MaterialPageRoute(builder: (_) => ReclamationsScreen(trancheId: widget.tranche.id))),
+    ),
+    // ── MODULE ANNONCES ──────────────────────────────────────
+    _ModuleData(
+      label: 'Annonces',
+      value: '${_num(_stats?['nbAnnonces'] ?? 0)}',
+      sub: 'publiees',
+      icon: Icons.campaign_rounded,
+      iconBg: _C.blueLight,
+      valueColor: _C.blue,
+      interactive: true,
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => AnnoncesScreen(trancheId: widget.tranche.id))),
     ),
   ];
 

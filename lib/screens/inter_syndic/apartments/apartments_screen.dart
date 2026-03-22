@@ -10,14 +10,16 @@ import '../../../services/tranche_service.dart';
 class ApartmentsListScreen extends StatefulWidget {
   final int? trancheId;
   final int? residenceId;
-  final String? trancheName; // Ajouté
-  final String? residenceName; // Ajouté
+  final int? immeubleId; // Ajouté
+  final String? trancheName;
+  final String? residenceName;
   final VoidCallback? onBack;
 
   const ApartmentsListScreen({
     Key? key, 
     this.trancheId, 
-    this.residenceId, 
+    this.residenceId,
+    this.immeubleId, // Ajouté
     this.trancheName,
     this.residenceName,
     this.onBack
@@ -63,6 +65,9 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
       
       if (widget.trancheId != null) {
         query = query.eq('immeubles.tranche_id', widget.trancheId!);
+      }
+      if (widget.immeubleId != null) {
+        query = query.eq('immeuble_id', widget.immeubleId!);
       }
 
       final response = await query.order('id', ascending: true) as List<dynamic>;
