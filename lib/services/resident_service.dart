@@ -953,32 +953,88 @@ class ResidentService {
           'paye_annee': 0.0,
           'reste_annee': 0.0,
           'statut': 'impaye',
+          'lignes': [],
         };
       }
       final dynamic appartId = resRow['appartements']?['id'];
+
+      // ── Charger toutes les lignes de paiement de l'année
       final paiements = await _db
           .from('paiements')
-          .select('montant_total, montant_paye, statut')
+          .select('id, montant_total, montant_paye, statut, type_paiement, annee')
           .eq('appartement_id', appartId)
           .eq('annee', annee);
+
       double total = 0, paye = 0;
+      final List<Map<String, dynamic>> lignes = [];
+
       for (final p in paiements as List) {
-        total += (p['montant_total'] as num).toDouble();
-        paye += (p['montant_paye'] as num).toDouble();
+        final double mt = (p['montant_total'] as num).toDouble();
+        final double mp = (p['montant_paye'] as num).toDouble();
+        total += mt;
+        paye  += mp;
+        lignes.add({
+          'id':            p['id'],
+          'type':          p['type_paiement'] ?? 'charges',
+          'montant_total': mt,
+          'montant_paye':  mp,
+          'reste':         (mt - mp).clamp(0.0, double.infinity),
+          'statut':        p['statut'] ?? 'impaye',
+        });
       }
+
+      // ── Résoudre les numéros de ressource (parking/box/garage)
+      // Même logique que getResidentsByTranche
+      try {
+        final benefRes = await _db
+            .from('beneficiaires')
+            .select('id')
+            .eq('resident_id', userId);
+        final List benefList = benefRes as List? ?? [];
+        if (benefList.isNotEmpty) {
+          final benefIds = benefList.map((b) => b['id']).toList();
+
+          final gRes  = await _db.from('garages').select('numero, beneficiaire_id').inFilter('beneficiaire_id', benefIds);
+          final pkRes = await _db.from('parkings').select('numero, beneficiaire_id').inFilter('beneficiaire_id', benefIds);
+          final bxRes = await _db.from('boxes').select('numero, beneficiaire_id').inFilter('beneficiaire_id', benefIds);
+
+          // Map type -> [numeros disponibles]
+          final Map<String, List<String>> numeros = {
+            'garage':  (gRes  as List? ?? []).map((g)  => g['numero'].toString()).toList(),
+            'parking': (pkRes as List? ?? []).map((pk) => pk['numero'].toString()).toList(),
+            'box':     (bxRes as List? ?? []).map((bx) => bx['numero'].toString()).toList(),
+          };
+          final Map<String, int> counters = {};
+
+          for (final ligne in lignes) {
+            final String type = ligne['type'] as String;
+            if (type == 'charges') continue;
+            final list = numeros[type] ?? [];
+            final idx  = counters[type] ?? 0;
+            if (idx < list.length) {
+              ligne['reference'] = list[idx];
+              counters[type] = idx + 1;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('>>> ERREUR résolution numéros overview: $e');
+      }
+
       return {
-        'num_appart': resRow['appartements']['numero'],
+        'num_appart':   resRow['appartements']['numero'],
         'immeuble_nom': resRow['appartements']['immeubles']['nom'],
-        'tranche_nom': resRow['appartements']['immeubles']['tranches']['nom'],
-        'total_annee': total,
-        'paye_annee': paye,
-        'reste_annee': total - paye,
+        'tranche_nom':  resRow['appartements']['immeubles']['tranches']['nom'],
+        'total_annee':  total,
+        'paye_annee':   paye,
+        'reste_annee':  total - paye,
         'statut': paye >= total
             ? 'complet'
             : (paye > 0 ? 'partiel' : 'impaye'),
+        'lignes': lignes,   // ← NOUVEAU
       };
     } catch (e) {
-      return {'total_annee': 0.0};
+      return {'total_annee': 0.0, 'lignes': []};
     }
   }
 
@@ -992,23 +1048,66 @@ class ResidentService {
           .maybeSingle();
       final dynamic appartId = resRow?['appartement_id'];
       if (appartId == null) return {'total_verse': 0.0, 'historique': []};
+
       final paiements = await _db
           .from('paiements')
           .select()
           .eq('appartement_id', appartId)
           .order('date_paiement', ascending: false);
+
+      // ── Résoudre les numéros de ressource
+      final Map<String, String> paiementNumero = {};
+      try {
+        final benefRes = await _db
+            .from('beneficiaires')
+            .select('id')
+            .eq('resident_id', userId);
+        final List benefList = benefRes as List? ?? [];
+        if (benefList.isNotEmpty) {
+          final benefIds = benefList.map((b) => b['id']).toList();
+
+          final gRes  = await _db.from('garages').select('numero, beneficiaire_id').inFilter('beneficiaire_id', benefIds);
+          final pkRes = await _db.from('parkings').select('numero, beneficiaire_id').inFilter('beneficiaire_id', benefIds);
+          final bxRes = await _db.from('boxes').select('numero, beneficiaire_id').inFilter('beneficiaire_id', benefIds);
+
+          final Map<String, List<String>> numeros = {
+            'garage':  (gRes  as List? ?? []).map((g)  => g['numero'].toString()).toList(),
+            'parking': (pkRes as List? ?? []).map((pk) => pk['numero'].toString()).toList(),
+            'box':     (bxRes as List? ?? []).map((bx) => bx['numero'].toString()).toList(),
+          };
+          final Map<String, int> counters = {};
+
+          for (final p in paiements as List) {
+            final String type = p['type_paiement']?.toString() ?? 'charges';
+            if (type == 'charges') continue;
+            final pId   = p['id']?.toString() ?? '';
+            final list  = numeros[type] ?? [];
+            final idx   = counters[type] ?? 0;
+            if (idx < list.length) {
+              paiementNumero[pId] = list[idx];
+              counters[type] = idx + 1;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('>>> ERREUR résolution numéros historique: $e');
+      }
+
       double total = 0;
       final List<Map<String, dynamic>> hist = [];
       for (final p in paiements as List) {
         total += (p['montant_paye'] as num).toDouble();
-        hist.add(Map<String, dynamic>.from(p));
+        final map = Map<String, dynamic>.from(p);
+        // ── Injecter la référence de ressource si disponible
+        final ref = paiementNumero[p['id']?.toString() ?? ''];
+        if (ref != null) map['reference'] = ref;
+        hist.add(map);
       }
       return {'total_verse': total, 'historique': hist};
     } catch (e) {
       return {'total_verse': 0.0, 'historique': []};
     }
   }
-
   Future<String?> envoyerReclamation({
     required dynamic residentUserId,
     required String titre,
