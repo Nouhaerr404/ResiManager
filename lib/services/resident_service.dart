@@ -604,6 +604,8 @@ class ResidentService {
     required String prenom,
     String? telephone,
     required String type,
+    double? montantTotal, // Optionnel : pour mettre à jour le prix annuel
+    int? annee,           // Optionnel : l'année concernée
   }) async {
     try {
       await _db.from('users').update({
@@ -611,9 +613,37 @@ class ResidentService {
         'prenom': prenom.trim(),
         'telephone': telephone?.trim(),
       }).eq('id', userId);
+      
       await _db
           .from('residents')
           .update({'type': type}).eq('user_id', userId);
+
+      // Si un nouveau montant total est fourni, on met à jour la ligne de 'charges'
+      if (montantTotal != null && montantTotal > 0) {
+        final targetAnnee = annee ?? DateTime.now().year;
+        
+        // Trouver le paiement de type 'charges' pour cette année
+        final existingPaiement = await _db
+            .from('paiements')
+            .select('id, montant_paye')
+            .eq('resident_id', userId)
+            .eq('type_paiement', 'charges')
+            .eq('annee', targetAnnee)
+            .maybeSingle();
+
+        if (existingPaiement != null) {
+          final double paid = double.tryParse(existingPaiement['montant_paye'].toString()) ?? 0.0;
+          final String nouveauStatut = paid >= montantTotal 
+              ? 'complet' 
+              : (paid > 0 ? 'partiel' : 'impaye');
+              
+          await _db.from('paiements').update({
+            'montant_total': montantTotal,
+            'statut': nouveauStatut,
+          }).eq('id', existingPaiement['id']);
+        }
+      }
+      
       return null;
     } catch (e) {
       return e.toString();
@@ -946,46 +976,57 @@ class ResidentService {
     try {
       final resRow = await _db
           .from('residents')
-          .select(
-          'id, appartements(id, numero, immeubles(id, nom, tranches(id, nom)))')
+          .select('id, appartements(id, numero, immeubles(id, nom, tranches(id, nom)))')
           .eq('user_id', userId)
           .maybeSingle();
       if (resRow == null) {
-        return {
-          'num_appart': '-',
-          'total_annee': 0.0,
-          'paye_annee': 0.0,
-          'reste_annee': 0.0,
-          'statut': 'impaye',
-        };
+        return {'num_appart': '-', 'total_annee': 0.0, 'paye_annee': 0.0, 'reste_annee': 0.0, 'statut': 'impaye', 'lignes': []};
       }
+
       final dynamic appartId = resRow['appartements']?['id'];
+
+      // ← NOUVEAU : select avec type_paiement et statut
       final paiements = await _db
           .from('paiements')
-          .select('montant_total, montant_paye, statut')
+          .select('id, montant_total, montant_paye, statut, type_paiement')
           .eq('appartement_id', appartId)
           .eq('annee', annee);
+
       double total = 0, paye = 0;
+      final List<Map<String, dynamic>> lignes = [];
+
       for (final p in paiements as List) {
-        total += (p['montant_total'] as num).toDouble();
-        paye += (p['montant_paye'] as num).toDouble();
+        final double mt = (p['montant_total'] as num).toDouble();
+        final double mp = (p['montant_paye'] as num).toDouble();
+        total += mt;
+        paye  += mp;
+
+        // ← NOUVEAU : chaque ligne de paiement
+        lignes.add({
+          'type':          p['type_paiement']?.toString() ?? 'charges',
+          'reference':     null,
+          'montant_total': mt,
+          'montant_paye':  mp,
+          'reste':         mt - mp,
+          'statut':        p['statut']?.toString() ?? 'impaye',
+        });
       }
+
       return {
-        'num_appart': resRow['appartements']['numero'],
+        'num_appart':   resRow['appartements']['numero'],
         'immeuble_nom': resRow['appartements']['immeubles']['nom'],
-        'tranche_nom': resRow['appartements']['immeubles']['tranches']['nom'],
-        'total_annee': total,
-        'paye_annee': paye,
-        'reste_annee': total - paye,
-        'statut': paye >= total
-            ? 'complet'
-            : (paye > 0 ? 'partiel' : 'impaye'),
+        'tranche_nom':  resRow['appartements']['immeubles']['tranches']['nom'],
+        'total_annee':  total,
+        'paye_annee':   paye,
+        'reste_annee':  total - paye,
+        'statut': paye >= total ? 'complet' : (paye > 0 ? 'partiel' : 'impaye'),
+        'lignes': lignes, // ← NOUVEAU
       };
     } catch (e) {
-      return {'total_annee': 0.0};
+      debugPrint('>>> ERREUR getPaiementOverview: $e');
+      return {'total_annee': 0.0, 'lignes': []};
     }
   }
-
   Future<Map<String, dynamic>> getHistoriquePaiementsComplet(
       dynamic userId) async {
     try {

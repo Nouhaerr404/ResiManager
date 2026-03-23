@@ -5,24 +5,64 @@ import '../models/tranche_model.dart';
 class TrancheService {
   final _db = Supabase.instance.client;
 
-  Future<List<TrancheModel>> getTranchesOfInterSyndic(
-      int interSyndicId) async {
+  Future<List<TrancheModel>> getTranchesOfInterSyndic(int interSyndicId) async {
     try {
-      print('>>> Chargement tranches pour interSyndicId=$interSyndicId');
+      print('>>> Chargement tranches dynamiques pour interSyndicId=$interSyndicId');
 
-      final res = await _db
+      final response = await _db
           .from('tranches')
-          .select('*, residences(*), users(nom, prenom)')
+          .select('''
+            *, 
+            residences(*), 
+            users(nom, prenom),
+            immeubles(count),
+            appartements_count:immeubles(appartements(count))
+          ''')
           .eq('inter_syndic_id', interSyndicId)
           .timeout(const Duration(seconds: 10));
 
-      final list = res as List;
-      print('>>> Tranches trouvees: ${list.length}');
+      final List list = response as List;
+      print('>>> Tranches trouvées: ${list.length}');
 
-      return list.map((e) => TrancheModel.fromJson(e)).toList();
+      return list.map((e) {
+        // Extraction du compte réel d'immeubles
+        int realImmCount = 0;
+        if (e['immeubles'] != null && (e['immeubles'] as List).isNotEmpty) {
+          realImmCount = e['immeubles'][0]['count'] ?? 0;
+        }
+
+        // Extraction du compte réel d'appartements (somme de tous les immeubles)
+        int totalApparts = 0;
+        if (e['appartements_count'] != null) {
+          for (var imm in (e['appartements_count'] as List)) {
+            if (imm['appartements'] != null && (imm['appartements'] as List).isNotEmpty) {
+              totalApparts += (imm['appartements'][0]['count'] as int);
+            }
+          }
+        }
+
+        return TrancheModel(
+          id: e['id'],
+          nom: e['nom'] ?? '',
+          description: e['description'],
+          residenceId: e['residence_id'],
+          interSyndicId: e['inter_syndic_id'],
+          nombreImmeubles: realImmCount,
+          nombreAppartements: totalApparts,
+          nombreParkings: e['nombre_parkings'] ?? 0,
+          nombreGarages: e['nombre_garages'] ?? 0,
+          nombreBoxes: e['nombre_boxes'] ?? 0,
+          prixAnnuel: e['prix_annuel'] != null ? (e['prix_annuel'] as num).toDouble() : 0.0,
+          statut: e['statut_tranche'] ?? 'Actif',
+          residenceNom: e['residences'] != null ? e['residences']['nom'] : null,
+          interSyndicNom: e['users'] != null
+              ? "${e['users']['prenom']} ${e['users']['nom']}"
+              : null,
+        );
+      }).toList();
 
     } catch (e, s) {
-      print('>>> ERREUR getTranches: $e\n$s');
+      print('>>> ERREUR getTranchesOfInterSyndic: $e\n$s');
       return [];
     }
   }
@@ -87,41 +127,55 @@ class TrancheService {
           .select('id')
           .eq('tranche_id', trancheId);
 
-      // Finances — calculées directement (pas besoin de vue SQL)
-      // Revenus : montant_paye dans les paiements liés aux appartements de cette tranche
+      // Finances — calculées avec les quote-parts (Transparence totale)
+      final int anneeEnCours = DateTime.now().year;
       double revenus = 0;
       double depenses = 0;
 
-      if (immeubleIds.isNotEmpty) {
-        // Tous les appartements de la tranche (déjà récupérés plus haut via appartIds)
-        if (immeubleIds.isNotEmpty) {
-          final appartements2 = await _db
-              .from('appartements')
-              .select('id')
-              .inFilter('immeuble_id', immeubleIds);
-          final appartIds2 = (appartements2 as List)
-              .map((a) => a['id'] as int)
-              .toList();
+      // 1. Récupérer les infos de la tranche (residence_id, inter_syndic_id)
+      final trancheData = await _db.from('tranches').select('residence_id, inter_syndic_id').eq('id', trancheId).single();
+      final int resId = trancheData['residence_id'];
+      final int? isId = trancheData['inter_syndic_id'];
 
-          if (appartIds2.isNotEmpty) {
-            final paiements = await _db
-                .from('paiements')
-                .select('montant_paye')
-                .inFilter('appartement_id', appartIds2);
-            for (var p in paiements as List) {
-              revenus += (p['montant_paye'] as num).toDouble();
-            }
+      // 2. Récupérer les effectifs pour les divisions
+      final allResTranches = await _db.from('tranches').select('id').eq('residence_id', resId);
+      final int totalTranches = (allResTranches as List).isEmpty ? 1 : allResTranches.length;
+      
+      int tranchesSameIS = 1;
+      if (isId != null) {
+        final sameISTranches = await _db.from('tranches').select('id').eq('inter_syndic_id', isId).eq('residence_id', resId);
+        tranchesSameIS = (sameISTranches as List).isEmpty ? 1 : sameISTranches.length;
+      }
+
+      // 3. Calcul des Revenus (Paiements de cette tranche)
+      if (immeubleIds.isNotEmpty) {
+        final appartements2 = await _db.from('appartements').select('id').inFilter('immeuble_id', immeubleIds);
+        final appartIds2 = (appartements2 as List).map((a) => a['id'] as int).toList();
+
+        if (appartIds2.isNotEmpty) {
+          final paiements = await _db.from('paiements').select('montant_paye').inFilter('appartement_id', appartIds2).eq('annee', anneeEnCours);
+          for (var p in paiements as List) {
+            revenus += (p['montant_paye'] as num).toDouble();
           }
         }
       }
 
-      // Dépenses : depenses liées à cette tranche (tranche_id)
-      final depensesRes = await _db
-          .from('depenses')
-          .select('montant')
-          .eq('tranche_id', trancheId);
-      for (var d in depensesRes as List) {
-        depenses += (d['montant'] as num).toDouble();
+      // 4. Calcul des Dépenses (avec quote-part)
+      final allExpenses = await _db.from('depenses').select('montant, tranche_id, inter_syndic_id, syndic_general_id').eq('residence_id', resId).eq('annee', anneeEnCours);
+      
+      for (var ex in allExpenses as List) {
+        double amount = (ex['montant'] as num).toDouble();
+        
+        if (ex['tranche_id'] == trancheId) {
+          // Dépense 100% spécifique à cette tranche
+          depenses += amount;
+        } else if (isId != null && ex['inter_syndic_id'] == isId && ex['tranche_id'] == null) {
+          // Dépense de l'inter-syndic partagée entre ses tranches
+          depenses += amount / tranchesSameIS;
+        } else if (ex['syndic_general_id'] != null) {
+          // Dépense globale de la résidence partagée entre TOUTES les tranches
+          depenses += amount / totalTranches;
+        }
       }
 
       final double solde = revenus - depenses;
@@ -148,6 +202,7 @@ class TrancheService {
           .eq('statut', 'publiee');
 
       final stats = {
+        'nbImmeubles':     immeubleIds.length,
         'nbResidents':     nbResidents,
         'nbAppartements':  nbAppartements,
         'nbPersonnel':     (personnel as List).length,
@@ -372,12 +427,22 @@ class TrancheService {
     required String type,
   }) async {
     try {
+      // Récupération de l'inter_syndic_id, requis par la BD
+      final trancheInfo = await _db
+          .from('tranches')
+          .select('inter_syndic_id')
+          .eq('id', trancheId)
+          .maybeSingle();
+
+      final interSyndicId = trancheInfo?['inter_syndic_id'] ?? 1;
+
       await _db.from('annonces').insert({
         'tranche_id': trancheId,
+        'inter_syndic_id': interSyndicId,
         'titre':      titre.trim(),
         'contenu':    contenu.trim(),
         'type':       type,
-        'statut':     'brouillon',
+        'statut':     'archivee',
       });
       return null;
     } catch (e) {

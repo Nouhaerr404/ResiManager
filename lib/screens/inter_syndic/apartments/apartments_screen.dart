@@ -232,7 +232,15 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
 
   Future<void> _deleteApartmentFromDb(AppartementModel apartment) async {
     try {
+      // 1. Supprimer les paiements liés à cet appartement d'abord (contrainte FK)
+      await _supabase.from('paiements').delete().eq('appartement_id', apartment.id);
+
+      // 2. Désassigner quiconque est lié à lui côté résidents
+      await _supabase.from('residents').update({'appartement_id': null}).eq('appartement_id', apartment.id);
+
+      // 3. Supprimer l'appartement (le code précédent était correct mais incomplet)
       await _supabase.from('appartements').delete().eq('id', apartment.id);
+
       setState(() {
         apartments.removeWhere((a) => a.id == apartment.id);
         if (searchController.text.isEmpty) {
@@ -422,8 +430,8 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                 onPressed: () async {
                   if (!_formKey.currentState!.validate()) return;
                   
-                  final residenceStr = widget.residenceId?.toString() ?? residenceController.text.trim();
-                  final trancheStr = widget.trancheId?.toString() ?? trancheController.text.trim();
+                  final residenceStr = widget.residenceName ?? residenceController.text.trim();
+                  final trancheStr = widget.trancheName ?? trancheController.text.trim();
                   final immId = selectedImmeubleId!;
                   final immLabel = selectedImmeubleNom!;
                   final numAptStr = numeroController.text.trim();
@@ -651,8 +659,8 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                 onPressed: () async {
                   if (!_formKey.currentState!.validate()) return;
 
-                  final resStr = widget.residenceId?.toString() ?? residenceController.text.trim();
-                  final traStr = widget.trancheId?.toString() ?? trancheController.text.trim();
+                  final resStr = widget.residenceName ?? residenceController.text.trim();
+                  final traStr = widget.trancheName ?? trancheController.text.trim();
                   final immId = selectedImmeubleId!;
                   final immLabel = selectedImmeubleNom!;
                   final numAptStr = numeroController.text.trim();

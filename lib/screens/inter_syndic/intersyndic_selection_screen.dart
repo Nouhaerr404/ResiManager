@@ -151,6 +151,8 @@ class _InterSyndicSelectionScreenState extends State<InterSyndicSelectionScreen>
       onTap: () {
         TempSession.interSyndicId = s['id'];
         TempSession.interSyndicNom = '$prenom $nom';
+        TempSession.interSyndicEmail = s['email'] ?? '';
+        TempSession.interSyndicTelephone = s['telephone'] ?? '';
         Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const TranchesListScreen()),

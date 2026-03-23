@@ -647,12 +647,12 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
   }
 
   Widget _buildPaymentItem(Map<String, dynamic> item, int index) {
-    final String? dateStr = item['date_paiement'] as String?;
-    final double amount =
-        (item['montant_paye'] as num?)?.toDouble() ?? 0.0;
-    final int? year = item['annee'] as int?;
-    final bool hasDoc = item['facture_path'] != null;
-    final String statut = item['statut']?.toString() ?? 'impaye';
+    final String? dateStr  = item['date_paiement'] as String?;
+    final double  amount   = (item['montant_paye'] as num?)?.toDouble() ?? 0.0;
+    final int?    year     = item['annee'] as int?;
+    final String  type     = item['type_paiement']?.toString() ?? 'charges'; // ← TYPE
+    final String? ref      = item['reference'] as String?;
+    final String  statut   = item['statut']?.toString() ?? 'impaye';
 
     String dateLabel = 'Date inconnue';
     if (dateStr != null) {
@@ -664,6 +664,7 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
       } catch (_) { dateLabel = dateStr; }
     }
 
+    // ── Couleur selon STATUT (pour le badge statut)
     Color statusColor; String statusLabel; IconData statusIcon;
     switch (statut) {
       case 'complet':
@@ -675,6 +676,27 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
       default:
         statusColor = _orange; statusLabel = 'Impayé';
         statusIcon = Icons.cancel_rounded;
+    }
+
+    // ── Icône + couleur selon TYPE ← NOUVEAU
+    IconData typeIcon; Color typeColor; String typeLabel;
+    switch (type) {
+      case 'garage':
+        typeIcon = Icons.garage_rounded;
+        typeColor = const Color(0xFF0891B2);
+        typeLabel = 'Garage${ref != null ? ' $ref' : ''}'; break;
+      case 'parking':
+        typeIcon = Icons.local_parking_rounded;
+        typeColor = _purple;
+        typeLabel = 'Parking${ref != null ? ' $ref' : ''}'; break;
+      case 'box':
+        typeIcon = Icons.inventory_2_rounded;
+        typeColor = _yellow;
+        typeLabel = 'Box${ref != null ? ' $ref' : ''}'; break;
+      default:
+        typeIcon = Icons.home_work_rounded;
+        typeColor = _orange;
+        typeLabel = 'Charges';
     }
 
     return Container(
@@ -689,13 +711,13 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Row(children: [
-          // ── ICONE ──
+          // ── ICONE TYPE ← NOUVEAU
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.1),
+                color: typeColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12)),
-            child: Icon(statusIcon, color: statusColor, size: 20),
+            child: Icon(typeIcon, color: typeColor, size: 20),
           ),
           const SizedBox(width: 12),
 
@@ -704,36 +726,52 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
               crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(dateLabel, style: const TextStyle(
                 fontWeight: FontWeight.w600, fontSize: 13)),
-            const SizedBox(height: 2),
+            const SizedBox(height: 4),
+
+            // ── BADGE TYPE ← NOUVEAU
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: typeColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(typeIcon, size: 10, color: typeColor),
+                const SizedBox(width: 3),
+                Text(typeLabel, style: TextStyle(
+                    color: typeColor, fontSize: 10,
+                    fontWeight: FontWeight.w600)),
+              ]),
+            ),
+            const SizedBox(height: 4),
+
+            // ── BADGE STATUT ──
             Row(children: [
-              _typeBadgeHistorique(item['type_paiement']?.toString() ?? 'charges',
-                  item['reference'] as String?),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(statusIcon, size: 10, color: statusColor),
+                  const SizedBox(width: 3),
+                  Text(statusLabel, style: TextStyle(
+                      color: statusColor, fontSize: 10,
+                      fontWeight: FontWeight.bold)),
+                ]),
+              ),
               const SizedBox(width: 6),
               Text('${year ?? "???"}',
                   style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
-            ]),            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20)),
-              child: Text(statusLabel, style: TextStyle(
-                  color: statusColor, fontSize: 10,
-                  fontWeight: FontWeight.bold)),
-            ),
+            ]),
           ])),
 
-          // ── MONTANT + RECU ──
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('${_format(amount)} DH',
-                style: TextStyle(
-                    color: statusColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15)),
-            const SizedBox(height: 6),
-            hasDoc ? _btnRecu() : _btnRecuDisabled(),
-          ]),
+          // ── MONTANT ──
+          Text('${_format(amount)} DH',
+              style: TextStyle(
+                  color: statusColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15)),
         ]),
       ),
     );

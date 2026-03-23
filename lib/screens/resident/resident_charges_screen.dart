@@ -481,7 +481,7 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
                           mode: LaunchMode.externalApplication);
                     }
                   },
-                  icon: const Icon(Icons.download_rounded, size: 16),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 16),
                   label: const Text('Agrandir'),
                   style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFF6B4A),

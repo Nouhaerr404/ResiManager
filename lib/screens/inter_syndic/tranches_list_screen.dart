@@ -1,9 +1,11 @@
 // lib/screens/inter_syndic/tranches_list_screen.dart
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../models/tranche_model.dart';
 import '../../services/tranche_service.dart';
 import '../../utils/temp_session.dart';
 import 'tranche_dashboard_screen.dart';
+import 'profile/inter_syndic_profile_screen.dart';
 
 // ── Brand Colors — aligned with ResiManager desktop app
 class _C {
@@ -73,36 +75,63 @@ class _TranchesListScreenState extends State<TranchesListScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _C.bg,
-      body: Column(
+      backgroundColor: _C.dark,
+      body: Stack(
         children: [
-          _buildHeader(),
-          Expanded(
-            child: _loading
-                ? _buildLoader()
-                : FadeTransition(
-              opacity: _fadeAnim,
-              child: RefreshIndicator(
-                color: _C.coral,
-                onRefresh: _loadTranches,
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-                  children: [
-                    _buildPageTitle(),
-                    const SizedBox(height: 24),
-                    _buildStatsRow(),
-                    const SizedBox(height: 32),
-                    _buildSectionLabel('Tranches'),
-                    const SizedBox(height: 14),
-                    ..._tranches
-                        .asMap()
-                        .entries
-                        .map((e) => _buildTrancheCard(e.value, e.key)),
+          // Background image
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/tranche_bg.png',
+              fit: BoxFit.cover,
+            ),
+          ),
+          // Gradient overlay
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color.fromRGBO(0, 0, 0, 0.40),
+                    Color.fromRGBO(0, 0, 0, 0.90),
                   ],
+                  stops: [0.0, 1.0],
                 ),
               ),
             ),
+          ),
+          Column(
+            children: [
+              _buildHeader(),
+              Expanded(
+                child: _loading
+                    ? _buildLoader()
+                    : FadeTransition(
+                  opacity: _fadeAnim,
+                  child: RefreshIndicator(
+                    color: _C.coral,
+                    onRefresh: _loadTranches,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+                      children: [
+                        _buildPageTitle(),
+                        const SizedBox(height: 24),
+                        _buildStatsRow(),
+                        const SizedBox(height: 32),
+                        _buildSectionLabel('Tranches'),
+                        const SizedBox(height: 14),
+                        ..._tranches
+                            .asMap()
+                            .entries
+                            .map((e) => _buildTrancheCard(e.value, e.key)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -117,8 +146,8 @@ class _TranchesListScreenState extends State<TranchesListScreen>
         CircularProgressIndicator(color: _C.coral, strokeWidth: 2.5),
         SizedBox(height: 16),
         Text('Chargement…',
-            style: TextStyle(
-                color: _C.textLight,
+            style: const TextStyle(
+                color: _C.white,
                 fontSize: 13,
                 fontWeight: FontWeight.w500)),
       ],
@@ -128,10 +157,19 @@ class _TranchesListScreenState extends State<TranchesListScreen>
   // ── Header — mirrors app's top bar with logo + Espace Syndic button
   // Remplace UNIQUEMENT la méthode _buildHeader() dans tranches_list_screen.dart
 
+  String _getInitials(String name) {
+    if (name.trim().isEmpty) return 'IS';
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return parts[0].substring(0, parts[0].length >= 2 ? 2 : 1).toUpperCase();
+  }
+
   Widget _buildHeader() {
     final top = MediaQuery.of(context).padding.top;
     return Container(
-      color: _C.white,
+      color: Colors.transparent,
       padding: EdgeInsets.only(
           top: top + 14, bottom: 14, left: 16, right: 16),
       child: Row(
@@ -143,34 +181,35 @@ class _TranchesListScreenState extends State<TranchesListScreen>
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: _C.white,
+                color: Colors.white.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _C.divider, width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                border: Border.all(color: Colors.white24, width: 1.5),
               ),
               child: const Icon(Icons.chevron_left_rounded,
-                  color: _C.dark, size: 24),
+                  color: _C.white, size: 24),
             ),
           ),
 
           const SizedBox(width: 10),
 
-          // ── Bouton GRILLE (fond coral)
+          // ── Initiales du Syndic (ou Icone par defaut)
           Container(
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: _C.coral,
+              color: _C.coralLight,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.grid_view_rounded,
-                color: _C.white, size: 20),
+            child: Center(
+              child: Text(
+                _getInitials(TempSession.interSyndicNom),
+                style: const TextStyle(
+                  color: _C.coral,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
           ),
 
           const SizedBox(width: 12),
@@ -179,16 +218,16 @@ class _TranchesListScreenState extends State<TranchesListScreen>
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Text('ResiManager',
-                  style: TextStyle(
-                      color: _C.dark,
+            children: [
+              Text(TempSession.interSyndicNom.trim().isNotEmpty ? TempSession.interSyndicNom.trim() : 'ResiManager',
+                  style: const TextStyle(
+                      color: _C.white,
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
                       letterSpacing: -0.2)),
-              Text('inter_syndic',
+              const Text('Inter-Syndic',
                   style: TextStyle(
-                      color: _C.textLight,
+                      color: Colors.white70,
                       fontSize: 11,
                       fontWeight: FontWeight.w500)),
             ],
@@ -196,24 +235,36 @@ class _TranchesListScreenState extends State<TranchesListScreen>
 
           const Spacer(),
 
-          // ── Bouton Espace Syndic
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: _C.dark,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.work_outline_rounded, size: 13, color: _C.white),
-                SizedBox(width: 6),
-                Text('Espace Syndic',
-                    style: TextStyle(
-                        color: _C.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12)),
-              ],
+          // ── Bouton Profil
+          GestureDetector(
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const InterSyndicProfileScreen()),
+              );
+              // Refresh name in case it was changed
+              setState(() {});
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.person_rounded, size: 14, color: _C.white),
+                  const SizedBox(width: 6),
+                  const Text('Mon Profil',
+                      style: TextStyle(
+                          color: _C.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12)),
+                ],
+              ),
             ),
           ),
         ],
@@ -228,14 +279,14 @@ class _TranchesListScreenState extends State<TranchesListScreen>
       children: [
         const Text('Tableau de Bord',
             style: TextStyle(
-                color: _C.dark,
+                color: _C.white,
                 fontWeight: FontWeight.w800,
                 fontSize: 26,
                 letterSpacing: -0.5)),
         const SizedBox(height: 4),
         const Text("Vue d'ensemble de vos tranches",
             style: TextStyle(
-                color: _C.textMid, fontSize: 13, fontWeight: FontWeight.w400)),
+                color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w400)),
       ],
     );
   }
@@ -299,13 +350,11 @@ class _TranchesListScreenState extends State<TranchesListScreen>
     required String label,
   }) =>
       Expanded(
-        child: Container(
+        child: GlassCard(
           padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: _C.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _C.divider, width: 1),
-          ),
+          borderRadius: 16,
+          color: Colors.white.withOpacity(0.85),
+          border: Border.all(color: Colors.white.withOpacity(0.2)),
           child: Row(
             children: [
               Container(
@@ -344,10 +393,10 @@ class _TranchesListScreenState extends State<TranchesListScreen>
     return Text(
       text,
       style: const TextStyle(
-          color: _C.dark,
-          fontWeight: FontWeight.w700,
-          fontSize: 18,
-          letterSpacing: -0.3),
+          color: _C.white,
+          fontWeight: FontWeight.w800,
+          fontSize: 20,
+          letterSpacing: -0.5),
     );
   }
 
@@ -358,16 +407,15 @@ class _TranchesListScreenState extends State<TranchesListScreen>
           context,
           MaterialPageRoute(
               builder: (_) => TrancheDashboardScreen(tranche: t))),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: _C.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _C.divider, width: 1),
-        ),
-        child: Row(
-          children: [
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: GlassCard(
+          padding: const EdgeInsets.all(18),
+          borderRadius: 16,
+          color: Colors.white.withOpacity(0.85),
+          border: Border.all(color: Colors.white.withOpacity(0.2)),
+          child: Row(
+            children: [
             // Icon
             Container(
               width: 46,
@@ -422,6 +470,7 @@ class _TranchesListScreenState extends State<TranchesListScreen>
           ],
         ),
       ),
+      ),
     );
   }
 
@@ -439,6 +488,42 @@ class _TranchesListScreenState extends State<TranchesListScreen>
               style: TextStyle(
                   color: fg, fontSize: 11, fontWeight: FontWeight.w600)),
         ],
+      ),
+    );
+  }
+}
+
+class GlassCard extends StatelessWidget {
+  final Widget child;
+  final double borderRadius;
+  final EdgeInsets padding;
+  final Color color;
+  final BoxBorder? border;
+
+  const GlassCard({
+    super.key,
+    required this.child,
+    this.borderRadius = 16,
+    this.padding = const EdgeInsets.all(16),
+    this.color = const Color.fromRGBO(255, 255, 255, 0.08),
+    this.border,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(borderRadius),
+            border: border,
+          ),
+          child: child,
+        ),
       ),
     );
   }
