@@ -53,7 +53,7 @@ class TrancheService {
           nombreGarages: e['nombre_garages'] ?? 0,
           nombreBoxes: e['nombre_boxes'] ?? 0,
           prixAnnuel: e['prix_annuel'] != null ? (e['prix_annuel'] as num).toDouble() : 0.0,
-          statut: e['statut_tranche'] ?? 'Actif',
+          statut: e['statut'] ?? 'Actif',
           residenceNom: e['residences'] != null ? e['residences']['nom'] : null,
           interSyndicNom: e['users'] != null
               ? "${e['users']['prenom']} ${e['users']['nom']}"
@@ -279,7 +279,7 @@ class TrancheService {
         nombreGarages: e['nombre_garages'] ?? 0,
         nombreBoxes: e['nombre_boxes'] ?? 0,
         prixAnnuel: e['prix_annuel'] != null ? (e['prix_annuel'] as num).toDouble() : 0.0,
-        statut: e['Statut'] ?? 'Actif',
+        statut: e['statut'] ?? 'Actif',
         interSyndicNom: e['users'] != null
             ? "${e['users']['prenom']} ${e['users']['nom']}"
             : null,
@@ -352,7 +352,7 @@ class TrancheService {
   }
 
   Future<void> setTrancheStatut(int trancheId, String statut) async {
-    await _db.from('tranches').update({'Statut': statut}).eq('id', trancheId);
+    await _db.from('tranches').update({'statut': statut}).eq('id', trancheId);
   }
 
   Future<void> deleteTranche(int trancheId) async {
@@ -376,14 +376,15 @@ class TrancheService {
     return (res as List).map((g) => g['numero'] as String).toList();
   }
 
-  Future<List<Map<String, dynamic>>> getMyAvailableInterSyndics(int myId) async {
+  Future<List<Map<String, dynamic>>> getMyAvailableInterSyndics(int myId, int residenceId) async {
     try {
-      print(">>> DEBUG : Recherche des syndics pour l'Admin ID : $myId");
+      print(">>> DEBUG : Recherche des syndics pour l'Admin ID : $myId sur la résidence : $residenceId");
 
       final response = await _db
           .from('liens_syndics')
           .select('inter_syndic_id')
-          .eq('syndic_general_id', myId);
+          .eq('syndic_general_id', myId)
+          .eq('residence_id', residenceId);
 
       final List data = response as List;
       if (data.isEmpty) return [];
@@ -393,9 +394,10 @@ class TrancheService {
       final usersResponse = await _db
           .from('users')
           .select('id, nom, prenom')
-          .inFilter('id', ids);
+          .inFilter('id', ids)
+          .eq('statut', 'actif');
 
-      print(">>> DEBUG : ${usersResponse.length} syndics trouves !");
+      print(">>> DEBUG : ${usersResponse.length} syndics actifs trouvés pour cette résidence !");
       return List<Map<String, dynamic>>.from(usersResponse);
 
     } catch (e) {

@@ -109,7 +109,7 @@ class _ResidenceSelectionScreenState extends State<ResidenceSelectionScreen> {
     );
   }
 
-  // --- PETITS HELPERS POUR LE DESIGN (À ajouter en bas de la classe) ---
+  // --- PETITS HELPERS POUR LE DESIGN ---
 
   Widget _buildFieldLabel(String label) {
     return Padding(
@@ -126,7 +126,7 @@ class _ResidenceSelectionScreenState extends State<ResidenceSelectionScreen> {
       hintText: hint,
       hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
       filled: true,
-      fillColor: const Color(0xFFF8F9FA), // Un fond très légèrement gris
+      fillColor: const Color(0xFFF8F9FA),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -138,22 +138,23 @@ class _ResidenceSelectionScreenState extends State<ResidenceSelectionScreen> {
       ),
     );
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // 1. IMAGE DE FOND (L'image que tu as fournie)
+          // 1. IMAGE DE FOND
           Container(
             decoration: const BoxDecoration(
               image: DecorationImage(
-                image: AssetImage('assets/images/residence_bg.png'), // Assure-toi du chemin
+                image: AssetImage('assets/images/residence_bg.png'),
                 fit: BoxFit.cover,
               ),
             ),
           ),
 
-          // 2. VOILE SOMBRE (Pour faire ressortir les cartes et le texte)
+          // 2. VOILE SOMBRE
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -172,13 +173,23 @@ class _ResidenceSelectionScreenState extends State<ResidenceSelectionScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // En-tête personnalisé
+                // En-tête personnalisé avec bouton retour
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 30),
+                  padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 30),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // AJOUT DE EXPANDED ICI
+                      // BOUTON RETOUR À L'ACCUEIL
+                      IconButton(
+                        onPressed: () {
+                          if (Navigator.canPop(context)) {
+                            Navigator.pop(context);
+                          } else {
+                            Navigator.pushReplacementNamed(context, '/home');
+                          }
+                        },
+                        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 24),
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,17 +202,17 @@ class _ResidenceSelectionScreenState extends State<ResidenceSelectionScreen> {
                               "Mes Résidences",
                               style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 26, // Taille légèrement réduite pour mobile
+                                  fontSize: 26,
                                   fontWeight: FontWeight.bold
                               ),
-                              overflow: TextOverflow.ellipsis, // Met "..." si c'est vraiment trop long
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 10), // Un petit espace de sécurité
+                      const SizedBox(width: 10),
 
-                      // Bouton d'ajout reste tel quel
+                      // Bouton d'ajout
                       GestureDetector(
                         onTap: _showAddResidenceDialog,
                         child: Container(

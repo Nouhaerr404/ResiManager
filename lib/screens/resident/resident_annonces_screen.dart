@@ -69,6 +69,8 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
 
         final urgentCount = allAnnonces.where((a) => a['type'] == 'urgente').length;
         final normaleCount = allAnnonces.where((a) => a['type'] == 'normale').length;
+        final infoCount = allAnnonces.where((a) => a['type'] == 'information').length; // ← AJOUTER
+
 
         return Column(
           children: [
@@ -163,6 +165,14 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
                         value: 'normale',
                         color: const Color(0xFF2D2D2D),
                         icon: Icons.info_outline_rounded,
+                      ),
+                      const SizedBox(width: 8), // ← AJOUTER
+                      _filterChip(              // ← AJOUTER
+                        label: "Informations",
+                        count: infoCount,
+                        value: 'information',
+                        color: const Color(0xFF4A90D9), // bleu
+                        icon: Icons.campaign_outlined,
                       ),
                     ]),
                   ),

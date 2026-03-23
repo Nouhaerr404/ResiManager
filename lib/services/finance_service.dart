@@ -455,8 +455,8 @@ class FinanceService {
   }
 
   // 7d. Catégories (RESTAURÉ)
-  Future<void> addExpenseCategory(String nom) async {
-    await _db.from('categories').insert({'nom': nom, 'type': 'individuelle'});
+  Future<void> addExpenseCategory(String nom, {String type = 'individuelle'}) async {
+    await _db.from('categories').insert({'nom': nom, 'type': type});
   }
 
   Future<void> deleteExpenseCategory(int categoryId) async {
@@ -493,7 +493,8 @@ class FinanceService {
         categories!inner(id, nom, type)
       ''')
           .eq('residence_id', residenceId)
-          .eq('syndic_general_id', mySyndicId); // Filtre dynamique
+          .eq('syndic_general_id', mySyndicId) // Filtre par VOTRE ID
+          .eq('categories.type', 'globale'); // Filtre par type GLOBAL uniquement
 
       if (annee != null) query = query.eq('annee', annee);
       if (mois != null) query = query.eq('mois', mois);
