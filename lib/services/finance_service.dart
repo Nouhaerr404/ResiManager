@@ -152,15 +152,23 @@ class FinanceService {
     }
   }
 
-  // 7. Pour le dashboard Inter-Syndic (RESTAURÉ)
+  // 7. Pour le dashboard Inter-Syndic (MIS À JOUR AVEC QUOTE-PART)
   Future<Map<String, dynamic>> getInterSyndicFinances(int interSyndicId, int residenceId, {int? annee}) async {
-    final tranches = await _db.from('tranches')
+    // 1. Récupérer les tranches gérées par cet inter-syndic
+    final tranchesManaged = await _db.from('tranches')
         .select('id, nom')
         .eq('inter_syndic_id', interSyndicId)
         .eq('residence_id', residenceId);
-    final tranchesIds = (tranches as List).map((t) => t['id'] as int).toList();
+    final tranchesManagedIds = (tranchesManaged as List).map((t) => t['id'] as int).toList();
+    final int nbrTranchesManaged = tranchesManagedIds.length;
 
-    if (tranchesIds.isEmpty) {
+    // 2. Récupérer le nombre TOTAL de tranches de la résidence (pour le partage)
+    final allTranchesRes = await _db.from('tranches')
+        .select('id')
+        .eq('residence_id', residenceId);
+    final int totalTranchesInResidence = (allTranchesRes as List).isEmpty ? 1 : allTranchesRes.length;
+
+    if (nbrTranchesManaged == 0) {
       return {'total_depenses': 0, 'total_revenus': 0, 'objectif_annuel': 0, 'solde': 0, 'recent_expenses': [], 'depenses_par_tranche': []};
     }
 
@@ -172,7 +180,7 @@ class FinanceService {
     final allDepenses = await depQuery;
 
     double totalDepensesSpecifiques = 0;
-    double totalDepensesGlobalesResidence = 0;
+    double totalDepensesGlobalesQuotePart = 0;
     Map<int, double> depByTranche = {};
 
     for (var d in allDepenses) {
@@ -186,16 +194,17 @@ class FinanceService {
           depByTranche[tId] = (depByTranche[tId] ?? 0) + val;
         }
       } 
-      // Si c'est une dépense globale du syndic général pour cette résidence
+      // Si c'est une dépense globale du syndic général -> Calculer la quote-part
       else if (d['syndic_general_id'] != null) {
-        totalDepensesGlobalesResidence += val;
+        double quotePart = (val / totalTranchesInResidence) * nbrTranchesManaged;
+        totalDepensesGlobalesQuotePart += quotePart;
       }
     }
 
     var payQuery = _db.from('paiements')
         .select('montant_paye, montant_total')
         .eq('inter_syndic_id', interSyndicId)
-        .eq('residence_id', residenceId); // ← filtre par résidence pour éviter les doublons inter-résidences
+        .eq('residence_id', residenceId);
     if (annee != null) payQuery = payQuery.eq('annee', annee);
 
     final paiementsRes = await payQuery;
@@ -220,27 +229,38 @@ class FinanceService {
 
     final depensesRes = await detailedQuery.order('date', ascending: false);
 
-    final recentExpenses = (depensesRes as List).map((d) => {
-      'id': d['id'],
-      'montant': double.parse(d['montant'].toString()),
-      'date': d['date'],
-      'description': d['description'] ?? '',
-      'categorie_nom': d['categories']?['nom'] ?? 'Inconnue',
-      'type': d['inter_syndic_id'] != null ? 'Spécifique' : 'Globale',
-      'facture_path': d['facture_path'],
-      'tranche': d['tranches']?['nom'] ?? 'Général',
-      'categorie_id': d['categorie_id'],
-      'tranche_id': d['tranche_id'],
+    final recentExpenses = (depensesRes as List).map((d) {
+      double rawAmount = double.parse(d['montant'].toString());
+      bool isGlobal = d['inter_syndic_id'] == null;
+      
+      // Si c'est global, on affiche la quote-part dans le tableau
+      double displayAmount = isGlobal 
+          ? (rawAmount / totalTranchesInResidence) * nbrTranchesManaged
+          : rawAmount;
+
+      return {
+        'id': d['id'],
+        'montant': displayAmount,
+        'montant_original': rawAmount, // Garder l'original au cas où
+        'date': d['date'],
+        'description': isGlobal ? "[Quote-part] ${d['description'] ?? ''}" : (d['description'] ?? ''),
+        'categorie_nom': d['categories']?['nom'] ?? 'Inconnue',
+        'type': !isGlobal ? 'Spécifique' : 'Globale',
+        'facture_path': d['facture_path'],
+        'tranche': d['tranches']?['nom'] ?? 'Général',
+        'categorie_id': d['categorie_id'],
+        'tranche_id': d['tranche_id'],
+      };
     }).toList();
 
     return {
       'total_depenses': totalDepensesSpecifiques,
-      'total_depenses_globales': totalDepensesGlobalesResidence,
+      'total_depenses_globales': totalDepensesGlobalesQuotePart,
       'total_revenus': totalRevenus,
       'objectif_annuel': totalObjectif,
-      'solde': totalRevenus - totalDepensesSpecifiques,
+      'solde': totalRevenus - (totalDepensesSpecifiques + totalDepensesGlobalesQuotePart),
       'recent_expenses': recentExpenses,
-      'depenses_par_tranche': tranches.map((t) => {
+      'depenses_par_tranche': tranchesManaged.map((t) => {
         'nom': t['nom'],
         'montant': depByTranche[t['id']] ?? 0,
       }).toList(),

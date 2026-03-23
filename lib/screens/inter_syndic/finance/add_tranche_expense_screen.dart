@@ -1,6 +1,7 @@
 // lib/screens/inter_syndic/finance/add_tranche_expense_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import '../../../services/finance_service.dart';
 import '../../../services/tranche_service.dart';
@@ -438,10 +439,19 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
 
     try {
       double montant = double.parse(_montantController.text.replaceAll(',', '.'));
-      String? facturePath;
+      String? fileUrl;
+
+      // ÉTAPE A : Upload réel du fichier sur Supabase (comme dans Syndic Général)
       if (_pickedFile != null) {
-        // Sauvegarde du nom de fichier uniquement, pour chargement depuis les assets
-        facturePath = _pickedFile!.name;
+        final dynamic fileData = kIsWeb ? _pickedFile!.bytes : _pickedFile!.path;
+        fileUrl = await _financeService.uploadInvoice(_pickedFile!.name, fileData);
+        
+        if (fileUrl == null) {
+          throw Exception("L'upload de la facture a échoué.");
+        }
+      } else if (isEdit) {
+        // En mode édition, conserver l'ancien chemin si aucun nouveau fichier n'est choisi
+        fileUrl = widget.expenseData!['facture_path'];
       }
 
       if (isEdit) {
@@ -452,7 +462,7 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
           categorieId: _selectedCategoryId!,
           date: _selectedDate,
           description: _descController.text,
-          facturePath: facturePath,
+          facturePath: fileUrl,
         );
       } else {
         await _financeService.addInterSyndicExpense(
@@ -463,7 +473,7 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
           date: _selectedDate,
           trancheId: _selectedTrancheId,
           description: _descController.text,
-          facturePath: facturePath,
+          facturePath: fileUrl,
         );
       }
       Navigator.pop(context);
