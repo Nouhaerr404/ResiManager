@@ -87,41 +87,55 @@ class TrancheService {
           .select('id')
           .eq('tranche_id', trancheId);
 
-      // Finances — calculées directement (pas besoin de vue SQL)
-      // Revenus : montant_paye dans les paiements liés aux appartements de cette tranche (année en cours)
+      // Finances — calculées avec les quote-parts (Transparence totale)
       final int anneeEnCours = DateTime.now().year;
       double revenus = 0;
       double depenses = 0;
 
+      // 1. Récupérer les infos de la tranche (residence_id, inter_syndic_id)
+      final trancheData = await _db.from('tranches').select('residence_id, inter_syndic_id').eq('id', trancheId).single();
+      final int resId = trancheData['residence_id'];
+      final int? isId = trancheData['inter_syndic_id'];
+
+      // 2. Récupérer les effectifs pour les divisions
+      final allResTranches = await _db.from('tranches').select('id').eq('residence_id', resId);
+      final int totalTranches = (allResTranches as List).isEmpty ? 1 : allResTranches.length;
+      
+      int tranchesSameIS = 1;
+      if (isId != null) {
+        final sameISTranches = await _db.from('tranches').select('id').eq('inter_syndic_id', isId).eq('residence_id', resId);
+        tranchesSameIS = (sameISTranches as List).isEmpty ? 1 : sameISTranches.length;
+      }
+
+      // 3. Calcul des Revenus (Paiements de cette tranche)
       if (immeubleIds.isNotEmpty) {
-        final appartements2 = await _db
-            .from('appartements')
-            .select('id')
-            .inFilter('immeuble_id', immeubleIds);
-        final appartIds2 = (appartements2 as List)
-            .map((a) => a['id'] as int)
-            .toList();
+        final appartements2 = await _db.from('appartements').select('id').inFilter('immeuble_id', immeubleIds);
+        final appartIds2 = (appartements2 as List).map((a) => a['id'] as int).toList();
 
         if (appartIds2.isNotEmpty) {
-          final paiements = await _db
-              .from('paiements')
-              .select('montant_paye')
-              .inFilter('appartement_id', appartIds2)
-              .eq('annee', anneeEnCours); // ← filtre par année en cours
+          final paiements = await _db.from('paiements').select('montant_paye').inFilter('appartement_id', appartIds2).eq('annee', anneeEnCours);
           for (var p in paiements as List) {
             revenus += (p['montant_paye'] as num).toDouble();
           }
         }
       }
 
-      // Dépenses : depenses liées à cette tranche (tranche_id) pour l'année en cours
-      final depensesRes = await _db
-          .from('depenses')
-          .select('montant')
-          .eq('tranche_id', trancheId)
-          .eq('annee', anneeEnCours); // ← filtre par année en cours
-      for (var d in depensesRes as List) {
-        depenses += (d['montant'] as num).toDouble();
+      // 4. Calcul des Dépenses (avec quote-part)
+      final allExpenses = await _db.from('depenses').select('montant, tranche_id, inter_syndic_id, syndic_general_id').eq('residence_id', resId).eq('annee', anneeEnCours);
+      
+      for (var ex in allExpenses as List) {
+        double amount = (ex['montant'] as num).toDouble();
+        
+        if (ex['tranche_id'] == trancheId) {
+          // Dépense 100% spécifique à cette tranche
+          depenses += amount;
+        } else if (isId != null && ex['inter_syndic_id'] == isId && ex['tranche_id'] == null) {
+          // Dépense de l'inter-syndic partagée entre ses tranches
+          depenses += amount / tranchesSameIS;
+        } else if (ex['syndic_general_id'] != null) {
+          // Dépense globale de la résidence partagée entre TOUTES les tranches
+          depenses += amount / totalTranches;
+        }
       }
 
       final double solde = revenus - depenses;
