@@ -430,8 +430,8 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                 onPressed: () async {
                   if (!_formKey.currentState!.validate()) return;
                   
-                  final residenceStr = widget.residenceId?.toString() ?? residenceController.text.trim();
-                  final trancheStr = widget.trancheId?.toString() ?? trancheController.text.trim();
+                  final residenceStr = widget.residenceName ?? residenceController.text.trim();
+                  final trancheStr = widget.trancheName ?? trancheController.text.trim();
                   final immId = selectedImmeubleId!;
                   final immLabel = selectedImmeubleNom!;
                   final numAptStr = numeroController.text.trim();
@@ -659,8 +659,8 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                 onPressed: () async {
                   if (!_formKey.currentState!.validate()) return;
 
-                  final resStr = widget.residenceId?.toString() ?? residenceController.text.trim();
-                  final traStr = widget.trancheId?.toString() ?? trancheController.text.trim();
+                  final resStr = widget.residenceName ?? residenceController.text.trim();
+                  final traStr = widget.trancheName ?? trancheController.text.trim();
                   final immId = selectedImmeubleId!;
                   final immLabel = selectedImmeubleNom!;
                   final numAptStr = numeroController.text.trim();
