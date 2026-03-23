@@ -8,6 +8,7 @@ import '../syndic_general/residence_selection_screen.dart';
 import '../inter_syndic/tranches_list_screen.dart';
 import '../super_admin/super_admin_dashboard_screen.dart';
 import '../resident/resident_layout.dart';
+import '../../utils/temp_session.dart';
 
 // ignore_for_file: invalid_language_identifier
 
@@ -19,7 +20,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _authService = AuthService(); // ← Plus d'erreur maintenant
+  final _authService = AuthService();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   bool _loading = false;
@@ -54,23 +55,26 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!mounted) return;
 
-    final role = result['role'] as String;
+    final role   = result['role'] as String;
     final userId = result['id'] as int;
+
+    // ── Stocker l'ID dans TempSession avant la navigation
+    TempSession.interSyndicId = userId;
 
     switch (role) {
       case 'resident':
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => ResidentLayout(userId: userId)), // ← Plus de const
+          MaterialPageRoute(builder: (_) => ResidentLayout(userId: userId)),
         );
         break;
 
-        case 'syndic_general':
+      case 'syndic_general':
         Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-        builder: (_) => ResidenceSelectionScreen(syndicGeneralId: userId),
-        ),
+          context,
+          MaterialPageRoute(
+            builder: (_) => ResidenceSelectionScreen(syndicGeneralId: userId),
+          ),
         );
         break;
 
@@ -105,7 +109,7 @@ class _LoginScreenState extends State<LoginScreen> {
       case 'super_admin':
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => SuperAdminDashboardScreen()), // ← Plus de const
+          MaterialPageRoute(builder: (_) => SuperAdminDashboardScreen()),
         );
         break;
 
@@ -162,24 +166,28 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: _coral,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.domain, color: Colors.white, size: 22),
+                        child: const Icon(Icons.domain,
+                            color: Colors.white, size: 22),
                       ),
                       const SizedBox(width: 10),
                       const Text(
                         'ResiManager',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.w800),
                       ),
                     ],
                   ),
                   const SizedBox(height: 40),
                   const Text(
                     'Bienvenue 👋',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
+                    style: TextStyle(
+                        fontSize: 28, fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     'Connectez-vous à votre espace',
-                    style: TextStyle(fontSize: 15, color: Colors.grey.shade600),
+                    style: TextStyle(
+                        fontSize: 15, color: Colors.grey.shade600),
                   ),
                   const SizedBox(height: 36),
                   _buildLabel('Email'),
@@ -200,11 +208,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     obscure: _obscure,
                     suffix: IconButton(
                       icon: Icon(
-                        _obscure ? Icons.visibility_off : Icons.visibility,
+                        _obscure
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                         color: Colors.grey,
                         size: 20,
                       ),
-                      onPressed: () => setState(() => _obscure = !_obscure),
+                      onPressed: () =>
+                          setState(() => _obscure = !_obscure),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -214,7 +225,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => ForgotPasswordScreen()), // ← Plus de const
+                          MaterialPageRoute(
+                              builder: (_) => ForgotPasswordScreen()),
                         );
                       },
                       child: const Text(
@@ -239,11 +251,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       child: Row(
                         children: [
-                          Icon(
-                            Icons.error_outline,
-                            color: Colors.red.shade400,
-                            size: 18,
-                          ),
+                          Icon(Icons.error_outline,
+                              color: Colors.red.shade400, size: 18),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -295,12 +304,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       Text(
                         "Pas encore de compte ? ",
-                        style: TextStyle(color: Colors.grey.shade600),
+                        style:
+                        TextStyle(color: Colors.grey.shade600),
                       ),
                       GestureDetector(
                         onTap: () => Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => RegisterScreen()), // ← Plus de const
+                          MaterialPageRoute(
+                              builder: (_) => RegisterScreen()),
                         ),
                         child: const Text(
                           "S'inscrire",
@@ -323,7 +334,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildLabel(String text) => Text(
     text,
-    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+    style: const TextStyle(
+        fontSize: 14, fontWeight: FontWeight.w600),
   );
 
   Widget _buildTextField({
@@ -354,10 +366,12 @@ class _LoginScreenState extends State<LoginScreen> {
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(color: Colors.grey.shade400),
-          prefixIcon: Icon(icon, color: Colors.grey.shade400, size: 20),
+          prefixIcon:
+          Icon(icon, color: Colors.grey.shade400, size: 20),
           suffixIcon: suffix,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 16),
+          contentPadding:
+          const EdgeInsets.symmetric(vertical: 16),
         ),
       ),
     );
