@@ -319,7 +319,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
           runSpacing: 8,
           children: [
             _chip(Icons.business_rounded,
-                '${widget.tranche.nombreImmeubles} immeubles',
+                '${_num(_stats?['nbImmeubles'] ?? widget.tranche.nombreImmeubles)} immeubles',
                 Colors.white.withOpacity(0.15), _C.white),
             _chip(
                 Icons.door_front_door_rounded,
@@ -327,7 +327,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
                 Colors.white.withOpacity(0.15), // Changé de Corail à Blanc Glass
                 _C.white),
             _chip(Icons.local_parking_rounded,
-                '${widget.tranche.nombreParkings} parkings', 
+                '${_num(_stats?['nbParkings'] ?? widget.tranche.nombreParkings)} parkings', 
                 Colors.white.withOpacity(0.15), _C.white),
           ],
         ),
@@ -571,7 +571,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
     ),
     _ModuleData(
       label: 'Immeubles',
-      value: '${widget.tranche.nombreImmeubles}',
+      value: '${_num(_stats?['nbImmeubles'] ?? widget.tranche.nombreImmeubles)}',
       sub: 'batiments',
       icon: Icons.business_rounded,
       iconBg: _C.blueLight,
@@ -731,8 +731,8 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
           _buildSectionLabel('Résumé de la Tranche', color: _C.dark, size: 18),
           const SizedBox(height: 16),
           _resumeRow(
-            _resumeItem(Icons.business_rounded, 'Immeubles', '${widget.tranche.nombreImmeubles}', _C.blue, _C.blueLight),
-            _resumeItem(Icons.home_outlined, 'Appartements', '${widget.tranche.nombreAppartements}', _C.coral, _C.coralLight),
+            _resumeItem(Icons.business_rounded, 'Immeubles', '${_num(_stats?['nbImmeubles'] ?? widget.tranche.nombreImmeubles)}', _C.blue, _C.blueLight),
+            _resumeItem(Icons.home_outlined, 'Appartements', '${_num(_stats?['nbAppartements'] ?? widget.tranche.nombreAppartements)}', _C.coral, _C.coralLight),
           ),
           Container(height: 1, color: _C.divider, margin: const EdgeInsets.symmetric(vertical: 14)),
           _resumeRow(

@@ -5,24 +5,64 @@ import '../models/tranche_model.dart';
 class TrancheService {
   final _db = Supabase.instance.client;
 
-  Future<List<TrancheModel>> getTranchesOfInterSyndic(
-      int interSyndicId) async {
+  Future<List<TrancheModel>> getTranchesOfInterSyndic(int interSyndicId) async {
     try {
-      print('>>> Chargement tranches pour interSyndicId=$interSyndicId');
+      print('>>> Chargement tranches dynamiques pour interSyndicId=$interSyndicId');
 
-      final res = await _db
+      final response = await _db
           .from('tranches')
-          .select('*, residences(*), users(nom, prenom)')
+          .select('''
+            *, 
+            residences(*), 
+            users(nom, prenom),
+            immeubles(count),
+            appartements_count:immeubles(appartements(count))
+          ''')
           .eq('inter_syndic_id', interSyndicId)
           .timeout(const Duration(seconds: 10));
 
-      final list = res as List;
-      print('>>> Tranches trouvees: ${list.length}');
+      final List list = response as List;
+      print('>>> Tranches trouvées: ${list.length}');
 
-      return list.map((e) => TrancheModel.fromJson(e)).toList();
+      return list.map((e) {
+        // Extraction du compte réel d'immeubles
+        int realImmCount = 0;
+        if (e['immeubles'] != null && (e['immeubles'] as List).isNotEmpty) {
+          realImmCount = e['immeubles'][0]['count'] ?? 0;
+        }
+
+        // Extraction du compte réel d'appartements (somme de tous les immeubles)
+        int totalApparts = 0;
+        if (e['appartements_count'] != null) {
+          for (var imm in (e['appartements_count'] as List)) {
+            if (imm['appartements'] != null && (imm['appartements'] as List).isNotEmpty) {
+              totalApparts += (imm['appartements'][0]['count'] as int);
+            }
+          }
+        }
+
+        return TrancheModel(
+          id: e['id'],
+          nom: e['nom'] ?? '',
+          description: e['description'],
+          residenceId: e['residence_id'],
+          interSyndicId: e['inter_syndic_id'],
+          nombreImmeubles: realImmCount,
+          nombreAppartements: totalApparts,
+          nombreParkings: e['nombre_parkings'] ?? 0,
+          nombreGarages: e['nombre_garages'] ?? 0,
+          nombreBoxes: e['nombre_boxes'] ?? 0,
+          prixAnnuel: e['prix_annuel'] != null ? (e['prix_annuel'] as num).toDouble() : 0.0,
+          statut: e['statut_tranche'] ?? 'Actif',
+          residenceNom: e['residences'] != null ? e['residences']['nom'] : null,
+          interSyndicNom: e['users'] != null
+              ? "${e['users']['prenom']} ${e['users']['nom']}"
+              : null,
+        );
+      }).toList();
 
     } catch (e, s) {
-      print('>>> ERREUR getTranches: $e\n$s');
+      print('>>> ERREUR getTranchesOfInterSyndic: $e\n$s');
       return [];
     }
   }
@@ -162,6 +202,7 @@ class TrancheService {
           .eq('statut', 'publiee');
 
       final stats = {
+        'nbImmeubles':     immeubleIds.length,
         'nbResidents':     nbResidents,
         'nbAppartements':  nbAppartements,
         'nbPersonnel':     (personnel as List).length,
