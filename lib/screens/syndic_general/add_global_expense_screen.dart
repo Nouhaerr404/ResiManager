@@ -27,6 +27,9 @@ class _AddGlobalExpenseScreenState extends State<AddGlobalExpenseScreen> {
   final Color darkGrey = const Color(0xFF2C2C2C);
   final Color backgroundBeige = const Color(0xFFFCF9F6);
 
+  // Pour forcer le rafraîchissement du FutureBuilder des catégories
+  Key _gridKey = UniqueKey();
+
   @override
   Widget build(BuildContext context) {
     double width = MediaQuery.of(context).size.width;
@@ -46,8 +49,19 @@ class _AddGlobalExpenseScreenState extends State<AddGlobalExpenseScreen> {
         child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("1. Catégorie *", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 15),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("1. Catégorie *", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  TextButton.icon(
+                    onPressed: _showAddCategoryDialog,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text("Nouvelle"),
+                    style: TextButton.styleFrom(foregroundColor: primaryOrange),
+                  )
+                ],
+              ),
+              const SizedBox(height: 10),
 
               _buildCatGrid(isWeb),
 
@@ -66,12 +80,59 @@ class _AddGlobalExpenseScreenState extends State<AddGlobalExpenseScreen> {
     );
   }
 
+  void _showAddCategoryDialog() {
+    final TextEditingController catController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Nouvelle Catégorie Globale"),
+        content: TextField(
+          controller: catController,
+          decoration: const InputDecoration(hintText: "Nom de la catégorie (ex: Ascenseur)"),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: primaryOrange),
+            onPressed: () async {
+              if (catController.text.trim().isEmpty) return;
+              try {
+                // On passe explicitement le type 'globale'
+                await _service.addExpenseCategory(catController.text.trim(), type: 'globale');
+                Navigator.pop(context);
+                setState(() {
+                  _gridKey = UniqueKey(); // Rafraîchit la grille
+                });
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Catégorie ajoutée !")));
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red));
+              }
+            },
+            child: const Text("Ajouter", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCatGrid(bool isWeb) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _service.getAllCategories(),
+      key: _gridKey,
+      future: _service.getCategories('globale'),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const LinearProgressIndicator();
-        final cats = snapshot.data!;
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final cats = snapshot.data ?? [];
+        
+        if (cats.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Text("Aucune catégorie globale. Cliquez sur 'Nouvelle' pour en ajouter une."),
+          );
+        }
+
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -94,7 +155,17 @@ class _AddGlobalExpenseScreenState extends State<AddGlobalExpenseScreen> {
                     border: Border.all(color: sel ? primaryOrange : Colors.grey.shade200, width: 2),
                     boxShadow: sel ? [BoxShadow(color: primaryOrange.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))] : []
                 ),
-                child: Center(child: Text(cats[i]['nom'], style: TextStyle(fontWeight: sel ? FontWeight.bold : FontWeight.normal, color: sel ? Colors.white : Colors.black87))),
+                child: Center(
+                  child: Text(
+                    cats[i]['nom'], 
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontWeight: sel ? FontWeight.bold : FontWeight.normal, 
+                      color: sel ? Colors.white : Colors.black87,
+                      fontSize: 13
+                    )
+                  )
+                ),
               ),
             );
           },
