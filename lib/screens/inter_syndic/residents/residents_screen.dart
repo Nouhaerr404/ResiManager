@@ -23,7 +23,7 @@ class _C {
   static const textLight   = Color(0xFF9A9AAF);
   static const divider     = Color(0xFFE8E8F0);
   static const iconBg      = Color(0xFFEDEDED);
-  static const blue        = Color(0xFF4B6BFB);
+  static const blue        = Color(0xFFFB9A4B);
   static const blueLight   = Color(0xFFEEF1FF);
   static const amber       = Color(0xFFF5A623);
   static const amberLight  = Color(0xFFFFF8EC);
