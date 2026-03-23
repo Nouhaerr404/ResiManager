@@ -376,14 +376,15 @@ class TrancheService {
     return (res as List).map((g) => g['numero'] as String).toList();
   }
 
-  Future<List<Map<String, dynamic>>> getMyAvailableInterSyndics(int myId) async {
+  Future<List<Map<String, dynamic>>> getMyAvailableInterSyndics(int myId, int residenceId) async {
     try {
-      print(">>> DEBUG : Recherche des syndics pour l'Admin ID : $myId");
+      print(">>> DEBUG : Recherche des syndics pour l'Admin ID : $myId sur la résidence : $residenceId");
 
       final response = await _db
           .from('liens_syndics')
           .select('inter_syndic_id')
-          .eq('syndic_general_id', myId);
+          .eq('syndic_general_id', myId)
+          .eq('residence_id', residenceId);
 
       final List data = response as List;
       if (data.isEmpty) return [];
@@ -393,9 +394,10 @@ class TrancheService {
       final usersResponse = await _db
           .from('users')
           .select('id, nom, prenom')
-          .inFilter('id', ids);
+          .inFilter('id', ids)
+          .eq('statut', 'actif');
 
-      print(">>> DEBUG : ${usersResponse.length} syndics trouves !");
+      print(">>> DEBUG : ${usersResponse.length} syndics actifs trouvés pour cette résidence !");
       return List<Map<String, dynamic>>.from(usersResponse);
 
     } catch (e) {

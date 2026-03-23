@@ -8,7 +8,6 @@ import '../syndic_general/residence_selection_screen.dart';
 import '../inter_syndic/tranches_list_screen.dart';
 import '../super_admin/super_admin_dashboard_screen.dart';
 import '../resident/resident_layout.dart';
-import '../../utils/temp_session.dart';
 
 // ignore_for_file: invalid_language_identifier
 
@@ -157,7 +156,28 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── BOUTON RETOUR ──
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade200),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.02),
+                            blurRadius: 5,
+                            offset: const Offset(0, 2),
+                          )
+                        ],
+                      ),
+                      child: const Icon(Icons.arrow_back, size: 20),
+                    ),
+                  ),
                   const SizedBox(height: 20),
+
                   Row(
                     children: [
                       Container(
