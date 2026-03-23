@@ -12,7 +12,7 @@ import 'boxes/boxes_screen.dart';
 import 'reclamations/reclamations_screen.dart';
 import 'immeubles/immeubles_screen.dart'; // Ajouté
 import 'annonces/annonces_screen.dart';
-
+import '../../utils/temp_session.dart';
 // ── Palette de couleurs
 class _C {
   static const coral       = Color(0xFFE8603C);
@@ -176,6 +176,15 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
         ),
       );
 
+  String _getInitials(String name) {
+    if (name.trim().isEmpty) return 'IS';
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return parts[0].substring(0, parts[0].length >= 2 ? 2 : 1).toUpperCase();
+  }
+
   Widget _buildHeader() {
     final top = MediaQuery.of(context).padding.top;
     return Container(
@@ -201,23 +210,32 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: _C.coral,
+              color: Colors.white.withOpacity(0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.grid_view_rounded, color: _C.white, size: 20),
+            child: Center(
+              child: Text(
+                _getInitials(TempSession.interSyndicNom),
+                style: const TextStyle(
+                  color: _C.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
           ),
           const SizedBox(width: 10),
-          const Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('ResiManager',
-                  style: TextStyle(
+              Text(TempSession.interSyndicNom.trim().isNotEmpty ? TempSession.interSyndicNom.trim() : 'ResiManager',
+                  style: const TextStyle(
                       color: _C.white,
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
                       letterSpacing: -0.2)),
-              Text('inter_syndic',
+              const Text('Inter-Syndic',
                   style: TextStyle(
                       color: Colors.white60,
                       fontSize: 11,
