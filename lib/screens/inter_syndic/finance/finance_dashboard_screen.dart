@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import '../../../services/finance_service.dart';
 import '../../../widgets/kpi_card.dart';
 import 'add_tranche_expense_screen.dart';
+import '../../../services/expense_report_pdf_service.dart';
+import '../../../models/tranche_model.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class FinanceDashboardScreen extends StatefulWidget {
   final int residenceId;
@@ -132,9 +135,62 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
             icon: const Icon(Icons.add, color: Colors.white, size: 20),
             label: const Text("Nouvelle Dépense", style: TextStyle(color: Colors.white, fontSize: 13)),
           ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: () => _generatePDF(context),
+            icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
+            tooltip: "Générer Rapport PDF",
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.white.withOpacity(0.2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _generatePDF(BuildContext context) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator(color: Color(0xFFFF6F4A))),
+    );
+
+    try {
+      final res = await _service.getInterSyndicFinances(
+        widget.interSyndicId,
+        widget.residenceId,
+        annee: _selectedYear,
+        trancheId: widget.trancheId,
+      );
+
+      // Fetch residence and tranche names
+      final db = Supabase.instance.client;
+      final resData = await db.from('residences').select('nom').eq('id', widget.residenceId).single();
+      String trancheNom = "Toutes les tranches";
+      if (widget.trancheId != null) {
+        final tData = await db.from('tranches').select('nom').eq('id', widget.trancheId!).single();
+        trancheNom = tData['nom'];
+      }
+
+      final bytes = await ExpenseReportPdfService.generate(
+        residenceNom: resData['nom'],
+        trancheNom: trancheNom,
+        annee: _selectedYear,
+        financeData: res,
+      );
+
+      if (mounted) {
+        Navigator.pop(context);
+        await ExpenseReportPdfService.preview(bytes);
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur PDF: $e")));
+      }
+    }
   }
 
   Widget _buildYearPicker() {
