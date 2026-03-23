@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/auth_service.dart';
+import '../../utils/temp_session.dart';
 import 'register_screen.dart';
 import 'forgot_password_screen.dart';
-import '../syndic_general/dashboard_screen.dart';
 import '../syndic_general/residence_selection_screen.dart';
-import '../inter_syndic/intersyndic_selection_screen.dart';
+import '../inter_syndic/tranches_list_screen.dart';
 import '../super_admin/super_admin_dashboard_screen.dart';
 import '../resident/resident_layout.dart';
 
@@ -75,9 +75,30 @@ class _LoginScreenState extends State<LoginScreen> {
         break;
 
       case 'inter_syndic':
+        // Charger le profil complet depuis Supabase
+        try {
+          final profile = await Supabase.instance.client
+              .from('users')
+              .select('id, nom, prenom, email, telephone')
+              .eq('id', userId)
+              .maybeSingle();
+          if (profile != null) {
+            TempSession.interSyndicId        = profile['id'];
+            TempSession.interSyndicNom       = '${profile['prenom'] ?? ''} ${profile['nom'] ?? ''}'.trim();
+            TempSession.interSyndicEmail     = profile['email']     ?? '';
+            TempSession.interSyndicTelephone = profile['telephone'] ?? '';
+          } else {
+            TempSession.interSyndicId  = userId;
+            TempSession.interSyndicNom = _emailCtrl.text.split('@').first;
+          }
+        } catch (_) {
+          TempSession.interSyndicId  = userId;
+          TempSession.interSyndicNom = _emailCtrl.text.split('@').first;
+        }
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => InterSyndicSelectionScreen()), // ← Plus de const
+          MaterialPageRoute(builder: (_) => const TranchesListScreen()),
         );
         break;
 
