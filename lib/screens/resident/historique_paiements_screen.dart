@@ -348,7 +348,11 @@ class _HistoriquePaiementsScreenState extends State<HistoriquePaiementsScreen>
 
     final List<Map<String, dynamic>> all =
     List<Map<String, dynamic>>.from(_history!['historique'] as List);
-    final Map byYear   = _history!['par_annee'] as Map;
+    final Map<int, List> byYear = {};
+    for (var h in all) {
+      final int y = (h['annee'] as int?) ?? 0;
+      byYear.putIfAbsent(y, () => []).add(h);
+    }
     final double total = (_history!['total_verse'] as num?)?.toDouble() ?? 0.0;
 
     final List<int> years =
@@ -427,7 +431,6 @@ class _HistoriquePaiementsScreenState extends State<HistoriquePaiementsScreen>
     final String? dateStr = item['date_paiement'] as String?;
     final double  amount  = (item['montant_paye'] as num?)?.toDouble() ?? 0.0;
     final int?    year    = item['annee']          as int?;
-    final bool    hasDoc  = item['facture_path']   != null;
 
     String dateLabel = '???';
     if (dateStr != null) {
@@ -480,32 +483,7 @@ class _HistoriquePaiementsScreenState extends State<HistoriquePaiementsScreen>
     );
   }
 
-  Widget _btnRecu() => GestureDetector(
-    onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Telechargement...'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    ),
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-          color: _dark, borderRadius: BorderRadius.circular(6)),
-      child: const Text('Recu',
-          style: TextStyle(
-              color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-    ),
-  );
 
-  Widget _btnRecuDisabled() => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(
-      border: Border.all(color: Colors.grey.shade300),
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Text('Recu',
-        style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
-  );
 
   Widget _chip({
     required String label,
