@@ -5,6 +5,7 @@ import '../../models/tranche_model.dart';
 import '../../services/tranche_service.dart';
 import '../../utils/temp_session.dart';
 import 'tranche_dashboard_screen.dart';
+import 'profile/inter_syndic_profile_screen.dart';
 
 // ── Brand Colors — aligned with ResiManager desktop app
 class _C {
@@ -234,25 +235,36 @@ class _TranchesListScreenState extends State<TranchesListScreen>
 
           const Spacer(),
 
-          // ── Bouton Espace Syndic
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white24),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.work_outline_rounded, size: 13, color: _C.white),
-                SizedBox(width: 6),
-                Text('Espace Syndic',
-                    style: TextStyle(
-                        color: _C.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12)),
-              ],
+          // ── Bouton Profil
+          GestureDetector(
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const InterSyndicProfileScreen()),
+              );
+              // Refresh name in case it was changed
+              setState(() {});
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.person_rounded, size: 14, color: _C.white),
+                  const SizedBox(width: 6),
+                  const Text('Mon Profil',
+                      style: TextStyle(
+                          color: _C.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12)),
+                ],
+              ),
             ),
           ),
         ],
