@@ -10,9 +10,10 @@ import 'apartments/apartments_screen.dart';
 import 'parkings/parkings_screen.dart';
 import 'boxes/boxes_screen.dart';
 import 'reclamations/reclamations_screen.dart';
-import 'immeubles/immeubles_screen.dart'; // Ajouté
+import 'immeubles/immeubles_screen.dart';
 import 'annonces/annonces_screen.dart';
 import '../../utils/temp_session.dart';
+
 // ── Palette de couleurs
 class _C {
   static const coral       = Color(0xFFE8603C);
@@ -97,14 +98,12 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       backgroundColor: _C.bg,
       body: Stack(
         children: [
-          // Background image
           Positioned.fill(
             child: Image.asset(
               'assets/images/tranche_bg.png',
               fit: BoxFit.cover,
             ),
           ),
-          // Gradient overlay
           Positioned.fill(
             child: Container(
               decoration: const BoxDecoration(
@@ -127,32 +126,32 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
                 child: _loading
                     ? _buildLoader()
                     : FadeTransition(
-                        opacity: _fadeAnim,
-                        child: _selectedView == 'apartments'
-                            ? ApartmentsListScreen(
-                                trancheId: widget.tranche.id,
-                                residenceId: widget.tranche.residenceId,
-                                trancheName: widget.tranche.nom,
-                                residenceName: widget.tranche.residenceNom,
-                                onBack: () =>
-                                    setState(() => _selectedView = 'dashboard'),
-                              )
-                            : ListView(
-                                padding:
-                                    const EdgeInsets.fromLTRB(20, 24, 20, 40),
-                                children: [
-                                  _buildPageTitle(),
-                                  const SizedBox(height: 24),
-                                  _buildFinanceBanner(),
-                                  const SizedBox(height: 32),
-                                  _buildSectionLabel('Modules', color: _C.white),
-                                  const SizedBox(height: 14),
-                                  _buildModulesGrid(),
-                                  const SizedBox(height: 24),
-                                  _buildResume(),
-                                ],
-                              ),
-                      ),
+                  opacity: _fadeAnim,
+                  child: _selectedView == 'apartments'
+                      ? ApartmentsListScreen(
+                    trancheId: widget.tranche.id,
+                    residenceId: widget.tranche.residenceId,
+                    trancheName: widget.tranche.nom,
+                    residenceName: widget.tranche.residenceNom,
+                    onBack: () =>
+                        setState(() => _selectedView = 'dashboard'),
+                  )
+                      : ListView(
+                    padding:
+                    const EdgeInsets.fromLTRB(20, 24, 20, 40),
+                    children: [
+                      _buildPageTitle(),
+                      const SizedBox(height: 24),
+                      _buildFinanceBanner(),
+                      const SizedBox(height: 32),
+                      _buildSectionLabel('Modules', color: _C.white),
+                      const SizedBox(height: 14),
+                      _buildModulesGrid(),
+                      const SizedBox(height: 24),
+                      _buildResume(),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -162,19 +161,19 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
   }
 
   Widget _buildLoader() => const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(color: _C.coral, strokeWidth: 2.5),
-            SizedBox(height: 16),
-            Text('Chargement...',
-                style: TextStyle(
-                    color: _C.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500)),
-          ],
-        ),
-      );
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircularProgressIndicator(color: _C.coral, strokeWidth: 2.5),
+        SizedBox(height: 16),
+        Text('Chargement...',
+            style: TextStyle(
+                color: _C.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w500)),
+      ],
+    ),
+  );
 
   String _getInitials(String name) {
     if (name.trim().isEmpty) return 'IS';
@@ -229,12 +228,16 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(TempSession.interSyndicNom.trim().isNotEmpty ? TempSession.interSyndicNom.trim() : 'ResiManager',
-                  style: const TextStyle(
-                      color: _C.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      letterSpacing: -0.2)),
+              Text(
+                TempSession.interSyndicNom.trim().isNotEmpty
+                    ? TempSession.interSyndicNom.trim()
+                    : 'ResiManager',
+                style: const TextStyle(
+                    color: _C.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    letterSpacing: -0.2),
+              ),
               const Text('Inter-Syndic',
                   style: TextStyle(
                       color: Colors.white60,
@@ -263,7 +266,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
   Widget _buildPageTitle() {
     final syndicName = widget.tranche.interSyndicNom ?? 'Inter-Syndic';
     final residenceName = widget.tranche.residenceNom;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -291,7 +294,6 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
             ],
           ),
         const SizedBox(height: 4),
-        // MODIFICATION ICI : Visibilité du Syndic améliorée
         Row(
           children: [
             const Icon(Icons.person_pin_rounded, color: Colors.white70, size: 14),
@@ -299,7 +301,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
             Text(
               '$syndicName · Inter-Syndic',
               style: TextStyle(
-                  color: Colors.white.withOpacity(0.9), // Plus clair
+                  color: Colors.white.withOpacity(0.9),
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
                   shadows: [
@@ -313,7 +315,6 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
           ],
         ),
         const SizedBox(height: 20),
-        // MODIFICATION ICI : Uniformisation des Chips
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -324,10 +325,10 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
             _chip(
                 Icons.door_front_door_rounded,
                 '${_num(_stats?['nbAppartements'] ?? widget.tranche.nombreAppartements)} appts',
-                Colors.white.withOpacity(0.15), // Changé de Corail à Blanc Glass
+                Colors.white.withOpacity(0.15),
                 _C.white),
             _chip(Icons.local_parking_rounded,
-                '${_num(_stats?['nbParkings'] ?? widget.tranche.nombreParkings)} parkings', 
+                '${_num(_stats?['nbParkings'] ?? widget.tranche.nombreParkings)} parkings',
                 Colors.white.withOpacity(0.15), _C.white),
           ],
         ),
@@ -342,17 +343,17 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
-            color: bg, 
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: fg.withOpacity(0.1))
-          ),
+              color: bg,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: fg.withOpacity(0.1))),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 13, color: fg),
               const SizedBox(width: 6),
               Text(label,
-                  style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w600)),
+                  style: TextStyle(
+                      color: fg, fontSize: 12, fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -361,12 +362,12 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
   }
 
   Widget _buildFinanceBanner() {
-    final soldeNum = _num(_stats?['solde'] ?? 0);
-    final revenusNum = _num(_stats?['revenus'] ?? 0);
+    final soldeNum    = _num(_stats?['solde'] ?? 0);
+    final revenusNum  = _num(_stats?['revenus'] ?? 0);
     final depensesNum = _num(_stats?['depenses'] ?? 0);
 
-    final soldeStr = soldeNum.toDouble().toStringAsFixed(2);
-    final revenusStr = revenusNum.toDouble().toStringAsFixed(2);
+    final soldeStr    = soldeNum.toDouble().toStringAsFixed(2);
+    final revenusStr  = revenusNum.toDouble().toStringAsFixed(2);
     final depensesStr = depensesNum.toDouble().toStringAsFixed(2);
 
     return GestureDetector(
@@ -396,7 +397,8 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                      color: _C.coral, borderRadius: BorderRadius.circular(12)),
+                      color: _C.coral,
+                      borderRadius: BorderRadius.circular(12)),
                   child: const Icon(Icons.account_balance_wallet_rounded,
                       color: _C.white, size: 22),
                 ),
@@ -490,7 +492,8 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(
+                color: iconBg, borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: iconColor, size: 20),
           ),
           const SizedBox(width: 10),
@@ -500,14 +503,20 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
               children: [
                 Text(label,
                     style: const TextStyle(
-                        color: _C.textLight, fontSize: 10, fontWeight: FontWeight.w500)),
+                        color: _C.textLight,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
                 Text(value,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        color: valueColor, fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: -0.3)),
-                Text(sub, style: const TextStyle(color: _C.textLight, fontSize: 9)),
+                        color: valueColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        letterSpacing: -0.3)),
+                Text(sub,
+                    style: const TextStyle(color: _C.textLight, fontSize: 9)),
               ],
             ),
           ),
@@ -516,7 +525,8 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
     );
   }
 
-  Widget _buildSectionLabel(String text, {Color color = Colors.white, double size = 20}) {
+  Widget _buildSectionLabel(String text,
+      {Color color = Colors.white, double size = 20}) {
     return Text(
       text,
       style: TextStyle(
@@ -544,9 +554,6 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
     );
   }
 
-  // ── 2. REMPLACER _buildModuleList() par cette version ─────
-//    (ajouter le module Reclamations a la liste existante)
-
   List<_ModuleData> _buildModuleList() => [
     _ModuleData(
       label: 'Residents',
@@ -556,8 +563,11 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       iconBg: _C.coralLight,
       valueColor: _C.coral,
       interactive: true,
-      onTap: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => ResidentsScreen(trancheId: widget.tranche.id))),
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) =>
+                  ResidentsScreen(trancheId: widget.tranche.id))),
     ),
     _ModuleData(
       label: 'Appartements',
@@ -571,23 +581,20 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
     ),
     _ModuleData(
       label: 'Immeubles',
-      value: '${_num(_stats?['nbImmeubles'] ?? widget.tranche.nombreImmeubles)}',
+      value:
+      '${_num(_stats?['nbImmeubles'] ?? widget.tranche.nombreImmeubles)}',
       sub: 'batiments',
       icon: Icons.business_rounded,
       iconBg: _C.blueLight,
       valueColor: _C.blue,
       interactive: true,
-      onTap: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => InterSyndicImmeublesScreen(tranche: widget.tranche))),
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) =>
+                  InterSyndicImmeublesScreen(tranche: widget.tranche))),
     ),
-    _ModuleData(
-      label: 'Personnel',
-      value: '${_num(_stats?['nbPersonnel'] ?? 0)}',
-      sub: 'employes',
-      icon: Icons.badge_outlined,
-      iconBg: _C.purpleLight,
-      valueColor: _C.purple,
-    ),
+    // ── Personnel supprimé ──
     _ModuleData(
       label: 'Parkings',
       value: '${_num(_stats?['nbParkings'] ?? 0)}',
@@ -596,13 +603,15 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       iconBg: _C.coralLight,
       valueColor: _C.coral,
       interactive: true,
-      onTap: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => ParkingsScreen(
-            trancheId: widget.tranche.id,
-            residenceId: widget.tranche.residenceId,
-            trancheName: widget.tranche.nom,
-            residenceName: widget.tranche.residenceNom,
-          ))),
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => ParkingsScreen(
+                trancheId: widget.tranche.id,
+                residenceId: widget.tranche.residenceId,
+                trancheName: widget.tranche.nom,
+                residenceName: widget.tranche.residenceNom,
+              ))),
     ),
     _ModuleData(
       label: 'Garages',
@@ -612,13 +621,15 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       iconBg: _C.amberLight,
       valueColor: _C.amber,
       interactive: true,
-      onTap: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => GaragesScreen(
-            trancheId: widget.tranche.id,
-            residenceId: widget.tranche.residenceId,
-            trancheName: widget.tranche.nom,
-            residenceName: widget.tranche.residenceNom,
-          ))),
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => GaragesScreen(
+                trancheId: widget.tranche.id,
+                residenceId: widget.tranche.residenceId,
+                trancheName: widget.tranche.nom,
+                residenceName: widget.tranche.residenceNom,
+              ))),
     ),
     _ModuleData(
       label: 'Box',
@@ -628,13 +639,15 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       iconBg: _C.iconBg,
       valueColor: _C.coral,
       interactive: true,
-      onTap: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => BoxesScreen(
-            trancheId: widget.tranche.id,
-            residenceId: widget.tranche.residenceId,
-            trancheName: widget.tranche.nom,
-            residenceName: widget.tranche.residenceNom,
-          ))),
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => BoxesScreen(
+                trancheId: widget.tranche.id,
+                residenceId: widget.tranche.residenceId,
+                trancheName: widget.tranche.nom,
+                residenceName: widget.tranche.residenceNom,
+              ))),
     ),
     _ModuleData(
       label: 'Reunions',
@@ -644,10 +657,12 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       iconBg: _C.blueLight,
       valueColor: _C.blue,
       interactive: true,
-      onTap: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => ReunionsScreen(trancheId: widget.tranche.id))),
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) =>
+                  ReunionsScreen(trancheId: widget.tranche.id))),
     ),
-    // ── MODULE RECLAMATIONS ──────────────────────────────────
     _ModuleData(
       label: 'Reclamations',
       value: '${_num(_stats?['nbReclamations'] ?? 0)}',
@@ -656,10 +671,12 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       iconBg: const Color(0xFFFFF8EC),
       valueColor: const Color(0xFFF5A623),
       interactive: true,
-      onTap: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => ReclamationsScreen(trancheId: widget.tranche.id))),
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) =>
+                  ReclamationsScreen(trancheId: widget.tranche.id))),
     ),
-    // ── MODULE ANNONCES ──────────────────────────────────────
     _ModuleData(
       label: 'Annonces',
       value: '${_num(_stats?['nbAnnonces'] ?? 0)}',
@@ -668,12 +685,13 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       iconBg: _C.blueLight,
       valueColor: _C.blue,
       interactive: true,
-      onTap: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => AnnoncesScreen(trancheId: widget.tranche.id))),
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) =>
+                  AnnoncesScreen(trancheId: widget.tranche.id))),
     ),
   ];
-
-
 
   Widget _buildModuleCard(_ModuleData m) {
     return GestureDetector(
@@ -703,14 +721,21 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
                 children: [
                   Text(m.label,
                       style: const TextStyle(
-                          fontSize: 10, fontWeight: FontWeight.w600, color: _C.textMid)),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: _C.textMid)),
                   Text(m.value,
                       style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w800, color: _C.dark, letterSpacing: -0.5, height: 1.1)),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: _C.dark,
+                          letterSpacing: -0.5,
+                          height: 1.1)),
                 ],
               ),
             ),
-            if (m.interactive) Icon(Icons.chevron_right_rounded, size: 16, color: _C.textLight),
+            if (m.interactive)
+              Icon(Icons.chevron_right_rounded, size: 16, color: _C.textLight),
           ],
         ),
       ),
@@ -718,7 +743,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
   }
 
   Widget _buildResume() {
-    final revenus = _num(_stats?['revenus'] ?? 0).toDouble();
+    final revenus  = _num(_stats?['revenus'] ?? 0).toDouble();
     final depenses = _num(_stats?['depenses'] ?? 0).toDouble();
     return GlassCard(
       padding: const EdgeInsets.all(20),
@@ -731,13 +756,20 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
           _buildSectionLabel('Résumé de la Tranche', color: _C.dark, size: 18),
           const SizedBox(height: 16),
           _resumeRow(
-            _resumeItem(Icons.business_rounded, 'Immeubles', '${_num(_stats?['nbImmeubles'] ?? widget.tranche.nombreImmeubles)}', _C.blue, _C.blueLight),
-            _resumeItem(Icons.home_outlined, 'Appartements', '${_num(_stats?['nbAppartements'] ?? widget.tranche.nombreAppartements)}', _C.coral, _C.coralLight),
+            _resumeItem(Icons.business_rounded, 'Immeubles',
+                '${_num(_stats?['nbImmeubles'] ?? widget.tranche.nombreImmeubles)}', _C.blue, _C.blueLight),
+            _resumeItem(Icons.home_outlined, 'Appartements',
+                '${_num(_stats?['nbAppartements'] ?? widget.tranche.nombreAppartements)}', _C.coral, _C.coralLight),
           ),
-          Container(height: 1, color: _C.divider, margin: const EdgeInsets.symmetric(vertical: 14)),
+          Container(
+              height: 1,
+              color: _C.divider,
+              margin: const EdgeInsets.symmetric(vertical: 14)),
           _resumeRow(
-            _resumeItem(Icons.trending_up_rounded, 'Revenus', '+${revenus.toStringAsFixed(2)} DH', _C.green, _C.greenLight),
-            _resumeItem(Icons.trending_down_rounded, 'Dépenses', '-${depenses.toStringAsFixed(2)} DH', _C.coral, _C.coralLight),
+            _resumeItem(Icons.trending_up_rounded, 'Revenus',
+                '+${revenus.toStringAsFixed(2)} DH', _C.green, _C.greenLight),
+            _resumeItem(Icons.trending_down_rounded, 'Dépenses',
+                '-${depenses.toStringAsFixed(2)} DH', _C.coral, _C.coralLight),
           ),
         ],
       ),
@@ -748,19 +780,25 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
     return Row(
       children: [
         Expanded(child: a),
-        Container(width: 1, height: 40, color: _C.divider, margin: const EdgeInsets.symmetric(horizontal: 16)),
+        Container(
+            width: 1,
+            height: 40,
+            color: _C.divider,
+            margin: const EdgeInsets.symmetric(horizontal: 16)),
         Expanded(child: b),
       ],
     );
   }
 
-  Widget _resumeItem(IconData icon, String label, String value, Color color, Color bg) {
+  Widget _resumeItem(
+      IconData icon, String label, String value, Color color, Color bg) {
     return Row(
       children: [
         Container(
           width: 32,
           height: 32,
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+          decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
           child: Icon(icon, color: color, size: 16),
         ),
         const SizedBox(width: 10),
@@ -769,10 +807,16 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label,
-                  style: const TextStyle(color: _C.textLight, fontSize: 10, fontWeight: FontWeight.w500)),
-              Text(value, 
+                  style: const TextStyle(
+                      color: _C.textLight,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500)),
+              Text(value,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _C.dark, fontWeight: FontWeight.w700, fontSize: 13)),
+                  style: const TextStyle(
+                      color: _C.dark,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13)),
             ],
           ),
         ),
