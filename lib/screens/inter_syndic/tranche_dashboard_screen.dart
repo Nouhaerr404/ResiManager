@@ -376,6 +376,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
           builder: (_) => FinanceDashboardScreen(
             residenceId: widget.tranche.residenceId,
             interSyndicId: widget.tranche.interSyndicId ?? 0,
+            trancheId: widget.tranche.id,
           ),
         ),
       ),

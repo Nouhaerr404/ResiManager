@@ -8,10 +8,12 @@ import 'add_tranche_expense_screen.dart';
 class FinanceDashboardScreen extends StatefulWidget {
   final int residenceId;
   final int interSyndicId;
+  final int? trancheId;
   const FinanceDashboardScreen({
     Key? key,
     required this.residenceId,
-    required this.interSyndicId
+    required this.interSyndicId,
+    this.trancheId,
   }) : super(key: key);
 
   @override
@@ -31,7 +33,12 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
 
   void _refresh() {
     setState(() {
-      _financesFuture = _service.getInterSyndicFinances(widget.interSyndicId, widget.residenceId, annee: _selectedYear);
+      _financesFuture = _service.getInterSyndicFinances(
+          widget.interSyndicId, 
+          widget.residenceId, 
+          annee: _selectedYear,
+          trancheId: widget.trancheId,
+      );
     });
   }
 
