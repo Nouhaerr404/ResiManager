@@ -118,7 +118,7 @@ class ConvocationPdfService {
 
               // Formule appel
               pw.RichText(text: pw.TextSpan(children: [
-                pw.TextSpan(text: 'Madame, Monsieur ', style: pw.TextStyle(color: _dark, fontSize: 10.5)),
+                pw.TextSpan(text: 'Bonjour  ', style: pw.TextStyle(color: _dark, fontSize: 10.5)),
                 pw.TextSpan(text: '$residentPrenom $residentNom',
                     style: pw.TextStyle(color: _dark, fontWeight: pw.FontWeight.bold, fontSize: 10.5)),
                 pw.TextSpan(text: ',', style: pw.TextStyle(color: _dark, fontSize: 10.5)),
