@@ -2246,6 +2246,20 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     final nomCtrl = TextEditingController(text: r.nom);
     final prenomCtrl = TextEditingController(text: r.prenom);
     final telCtrl = TextEditingController(text: r.telephone ?? '');
+    
+    // NOUVEAU : Controller pour le montant total
+    // On essaie de trouver le montant de la ligne 'charges' s'il existe
+    final chargesPaiement = r.paiements.firstWhere(
+      (p) => p.typePaiement == TypePaiementEnum.charges,
+      orElse: () => r.paiements.isNotEmpty ? r.paiements.first : PaiementModel(
+        id: 0, residentId: 0, appartementId: 0, depenseId: 0, interSyndicId: 0, 
+        residenceId: 0, montantTotal: r.montantTotal, montantPaye: 0, 
+        typePaiement: TypePaiementEnum.charges, statut: StatutPaiementEnum.impaye, 
+        annee: _selectedAnnee
+      )
+    );
+    final prixCtrl = TextEditingController(text: chargesPaiement.montantTotal.toInt().toString());
+
     String type = r.type;
     bool saving = false;
 
@@ -2257,64 +2271,76 @@ class _ResidentsScreenState extends State<ResidentsScreen>
               borderRadius: BorderRadius.circular(20)),
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _dialogHeader(ctx, 'Modifier Resident',
-                    icon: Icons.edit_rounded, iconColor: _C.blue),
-                const SizedBox(height: 20),
-                _label('Prenom'),
-                _field(prenomCtrl, ''),
-                const SizedBox(height: 14),
-                _label('Nom'),
-                _field(nomCtrl, ''),
-                const SizedBox(height: 14),
-                _label('Telephone'),
-                _field(telCtrl, '', inputType: TextInputType.phone),
-                const SizedBox(height: 14),
-                _label('Type'),
-                Row(children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () =>
-                          setDialog(() => type = 'proprietaire'),
-                      child: _typeToggle(
-                          'Proprietaire', type == 'proprietaire', _C.blue),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _dialogHeader(ctx, 'Modifier Resident',
+                      icon: Icons.edit_rounded, iconColor: _C.blue),
+                  const SizedBox(height: 20),
+                  _label('Prenom'),
+                  _field(prenomCtrl, ''),
+                  const SizedBox(height: 14),
+                  _label('Nom'),
+                  _field(nomCtrl, ''),
+                  const SizedBox(height: 14),
+                  _label('Telephone'),
+                  _field(telCtrl, '', inputType: TextInputType.phone),
+                  const SizedBox(height: 14),
+              
+                  // NOUVEAU : Champ pour le prix annuel
+                  _label('Prix Annuel Charges ($_selectedAnnee)'),
+                  _field(prixCtrl, 'ex: 3000', inputType: TextInputType.number),
+                  const SizedBox(height: 14),
+              
+                  _label('Type'),
+                  Row(children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () =>
+                            setDialog(() => type = 'proprietaire'),
+                        child: _typeToggle(
+                            'Proprietaire', type == 'proprietaire', _C.blue),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () =>
-                          setDialog(() => type = 'locataire'),
-                      child: _typeToggle(
-                          'Locataire', type == 'locataire', _C.amber),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () =>
+                            setDialog(() => type = 'locataire'),
+                        child: _typeToggle(
+                            'Locataire', type == 'locataire', _C.amber),
+                      ),
                     ),
+                  ]),
+                  const SizedBox(height: 24),
+                  _dialogActions(
+                    ctx: ctx,
+                    saving: saving,
+                    confirmLabel: 'Enregistrer',
+                    confirmColor: _C.blue,
+                    onConfirm: () async {
+                      setDialog(() => saving = true);
+                      final double? nouveauFix = double.tryParse(prixCtrl.text.trim());
+                      
+                      await _service.updateResident(
+                        userId: r.userId,
+                        nom: nomCtrl.text,
+                        prenom: prenomCtrl.text,
+                        telephone:
+                        telCtrl.text.isEmpty ? null : telCtrl.text,
+                        type: type,
+                        montantTotal: nouveauFix,
+                        annee: _selectedAnnee,
+                      );
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      _load();
+                    },
                   ),
-                ]),
-                const SizedBox(height: 24),
-                _dialogActions(
-                  ctx: ctx,
-                  saving: saving,
-                  confirmLabel: 'Enregistrer',
-                  confirmColor: _C.blue,
-                  onConfirm: () async {
-                    setDialog(() => saving = true);
-                    await _service.updateResident(
-                      userId: r.userId,
-                      nom: nomCtrl.text,
-                      prenom: prenomCtrl.text,
-                      telephone:
-                      telCtrl.text.isEmpty ? null : telCtrl.text,
-                      type: type,
-                    );
-                    if (!ctx.mounted) return;
-                    Navigator.pop(ctx);
-                    _load();
-                  },
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

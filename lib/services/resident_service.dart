@@ -604,6 +604,8 @@ class ResidentService {
     required String prenom,
     String? telephone,
     required String type,
+    double? montantTotal, // Optionnel : pour mettre à jour le prix annuel
+    int? annee,           // Optionnel : l'année concernée
   }) async {
     try {
       await _db.from('users').update({
@@ -611,9 +613,37 @@ class ResidentService {
         'prenom': prenom.trim(),
         'telephone': telephone?.trim(),
       }).eq('id', userId);
+      
       await _db
           .from('residents')
           .update({'type': type}).eq('user_id', userId);
+
+      // Si un nouveau montant total est fourni, on met à jour la ligne de 'charges'
+      if (montantTotal != null && montantTotal > 0) {
+        final targetAnnee = annee ?? DateTime.now().year;
+        
+        // Trouver le paiement de type 'charges' pour cette année
+        final existingPaiement = await _db
+            .from('paiements')
+            .select('id, montant_paye')
+            .eq('resident_id', userId)
+            .eq('type_paiement', 'charges')
+            .eq('annee', targetAnnee)
+            .maybeSingle();
+
+        if (existingPaiement != null) {
+          final double paid = double.tryParse(existingPaiement['montant_paye'].toString()) ?? 0.0;
+          final String nouveauStatut = paid >= montantTotal 
+              ? 'complet' 
+              : (paid > 0 ? 'partiel' : 'impaye');
+              
+          await _db.from('paiements').update({
+            'montant_total': montantTotal,
+            'statut': nouveauStatut,
+          }).eq('id', existingPaiement['id']);
+        }
+      }
+      
       return null;
     } catch (e) {
       return e.toString();
