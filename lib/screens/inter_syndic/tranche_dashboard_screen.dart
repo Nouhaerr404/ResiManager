@@ -12,6 +12,8 @@ import 'boxes/boxes_screen.dart';
 import 'reclamations/reclamations_screen.dart';
 import 'immeubles/immeubles_screen.dart'; // Ajouté
 import 'annonces/annonces_screen.dart';
+import '../../services/finance_service.dart';
+import '../../services/expense_report_pdf_service.dart';
 import '../../utils/temp_session.dart';
 // ── Palette de couleurs
 class _C {
@@ -46,6 +48,7 @@ class TrancheDashboardScreen extends StatefulWidget {
 class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
     with SingleTickerProviderStateMixin {
   final _service = TrancheService();
+  final _financeService = FinanceService();
   Map<String, dynamic>? _stats;
   bool _loading = true;
   late AnimationController _fadeCtrl;
@@ -383,7 +386,17 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionLabel('Résumé Financier', color: Colors.white),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildSectionLabel('Résumé Financier', color: Colors.white),
+              IconButton(
+                onPressed: _generateReport,
+                icon: const Icon(Icons.picture_as_pdf_rounded, color: _C.white, size: 24),
+                tooltip: 'Générer rapport PDF',
+              ),
+            ],
+          ),
           const SizedBox(height: 14),
           GlassCard(
             borderRadius: 16,
@@ -778,6 +791,48 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
         ),
       ],
     );
+  }
+
+  // ── GENERATION DE RAPPORT PDF ──────────────────────────────
+  Future<void> _generateReport() async {
+    // 1. Loader
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator(color: _C.coral)),
+    );
+
+    try {
+      final annee = DateTime.now().year;
+      // 2. Fetch fresh data
+      final financeData = await _financeService.getInterSyndicFinances(
+        widget.tranche.interSyndicId ?? 0,
+        widget.tranche.residenceId,
+        annee: annee,
+        trancheId: widget.tranche.id,
+      );
+
+      // 3. Generate PDF
+      final pdfBytes = await ExpenseReportPdfService.generate(
+        residenceNom: widget.tranche.residenceNom ?? 'Résidence',
+        trancheNom: widget.tranche.nom,
+        annee: annee,
+        financeData: financeData,
+      );
+
+      if (mounted) {
+        Navigator.pop(context); // Close loader
+        // 4. Preview/Share
+        await ExpenseReportPdfService.preview(pdfBytes);
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loader
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur : $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 }
 
