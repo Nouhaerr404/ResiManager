@@ -53,7 +53,7 @@ class TrancheService {
           nombreGarages: e['nombre_garages'] ?? 0,
           nombreBoxes: e['nombre_boxes'] ?? 0,
           prixAnnuel: e['prix_annuel'] != null ? (e['prix_annuel'] as num).toDouble() : 0.0,
-          statut: e['statut_tranche'] ?? 'Actif',
+          statut: e['statut'] ?? 'Actif',
           residenceNom: e['residences'] != null ? e['residences']['nom'] : null,
           interSyndicNom: e['users'] != null
               ? "${e['users']['prenom']} ${e['users']['nom']}"
@@ -279,7 +279,7 @@ class TrancheService {
         nombreGarages: e['nombre_garages'] ?? 0,
         nombreBoxes: e['nombre_boxes'] ?? 0,
         prixAnnuel: e['prix_annuel'] != null ? (e['prix_annuel'] as num).toDouble() : 0.0,
-        statut: e['Statut'] ?? 'Actif',
+        statut: e['statut'] ?? 'Actif',
         interSyndicNom: e['users'] != null
             ? "${e['users']['prenom']} ${e['users']['nom']}"
             : null,
@@ -352,7 +352,7 @@ class TrancheService {
   }
 
   Future<void> setTrancheStatut(int trancheId, String statut) async {
-    await _db.from('tranches').update({'Statut': statut}).eq('id', trancheId);
+    await _db.from('tranches').update({'statut': statut}).eq('id', trancheId);
   }
 
   Future<void> deleteTranche(int trancheId) async {
