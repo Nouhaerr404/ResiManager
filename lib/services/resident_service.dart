@@ -426,9 +426,25 @@ class ResidentService {
     int? garageId,
   }) async {
     try {
+      // ── 1. Créer le compte Supabase Auth avec le mot de passe fourni
+      // On ignore les erreurs (compte déjà existant, réseau, TLS, etc.)
       try {
         await _db.auth.signUp(email: email.trim(), password: password);
       } catch (_) {}
+
+      // ── 2. Envoyer un email de réinitialisation de mot de passe (fire & forget)
+      // Le résident reçoit un lien sécurisé pour définir son propre mot de passe
+      // Même mécanisme que "mot de passe oublié" dans Supabase Auth
+      try {
+        await _db.auth.resetPasswordForEmail(
+          email.trim(),
+          redirectTo: 'io.supabase.resimanager://reset-callback/',
+        );
+        debugPrint('>>> Email de réinitialisation envoyé à ${email.trim()}');
+      } catch (e) {
+        // L'échec de l'email ne bloque pas la création du résident
+        debugPrint('>>> AVERTISSEMENT reset email non envoyé: $e');
+      }
 
       final userRes = await _db
           .from('users')

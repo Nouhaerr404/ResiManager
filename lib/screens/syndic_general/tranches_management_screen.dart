@@ -334,7 +334,7 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
 
   Widget _buildSyndicDropdown(int? currentId, Function(int?) onChanged) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _service.getMyAvailableInterSyndics(widget.syndicId),
+      future: _service.getMyAvailableInterSyndics(widget.syndicId, widget.residenceId),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const LinearProgressIndicator();
         final mySyndics = snapshot.data ?? [];
