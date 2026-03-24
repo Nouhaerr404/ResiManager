@@ -4,7 +4,8 @@ import '../../../models/residence_model.dart';
 import 'residences/residences_screen.dart';
 import 'syndics/syndics_screen.dart';
 import 'demandes/demandes_screen.dart';
-
+import '../auth/login_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 class SuperAdminDashboardScreen extends StatelessWidget {
   final SuperAdminService _service = SuperAdminService();
 
@@ -517,7 +518,15 @@ class SuperAdminDashboardScreen extends StatelessWidget {
         ListTile(
           leading: const Icon(Icons.logout, color: Colors.red),
           title: const Text('Déconnexion', style: TextStyle(color: Colors.red)),
-          onTap: () => Navigator.of(context).popUntil((r) => r.isFirst),
+          onTap: () async {
+            Navigator.pop(context);
+            await Supabase.instance.client.auth.signOut();
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+            );
+          },
+
         ),
         const SizedBox(height: 16),
       ])),
