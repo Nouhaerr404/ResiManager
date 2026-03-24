@@ -6,6 +6,8 @@ import '../../../services/resident_service.dart';
 import '../../../widgets/apartment_card.dart';
 import '../../../widgets/apartment_filters.dart';
 import '../../../services/tranche_service.dart';
+import '../../../services/apartment_pdf_service.dart';
+
 
 class ApartmentsListScreen extends StatefulWidget {
   final int? trancheId;
@@ -298,11 +300,37 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     }
   }
 
-  // -------------------------
-  // Dialogs UI
-  // -------------------------
+  Future<void> _exportPdf() async {
+    if (filteredApartments.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La liste est vide')),
+      );
+      return;
+    }
+
+    try {
+      final pdfBytes = await ApartmentPdfService.generate(
+        apartments: filteredApartments,
+        residenceNom: widget.residenceName ?? widget.residenceId?.toString() ?? 'ResiManager',
+        trancheNom: widget.trancheName ?? widget.trancheId?.toString() ?? '-',
+      );
+
+      await ApartmentPdfService.share(
+        pdfBytes,
+        'Rapport_Appartements_${widget.trancheName ?? "General"}',
+      );
+    } catch (e) {
+      debugPrint('Erreur PDF: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erreur lors de la génération du PDF')),
+        );
+      }
+    }
+  }
 
   void _showAddApartmentDialog() {
+
     final _formKey = GlobalKey<FormState>();
     final residenceController = TextEditingController(text: widget.residenceName ?? widget.residenceId?.toString() ?? '1');
     final trancheController = TextEditingController(text: widget.trancheName ?? widget.trancheId?.toString() ?? '');
@@ -927,6 +955,33 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                         ),
                       ),
 
+                      const SizedBox(width: 12),
+
+                      // Bouton PDF (style inspiré)
+                      GestureDetector(
+                        onTap: _exportPdf,
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white24, width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.picture_as_pdf_rounded,
+                              color: Color(0xFFFF6F4A), size: 22),
+                        ),
+                      ),
+
+                      const SizedBox(width: 12),
+
                       // Bouton AJOUTER (coral, reste inchangé)
                       GestureDetector(
                         onTap: _showAddApartmentDialog,
@@ -949,6 +1004,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                     ],
                   ),
                 ),
+
 
                 // Barre de recherche stylisée
                 Padding(
