@@ -124,6 +124,8 @@ class FinanceService {
           .eq('appartement_id', appartId)
           .eq('annee', date.year)
           .eq('mois', date.month)
+          .eq('inter_syndic_id', interSyndicId)
+          .eq('type_paiement', 'charges')
           .maybeSingle();
 
       if (existingPaiement != null) {
@@ -370,6 +372,8 @@ class FinanceService {
           .eq('appartement_id', appartId)
           .eq('annee', date.year)
           .eq('mois', date.month)
+          .eq('inter_syndic_id', isId)
+          .eq('type_paiement', 'charges')
           .maybeSingle();
 
       if (pRes != null) {
@@ -425,6 +429,8 @@ class FinanceService {
                     .eq('appartement_id', appartId)
                     .eq('annee', annee)
                     .eq('mois', mois)
+                    .eq('inter_syndic_id', isId)
+                    .eq('type_paiement', 'charges')
                     .maybeSingle();
 
                 if (pRes != null) {
