@@ -15,8 +15,7 @@ class ResidentService {
   // SECTION ADMIN
   // ═══════════════════════════════════════════════════════════════════
 
-  Future<List<ResidentModel>> getResidentsByTranche(dynamic trancheId, {int? annee}) async {
-    final int anneeFiltre = annee ?? DateTime.now().year;
+  Future<List<ResidentModel>> getResidentsByTranche(dynamic trancheId, {String? dateDebut, String? dateFin}) async {
     try {
       // Recuperer le prix annuel de la tranche
       final trancheRes = await _db
@@ -58,13 +57,21 @@ class ResidentService {
           .inFilter('id', userIds);
       final users = usersRes as List;
 
-      // ── Paiements filtres par annee
-      final paiementsRes = await _db
+      // ── Paiements filtres par mandat
+      var paiementsQuery = _db
           .from('paiements')
           .select(
-          'id, appartement_id, resident_id, montant_total, montant_paye, statut, date_paiement, type_paiement, annee')
-          .inFilter('appartement_id', appartementIds)
-          .eq('annee', anneeFiltre);
+          'id, appartement_id, resident_id, montant_total, montant_paye, statut, date_paiement, type_paiement, annee, created_at')
+          .inFilter('appartement_id', appartementIds);
+
+      if (dateDebut != null) {
+        paiementsQuery = paiementsQuery.gte('created_at', dateDebut);
+      }
+      if (dateFin != null) {
+        // Ajouter la fin de journée pour inclure tout le dernier jour
+        paiementsQuery = paiementsQuery.lte('created_at', '${dateFin}T23:59:59');
+      }
+      final paiementsRes = await paiementsQuery;
       final paiements = paiementsRes as List;
 
       // ── Recuperer les numeros garage/parking/box
@@ -184,8 +191,8 @@ class ResidentService {
             .toList();
 
         // ── FILTRE CLÉ : n'afficher que les résidents ayant un paiement
-        // dans l'année sélectionnée. Les résidents sans ligne de paiement
-        // pour cette année sont exclus de la liste.
+        // dans le mandat sélectionné. Les résidents sans ligne de paiement
+        // pour ce mandat sont exclus de la liste.
         if (residentPaiements.isEmpty) continue;
 
         double totalM = 0;
@@ -230,7 +237,7 @@ class ResidentService {
           montantTotal: totalM,
           montantPaye: payeM,
           statutPaiement: globalStatut,
-          anneePaiement: anneeFiltre,
+          anneePaiement: DateTime.now().year,
           paiements: residentPaiements
               .map((p) {
             final type = p['type_paiement']?.toString() ?? 'charges';
@@ -366,27 +373,34 @@ class ResidentService {
   // HISTORIQUE PAIEMENTS — joint avec paiements pour avoir annee + type_paiement
   // ─────────────────────────────────────────────────────────────────
   Future<List<Map<String, dynamic>>> getHistoriquePaiements(
-      dynamic residentUserId) async {
+      dynamic residentUserId, {String? dateDebut, String? dateFin}) async {
     try {
-      final res = await _db
+      // Construire la requête de base — PAS encore de .order() ni .select() final
+      var query = _db
           .from('historique_paiements')
           .select(
           'id, montant, date, description, type, paiement_id, paiements(annee, type_paiement)')
-          .eq('resident_id', residentUserId)
-          .order('date', ascending: false);
+          .eq('resident_id', residentUserId);
 
+      // Filtres mandat — AVANT .order() pour rester sur PostgrestFilterBuilder
+      if (dateDebut != null) {
+        query = query.gte('date', dateDebut);
+      }
+      if (dateFin != null) {
+        query = query.lte('date', '${dateFin}T23:59:59');
+      }
+
+      // .order() en dernier
+      final res = await query.order('date', ascending: false);
       final List list = res as List? ?? [];
 
       return list.map((h) {
         final map = Map<String, dynamic>.from(h);
-
-        // Extraire annee et type_paiement depuis le join avec paiements
         final paiementData = h['paiements'];
         final int? anneeFromPaiement = paiementData?['annee'] as int?;
         final String? typeFromPaiement =
         paiementData?['type_paiement']?.toString();
 
-        // Fallback : parser l'annee depuis la date si le join echoue
         int? anneeCalculee = anneeFromPaiement;
         if (anneeCalculee == null) {
           final dateStr = h['date']?.toString() ?? '';
@@ -396,10 +410,8 @@ class ResidentService {
         }
 
         map['annee_paiement'] = anneeCalculee;
-        // Priorite : type depuis paiements > type depuis historique > 'charges'
         map['type_paiement'] =
             typeFromPaiement ?? h['type']?.toString() ?? 'charges';
-
         return map;
       }).toList();
     } catch (e) {
@@ -407,7 +419,6 @@ class ResidentService {
       return [];
     }
   }
-
   // ─────────────────────────────────────────────────────────────────
   // ADD RESIDENT
   // ─────────────────────────────────────────────────────────────────
