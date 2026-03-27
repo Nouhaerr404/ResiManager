@@ -38,7 +38,7 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
     bool isWeb = screenWidth >= 900;
 
     return MainLayout(
-      title: 'Gestion des Syndics', 
+      title: 'Gestion des Inter-Syndics',
       activePage: 'Syndics',
       residenceId: widget.residenceId,
       syndicId: widget.syndicId,
@@ -77,8 +77,8 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text("Gestion des Syndics", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: darkGrey)),
-          const Text("Gérez les syndics et leurs affectations", style: TextStyle(color: Colors.grey, fontSize: 16)),
+          Text("Gestion des Inter-Syndics", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: darkGrey)),
+          const Text("Gérez les inter-syndics et leurs affectations", style: TextStyle(color: Colors.grey, fontSize: 16)),
         ]),
         _addButton(false),
       ],
@@ -91,7 +91,7 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
       child: ElevatedButton.icon(
         onPressed: () => _showForm(),
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text("Ajouter un Syndic", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: const Text("Ajouter un Inter-Syndic", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF2B65EC),
           padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),

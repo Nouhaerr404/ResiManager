@@ -12,7 +12,7 @@ class TrancheModel {
   final int nombreGarages;
   final int nombreBoxes;
   final double prixAnnuel;
-  final String statut; // Garde 'statut' dans le code pour la simplicité, mais mappé sur 'statut_tranche'
+  final String statut;
   final DateTime? createdAt;
 
   // Données jointes optionnelles
@@ -53,7 +53,7 @@ class TrancheModel {
       nombreGarages: j['nombre_garages'] ?? 0,
       nombreBoxes: j['nombre_boxes'] ?? 0,
       prixAnnuel: double.parse((j['prix_annuel'] ?? 0).toString()),
-      statut: j['statut_tranche'] ?? 'Actif', // CHANGÉ ICI
+      statut: j['statut_tranche'] ?? 'Actif',
       createdAt: j['created_at'] != null
           ? DateTime.tryParse(j['created_at'])
           : null,
@@ -69,12 +69,7 @@ class TrancheModel {
     'description': description,
     'residence_id': residenceId,
     'inter_syndic_id': interSyndicId,
-    'nombre_immeubles': nombreImmeubles,
-    'nombre_appartements': nombreAppartements,
-    'nombre_parkings': nombreParkings,
-    'nombre_garages': nombreGarages,
-    'nombre_boxes': nombreBoxes,
     'prix_annuel': prixAnnuel,
-    'statut_tranche': statut, // CHANGÉ ICI
+    'statut_tranche': statut,
   };
 }

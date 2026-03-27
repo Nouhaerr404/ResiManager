@@ -6,18 +6,34 @@ class AccountingService {
   // 1. Audit complet pour la vue consolidée
   Future<Map<String, dynamic>> getFullResidenceAudit(int residenceId, int annee) async {
     final results = await Future.wait([
-      // Dépenses
-      _db.from('depenses').select('*, categories(nom, type), tranches(nom), inter_syndic:inter_syndic_id(nom)').eq('residence_id', residenceId).eq('annee', annee),
-      // Paiements (On récupère tout pour le calcul par appartement)
-      _db.from('paiements').select('*, resident:resident_id(nom, prenom), appartements(id, numero, immeubles(id, nom, tranches(id, nom)))').eq('residence_id', residenceId).eq('annee', annee),
-      // Tranches
-      _db.from('tranches').select('id, nom, "statut"').eq('residence_id', residenceId),
+      // Dépenses avec info inter-syndic
+      _db.from('depenses')
+          .select('*, categories(nom, type), tranches(nom), inter_syndic:inter_syndic_id(nom, prenom)')
+          .eq('residence_id', residenceId)
+          .eq('annee', annee),
+          
+      // Paiements avec info inter-syndic
+      _db.from('paiements')
+          .select('*, inter_syndic:inter_syndic_id(nom, prenom), resident:resident_id(nom, prenom), appartements(id, numero, immeubles(id, nom, tranches(id, nom)))')
+          .eq('residence_id', residenceId)
+          .eq('annee', annee),
+          
+      // Tranches avec l'inter-syndic actuel
+      _db.from('tranches')
+          .select('*, inter_syndic:inter_syndic_id(id, nom, prenom)')
+          .eq('residence_id', residenceId),
+
+      // Historique des affectations
+      _db.from('historique_affectations')
+          .select('*, inter_syndic:inter_syndic_id(nom, prenom)')
+          .order('date_debut', ascending: false),
     ]);
 
     return {
       'expenses': results[0] as List,
       'payments': results[1] as List,
       'tranches': results[2] as List,
+      'history': results[3] as List,
     };
   }
 

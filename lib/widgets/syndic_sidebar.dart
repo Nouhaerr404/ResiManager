@@ -38,13 +38,15 @@ class SyndicSidebar extends StatelessWidget {
               Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => DashboardScreen(residenceId: residenceId, syndicId: syndicId)));
             }),
 
+            _buildMenuItem(context, Icons.people_outline, 'Inter-Syndics', activePage == 'Syndics', () {
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => SyndicsManagementScreen(residenceId: residenceId, syndicId: syndicId)));
+            }),
+
             _buildMenuItem(context, Icons.domain, 'Tranches', activePage == 'Tranches', () {
               Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => TranchesManagementScreen(residenceId: residenceId, syndicId: syndicId)));
             }),
 
-            _buildMenuItem(context, Icons.people_outline, 'Syndics', activePage == 'Syndics', () {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => SyndicsManagementScreen(residenceId: residenceId, syndicId: syndicId)));
-            }),
+
 
             _buildMenuItem(context, Icons.account_balance_wallet_outlined, 'Dépenses', activePage == 'Dépenses', () {
               Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => ResidenceFinancesScreen(residenceId: residenceId, syndicId: syndicId)));
