@@ -315,6 +315,7 @@ class TrancheService {
       'nom':             nom,
       'inter_syndic_id': interSyndicId,
       'prix_annuel':     (prixAnnuel != null && prixAnnuel > 0) ? prixAnnuel : null,
+      'date_affectation': interSyndicId != null ? DateTime.now().toIso8601String().split('T')[0] : null,
     });
   }
 
@@ -328,10 +329,10 @@ class TrancheService {
   }
 
   Future<void> assignInterSyndic(int trancheId, int? interSyndicId) async {
-    await _db
-        .from('tranches')
-        .update({'inter_syndic_id': interSyndicId})
-        .eq('id', trancheId);
+    await _db.from('tranches').update({
+      'inter_syndic_id': interSyndicId,
+      'date_affectation': interSyndicId != null ? DateTime.now().toIso8601String().split('T')[0] : null
+    }).eq('id', trancheId);
   }
 
   Future<List<Map<String, dynamic>>> getImmeublesByTranche(int trancheId) async {
@@ -359,12 +360,22 @@ class TrancheService {
       int? interSyndicId,
       double? prixAnnuel) async {
 
-    await _db.from('tranches').update({
+    // On récupère l'ancien syndic pour savoir si on doit mettre à jour la date
+    final current = await _db.from('tranches').select('inter_syndic_id').eq('id', trancheId).single();
+    final int? oldId = current['inter_syndic_id'];
+
+    Map<String, dynamic> updateData = {
       'nom':             nom,
       'description':     description,
       'inter_syndic_id': interSyndicId,
       'prix_annuel':     (prixAnnuel != null && prixAnnuel > 0) ? prixAnnuel : null,
-    }).eq('id', trancheId);
+    };
+
+    if (interSyndicId != oldId) {
+      updateData['date_affectation'] = interSyndicId != null ? DateTime.now().toIso8601String().split('T')[0] : null;
+    }
+
+    await _db.from('tranches').update(updateData).eq('id', trancheId);
   }
 
   Future<void> setTrancheStatut(int trancheId, String statut) async {
