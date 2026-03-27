@@ -100,6 +100,7 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
               _buildStatIcon(Icons.home_work_outlined, widget.tranche.nombreAppartements, "App.", "app"),
               _buildStatIcon(Icons.local_parking, widget.tranche.nombreParkings, "Park.", "park"),
               _buildStatIcon(Icons.garage, widget.tranche.nombreGarages, "Gar.", "gar"),
+              _buildStatIcon(Icons.inventory_2, widget.tranche.nombreBoxes, "Box", "box"),
             ],
           ),
 
@@ -157,6 +158,7 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
         if (type == "app") _toggleDetail(type, widget.service.getAppartementNumeros(widget.tranche.id));
         if (type == "park") _toggleDetail(type, widget.service.getParkingNumeros(widget.tranche.id));
         if (type == "gar") _toggleDetail(type, widget.service.getGarageNumeros(widget.tranche.id));
+        if (type == "box") _toggleDetail(type, widget.service.getBoxNumeros(widget.tranche.id));
       },
       child: Column(
         children: [
