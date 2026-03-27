@@ -6,10 +6,10 @@ class TrancheDetailCard extends StatefulWidget {
   final TrancheModel tranche;
   final TrancheService service;
   final VoidCallback onEditTap;
-  final VoidCallback onDeleteTap;
+  final VoidCallback? onDeleteTap;
   final VoidCallback onAssignTap;
 
-  const TrancheDetailCard({Key? key, required this.tranche, required this.service, required this.onEditTap, required this.onDeleteTap, required this.onAssignTap}) : super(key: key);
+  const TrancheDetailCard({Key? key, required this.tranche, required this.service, required this.onEditTap, this.onDeleteTap, required this.onAssignTap}) : super(key: key);
 
   @override
   State<TrancheDetailCard> createState() => _TrancheDetailCardState();
@@ -35,8 +35,6 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
 
   @override
   Widget build(BuildContext context) {
-    bool isActif = widget.tranche.statut == 'Actif';
-
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.all(16),
@@ -56,18 +54,17 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
                 child: Row(
                   children: [
                     Flexible(child: Text(widget.tranche.nom, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkGrey), overflow: TextOverflow.ellipsis)),
-                    const SizedBox(width: 8),
-                    _buildStatusBadge(widget.tranche.statut),
                   ],
                 ),
               ),
               Row(
                 children: [
                   IconButton(onPressed: widget.onEditTap, icon: const Icon(Icons.edit_outlined, color: Colors.blue, size: 20)),
-                  IconButton(
-                    onPressed: widget.onDeleteTap, 
-                    icon: Icon(isActif ? Icons.block_flipped : Icons.check_circle_outline, color: isActif ? Colors.red : Colors.green, size: 20)
-                  ),
+                  if (widget.onDeleteTap != null)
+                    IconButton(
+                      onPressed: widget.onDeleteTap, 
+                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20)
+                    ),
                 ],
               )
             ],
@@ -99,7 +96,7 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
               _buildStatIcon(Icons.apartment, widget.tranche.nombreImmeubles, "Imm.", "imm"),
               _buildStatIcon(Icons.home_work_outlined, widget.tranche.nombreAppartements, "App.", "app"),
               _buildStatIcon(Icons.local_parking, widget.tranche.nombreParkings, "Park.", "park"),
-              _buildStatIcon(Icons.garage, widget.tranche.nombreGarages, "Gar.", "gar"),
+              _buildStatIcon(Icons.storefront_outlined, widget.tranche.nombreGarages, "Gar.", "gar"), // CHANGEMENT ICI
               _buildStatIcon(Icons.inventory_2, widget.tranche.nombreBoxes, "Box", "box"),
             ],
           ),
@@ -129,22 +126,6 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
               ),
           ]
         ],
-      ),
-    );
-  }
-
-  Widget _buildStatusBadge(String status) {
-    bool isActif = status == 'Actif';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: (isActif ? Colors.green : Colors.grey).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: (isActif ? Colors.green : Colors.grey).withOpacity(0.3)),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: isActif ? Colors.green : Colors.grey),
       ),
     );
   }

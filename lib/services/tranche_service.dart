@@ -375,6 +375,41 @@ class TrancheService {
     await _db.from('tranches').delete().eq('id', trancheId);
   }
 
+  Future<Map<String, int>> checkTrancheUsage(int trancheId) async {
+    try {
+      // 1. Gardien Physique : Immeubles, Parkings, Garages, Boxes
+      final List immRes = await _db.from('immeubles').select('id').eq('tranche_id', trancheId);
+      final List pkRes = await _db.from('parkings').select('id').eq('tranche_id', trancheId);
+      final List grRes = await _db.from('garages').select('id').eq('tranche_id', trancheId);
+      final List bxRes = await _db.from('boxes').select('id').eq('tranche_id', trancheId);
+
+      // 2. Gardien Financier : Dépenses, Paiements (via appartements)
+      final List depRes = await _db.from('depenses').select('id').eq('tranche_id', trancheId);
+      
+      // Paiements via appartements des immeubles de la tranche
+      int paiementsCount = 0;
+      if (immRes.isNotEmpty) {
+        final List<int> immIds = immRes.map((i) => i['id'] as int).toList();
+        final List apparts = await _db.from('appartements').select('id').inFilter('immeuble_id', immIds);
+        if (apparts.isNotEmpty) {
+           final List<int> appIds = apparts.map((a) => a['id'] as int).toList();
+           final List payRes = await _db.from('paiements').select('id').inFilter('appartement_id', appIds);
+           paiementsCount = payRes.length;
+        }
+      }
+
+      return {
+        'immeubles': immRes.length,
+        'espaces': pkRes.length + grRes.length + bxRes.length,
+        'depenses': depRes.length,
+        'paiements': paiementsCount,
+      };
+    } catch (e) {
+      print('Erreur checkTrancheUsage: $e');
+      return {'error': 1};
+    }
+  }
+
   Future<List<String>> getAppartementNumeros(int trancheId) async {
     final res = await _db.from('appartements')
         .select('numero, immeubles!inner(tranche_id)')

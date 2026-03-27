@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:resimanager/widgets/main_layout.dart';
-import 'package:resimanager/widgets/nav_buttons.dart';
 import '../../models/tranche_model.dart';
 import '../../services/tranche_service.dart';
 import '../../widgets/tranche_detail_card.dart';
@@ -22,7 +21,8 @@ class TranchesManagementScreen extends StatefulWidget {
 class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
   final TrancheService _service = TrancheService();
   late Future<List<TrancheModel>> _tranchesFuture;
-  String _selectedFilter = "Tous"; // "Tous", "Actif", "Inactif"
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
 
   final Color primaryOrange = const Color(0xFFFF6F4A);
   final Color darkGrey = const Color(0xFF2C2C2C);
@@ -37,6 +37,102 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
     setState(() {
       _tranchesFuture = _service.getTranchesByResidence(widget.residenceId);
     });
+  }
+
+  void _confirmDeleteTranche(TrancheModel tranche) async {
+    // 1. Scan de la base de données
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final usage = await _service.checkTrancheUsage(tranche.id);
+    if (!mounted) return;
+    Navigator.pop(context); // Fermer le loader
+
+    int imm = usage['immeubles'] ?? 0;
+    int esp = usage['espaces'] ?? 0;
+    int dep = usage['depenses'] ?? 0;
+    int pay = usage['paiements'] ?? 0;
+
+    bool isPhysicallyUsed = imm > 0 || esp > 0;
+    bool isFinanciallyUsed = dep > 0 || pay > 0;
+
+    if (isPhysicallyUsed || isFinanciallyUsed) {
+      // SCÉNARIO A : Action impossible
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange),
+              SizedBox(width: 10),
+              Text("Action impossible", style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Cette tranche '${tranche.nom}' ne peut pas être supprimée car elle est encore utilisée :"),
+              const SizedBox(height: 15),
+              if (imm > 0) _buildUsageInfo(Icons.apartment, "$imm immeuble(s) rattaché(s)"),
+              if (esp > 0) _buildUsageInfo(Icons.grid_view, "$esp espace(s) (parking/box/garage)"),
+              if (dep > 0) _buildUsageInfo(Icons.money_off, "$dep dépense(s) enregistrée(s)"),
+              if (pay > 0) _buildUsageInfo(Icons.payments, "$pay historique de paiements"),
+              const SizedBox(height: 15),
+              const Text("Cette tranche est actuellement active et contient des données structurelles (immeubles, résidents). Pour garantir la traçabilité de l'historique et la cohérence de l'audit financier, une tranche occupée ne peut pas être supprimée.",
+                style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic)),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Compris")),
+          ],
+        ),
+      );
+    } else {
+      // SCÉNARIO B : Dossier vide, confirmation classique
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text("Supprimer la tranche ?", style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Text("Voulez-vous vraiment supprimer la tranche '${tranche.nom}' ? Cette action est définitive."),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              onPressed: () async {
+                Navigator.pop(context); // Fermer le dialogue
+                try {
+                  await _service.deleteTranche(tranche.id);
+                  _loadTranches();
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tranche supprimée avec succès"), backgroundColor: Colors.green));
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red));
+                }
+              },
+              child: const Text("Supprimer", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Widget _buildUsageInfo(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.grey),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
+        ],
+      ),
+    );
   }
 
   // --- FORMULAIRE D'AJOUT CORRIGÉ ---
@@ -176,58 +272,28 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
     );
   }
 
-  void _confirmToggleTrancheStatut(TrancheModel tranche) {
-    bool isActif = tranche.statut == 'Actif';
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(isActif ? "Désactiver la tranche ?" : "Réactiver la tranche ?"),
-        content: Text(isActif ? "Désactiver '${tranche.nom}' ?" : "Réactiver '${tranche.nom}' ?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: isActif ? Colors.red : Colors.green),
-            onPressed: () async {
-              try {
-                await _service.setTrancheStatut(tranche.id, isActif ? 'Inactif' : 'Actif');
-                if (mounted) {
-                  Navigator.pop(context);
-                  _loadTranches();
-                }
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red));
-              }
-            },
-            child: Text(isActif ? "Désactiver" : "Réactiver", style: const TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
-    bool isMobile = screenWidth < 800;
+    bool isWeb = screenWidth >= 900;
 
     return MainLayout(
-      title: isMobile ? 'Gestion Tranches' : '',
+      title: isWeb ? '' : 'Gestion Tranches',
       activePage: 'Tranches',
       residenceId: widget.residenceId,
       syndicId: widget.syndicId,
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(isMobile ? 15 : 30),
+        padding: EdgeInsets.all(isWeb ? 30 : 15),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildResponsiveHeader(isMobile),
+            _buildResponsiveHeader(isWeb),
             const SizedBox(height: 25),
-            _buildFilterBar(),
+            _buildSearchBar(),
             const SizedBox(height: 25),
             FutureBuilder<List<TrancheModel>>(
               future: _tranchesFuture,
-              builder: (context, snapshot) => _buildTopSummary(snapshot.data ?? [], isMobile),
+              builder: (context, snapshot) => _buildTopSummary(snapshot.data ?? [], isWeb),
             ),
             const SizedBox(height: 35),
             FutureBuilder<List<TrancheModel>>(
@@ -235,7 +301,7 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
                 final allTranches = snapshot.data ?? [];
-                final tranches = allTranches.where((t) => _selectedFilter == "Tous" ? true : t.statut == _selectedFilter).toList();
+                final tranches = allTranches.where((t) => t.nom.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
 
                 if (tranches.isEmpty) {
                   return const Center(child: Padding(
@@ -244,8 +310,7 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
                   ));
                 }
 
-                // CHANGEMENT : Utilisation d'une Column sur mobile pour éviter les overflows de grille
-                if (isMobile) {
+                if (!isWeb) {
                   return Column(
                     children: tranches.map((tranche) => Padding(
                       padding: const EdgeInsets.only(bottom: 20),
@@ -254,7 +319,7 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
                         service: _service,
                         onAssignTap: () => _showEditTrancheDialog(tranche),
                         onEditTap: () => _showEditTrancheDialog(tranche),
-                        onDeleteTap: () => _confirmToggleTrancheStatut(tranche),
+                        onDeleteTap: () => _confirmDeleteTranche(tranche),
                       ),
                     )).toList(),
                   );
@@ -268,7 +333,7 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 3,
                     crossAxisSpacing: 20, mainAxisSpacing: 20,
-                    mainAxisExtent: 480, // Hauteur augmentée pour éviter les coupures
+                    mainAxisExtent: 460, 
                   ),
                   itemBuilder: (context, index) {
                     final tranche = tranches[index];
@@ -277,7 +342,7 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
                       service: _service,
                       onAssignTap: () => _showEditTrancheDialog(tranche),
                       onEditTap: () => _showEditTrancheDialog(tranche),
-                      onDeleteTap: () => _confirmToggleTrancheStatut(tranche),
+                      onDeleteTap: () => _confirmDeleteTranche(tranche),
                     );
                   },
                 );
@@ -289,37 +354,56 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
     );
   }
 
-  Widget _buildFilterBar() {
-    return Row(
-      children: ["Tous", "Actif", "Inactif"].map((f) => Padding(
-        padding: const EdgeInsets.only(right: 10),
-        child: ChoiceChip(
-          label: Text(f),
-          selected: _selectedFilter == f,
-          onSelected: (val) => setState(() => _selectedFilter = f),
-          selectedColor: primaryOrange,
-          labelStyle: TextStyle(color: _selectedFilter == f ? Colors.white : Colors.black),
+  Widget _buildSearchBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]
+      ),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (val) => setState(() => _searchQuery = val),
+        decoration: InputDecoration(
+          hintText: "Rechercher une tranche...",
+          border: InputBorder.none,
+          icon: Icon(Icons.search, color: primaryOrange),
+          suffixIcon: _searchQuery.isNotEmpty 
+            ? IconButton(icon: const Icon(Icons.clear), onPressed: () {
+                _searchController.clear();
+                setState(() => _searchQuery = "");
+              }) 
+            : null
         ),
-      )).toList(),
+      ),
     );
   }
 
-  Widget _buildResponsiveHeader(bool isMobile) {
+  Widget _buildResponsiveHeader(bool isWeb) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text("Gestion des Tranches", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+        if (isWeb)
+          const Text("Gestion des Tranches", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))
+        else
+          const SizedBox.shrink(),
+          
         ElevatedButton.icon(
           onPressed: _showAddTrancheDialog,
           icon: const Icon(Icons.add, color: Colors.white),
           label: const Text("Ajouter", style: TextStyle(color: Colors.white)),
-          style: ElevatedButton.styleFrom(backgroundColor: primaryOrange, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primaryOrange, 
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildTopSummary(List<TrancheModel> list, bool isMobile) {
+  Widget _buildTopSummary(List<TrancheModel> list, bool isWeb) {
     int tImm = list.fold(0, (s, t) => s + t.nombreImmeubles);
     int tApp = list.fold(0, (s, t) => s + t.nombreAppartements);
     return Row(children: [_kpiS("Tranches", list.length.toString(), Colors.blue), const SizedBox(width: 15), _kpiS("Immeubles", tImm.toString(), Colors.green), const SizedBox(width: 15), _kpiS("Apparts", tApp.toString(), Colors.orange)]);
