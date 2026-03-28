@@ -148,7 +148,7 @@ class TrancheService {
       // 2. Récupérer les effectifs pour les divisions
       final allResTranches = await _db.from('tranches').select('id').eq('residence_id', resId);
       final int totalTranches = (allResTranches as List).isEmpty ? 1 : allResTranches.length;
-      
+
       int tranchesSameIS = 1;
       if (isId != null) {
         final sameISTranches = await _db.from('tranches').select('id').eq('inter_syndic_id', isId).eq('residence_id', resId);
@@ -170,10 +170,10 @@ class TrancheService {
 
       // 4. Calcul des Dépenses (avec quote-part)
       final allExpenses = await _db.from('depenses').select('montant, tranche_id, inter_syndic_id, syndic_general_id').eq('residence_id', resId).eq('annee', anneeEnCours);
-      
+
       for (var ex in allExpenses as List) {
         double amount = (ex['montant'] as num).toDouble();
-        
+
         if (ex['tranche_id'] == trancheId) {
           // Dépense 100% spécifique à cette tranche
           depenses += amount;
@@ -303,7 +303,6 @@ class TrancheService {
     }).toList();
   }
 
-  // 1. Création de la tranche avec initialisation de l'historique
   Future<void> createTrancheComplet(
       int residenceId,
       String nom,
@@ -311,29 +310,27 @@ class TrancheService {
       int? interSyndicId,
       double? prixAnnuel) async {
 
-    // On récupère l'ID et la date de création générée par la DB
+    // 1. Créer la tranche
     final newTranche = await _db.from('tranches').insert({
       'residence_id':    residenceId,
       'nom':             nom,
       'description':     description,
       'inter_syndic_id': interSyndicId,
       'prix_annuel':     (prixAnnuel != null && prixAnnuel > 0) ? prixAnnuel : null,
-    }).select('id, created_at').single();
+    }).select('id').single();
 
     final int trancheId = newTranche['id'];
-    final DateTime createdAt = DateTime.parse(newTranche['created_at']);
 
-    // Si un responsable est assigné, on ouvre son premier cycle de facturation (1 an)
+    // 2. Si un inter-syndic est assigné, créer l'entrée dans l'historique (1 an par défaut)
     if (interSyndicId != null) {
-      final String debut = createdAt.toIso8601String().split('T')[0];
-      // Fin de l'année de facturation (exactement 1 an moins 1 jour après création)
-      final DateTime dateFin = DateTime(createdAt.year + 1, createdAt.month, createdAt.day).subtract(const Duration(days: 1));
+      final now = DateTime.now();
+      final oneYearLater = DateTime(now.year + 1, now.month, now.day - 1);
 
       await _db.from('historique_affectations').insert({
         'tranche_id': trancheId,
         'inter_syndic_id': interSyndicId,
-        'date_debut': debut,
-        'date_fin': dateFin.toIso8601String().split('T')[0],
+        'date_debut': now.toIso8601String().split('T')[0],
+        'date_fin': oneYearLater.toIso8601String().split('T')[0],
       });
     }
   }
@@ -347,50 +344,39 @@ class TrancheService {
     return List<Map<String, dynamic>>.from(response);
   }
 
-  // 2. Affectation / Changement de Syndic avec respect du cycle de facturation
   Future<void> assignInterSyndic(int trancheId, int? interSyndicId) async {
-    // Récupérer les infos actuelles de la tranche
-    final tranche = await _db.from('tranches')
-        .select('inter_syndic_id, created_at')
-        .eq('id', trancheId)
-        .single();
-    
-    final int? oldSyndicId = tranche['inter_syndic_id'];
-    final DateTime createdAt = DateTime.parse(tranche['created_at']);
+    // 1. Récupérer l'ancien syndic pour clore son mandat
+    final currentTranche = await _db.from('tranches').select('inter_syndic_id').eq('id', trancheId).single();
+    final int? oldSyndicId = currentTranche['inter_syndic_id'];
 
-    if (oldSyndicId == interSyndicId) return;
-
-    final now = DateTime.now();
-    final String todayStr = now.toIso8601String().split('T')[0];
-
-    // 1. Fermer TOUS les mandats actifs/futurs pour cette tranche (Nettoyage de sécurité)
-    await _db.from('historique_affectations')
-        .update({'date_fin': todayStr})
-        .eq('tranche_id', trancheId)
-        .gte('date_fin', todayStr);
+    if (oldSyndicId == interSyndicId) return; // Pas de changement
 
     // 2. Mettre à jour la table tranches
     await _db.from('tranches').update({
       'inter_syndic_id': interSyndicId,
     }).eq('id', trancheId);
 
-    // 3. Ouvrir le nouveau mandat
-    if (interSyndicId != null) {
-      // Calculer la fin du cycle de facturation annuel en cours (basé sur createdAt)
-      DateTime nextAnniversary = DateTime(now.year, createdAt.month, createdAt.day);
-      
-      // Si l'anniversaire est déjà passé cette année (ou c'est aujourd'hui), le cycle finit l'an prochain
-      if (nextAnniversary.isBefore(now) || (nextAnniversary.year == now.year && nextAnniversary.month == now.month && nextAnniversary.day <= now.day)) {
-         nextAnniversary = DateTime(now.year + 1, createdAt.month, createdAt.day);
-      }
-      
-      final DateTime dateFin = nextAnniversary.subtract(const Duration(days: 1));
+    // 3. Gérer l'historique
+    final now = DateTime.now();
+    final String today = now.toIso8601String().split('T')[0];
 
+    // Clôturer l'ancien mandat (On cible celui dont la date de fin est dans le futur)
+    if (oldSyndicId != null) {
+      await _db.from('historique_affectations')
+          .update({'date_fin': today})
+          .eq('tranche_id', trancheId)
+          .eq('inter_syndic_id', oldSyndicId)
+          .gt('date_fin', today);
+    }
+
+    // Ouvrir le nouveau mandat (1 an par défaut)
+    if (interSyndicId != null) {
+      final oneYearLater = DateTime(now.year + 1, now.month, now.day - 1);
       await _db.from('historique_affectations').insert({
         'tranche_id': trancheId,
         'inter_syndic_id': interSyndicId,
-        'date_debut': todayStr,
-        'date_fin': dateFin.toIso8601String().split('T')[0],
+        'date_debut': today,
+        'date_fin': oneYearLater.toIso8601String().split('T')[0],
       });
     }
   }
@@ -449,16 +435,16 @@ class TrancheService {
 
       // 2. Gardien Financier : Dépenses, Paiements (via appartements)
       final List depRes = await _db.from('depenses').select('id').eq('tranche_id', trancheId);
-      
+
       // Paiements via appartements des immeubles de la tranche
       int paiementsCount = 0;
       if (immRes.isNotEmpty) {
         final List<int> immIds = immRes.map((i) => i['id'] as int).toList();
         final List apparts = await _db.from('appartements').select('id').inFilter('immeuble_id', immIds);
         if (apparts.isNotEmpty) {
-           final List<int> appIds = apparts.map((a) => a['id'] as int).toList();
-           final List payRes = await _db.from('paiements').select('id').inFilter('appartement_id', appIds);
-           paiementsCount = payRes.length;
+          final List<int> appIds = apparts.map((a) => a['id'] as int).toList();
+          final List payRes = await _db.from('paiements').select('id').inFilter('appartement_id', appIds);
+          paiementsCount = payRes.length;
         }
       }
 
