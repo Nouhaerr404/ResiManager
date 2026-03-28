@@ -15,17 +15,12 @@ class ResidentService {
   // SECTION ADMIN
   // ═══════════════════════════════════════════════════════════════════
 
-  Future<List<ResidentModel>> getResidentsByTranche(dynamic trancheId, {String? dateDebut, String? dateFin}) async {
+  Future<List<ResidentModel>> getResidentsByTranche(
+      dynamic trancheId, {
+        int? mandatId,
+      }) async {
     try {
-      // Recuperer le prix annuel de la tranche
-      final trancheRes = await _db
-          .from('tranches')
-          .select('prix_annuel')
-          .eq('id', trancheId)
-          .maybeSingle();
-      final rawPrix = trancheRes?['prix_annuel'] ?? 0;
-      final double tranchePrixAnnuel = double.tryParse(rawPrix.toString()) ?? 0.0;
-
+      // 1. Immeubles de la tranche
       final immeublesRes = await _db
           .from('immeubles')
           .select('id, nom, tranche_id')
@@ -34,6 +29,8 @@ class ResidentService {
       if (immeubles.isEmpty) return [];
 
       final immeubleIds = immeubles.map((i) => i['id']).toList();
+
+      // 2. Appartements
       final appartementsRes = await _db
           .from('appartements')
           .select(
@@ -43,38 +40,40 @@ class ResidentService {
       if (appartements.isEmpty) return [];
 
       final appartementIds = appartements.map((a) => a['id']).toList();
+
+      // 3. Residents
       final residentsRes = await _db
           .from('residents')
           .select('id, user_id, appartement_id, type, statut')
-          .or('appartement_id.in.(${appartementIds.join(",")}),appartement_id.is.null');
+          .or(
+          'appartement_id.in.(${appartementIds.join(",")}),appartement_id.is.null');
       final List residents = residentsRes as List? ?? [];
       if (residents.isEmpty) return [];
 
       final userIds = residents.map((r) => r['user_id'] as int).toList();
+
+      // 4. Users
       final usersRes = await _db
           .from('users')
           .select('id, nom, prenom, email, telephone')
           .inFilter('id', userIds);
       final users = usersRes as List;
 
-      // ── Paiements filtres par mandat
+      // 5. Paiements filtres par mandat_id
       var paiementsQuery = _db
           .from('paiements')
           .select(
-          'id, appartement_id, resident_id, montant_total, montant_paye, statut, date_paiement, type_paiement, annee, created_at')
+          'id, appartement_id, resident_id, montant_total, montant_paye, statut, date_paiement, type_paiement, annee, created_at, mandat_id')
           .inFilter('appartement_id', appartementIds);
 
-      if (dateDebut != null) {
-        paiementsQuery = paiementsQuery.gte('created_at', dateDebut);
+      if (mandatId != null) {
+        paiementsQuery = paiementsQuery.eq('mandat_id', mandatId);
       }
-      if (dateFin != null) {
-        // Ajouter la fin de journée pour inclure tout le dernier jour
-        paiementsQuery = paiementsQuery.lte('created_at', '${dateFin}T23:59:59');
-      }
+
       final paiementsRes = await paiementsQuery;
       final paiements = paiementsRes as List;
 
-      // ── Recuperer les numeros garage/parking/box
+      // 6. Numeros garage/parking/box par resident
       final residentUserIds = residents.map((r) => r['user_id']).toList();
       final Map<String, String> paiementNumero = {};
 
@@ -104,7 +103,8 @@ class ResidentService {
           final Map<String, String> benefToResident = {};
           for (final b in benefList) {
             if (b['id'] != null && b['resident_id'] != null) {
-              benefToResident[b['id'].toString()] = b['resident_id'].toString();
+              benefToResident[b['id'].toString()] =
+                  b['resident_id'].toString();
             }
           }
 
@@ -112,35 +112,38 @@ class ResidentService {
           for (final g in gRes as List? ?? []) {
             final resId = benefToResident[g['beneficiaire_id']?.toString()];
             if (resId != null && g['numero'] != null) {
-              residentResources.putIfAbsent(resId, () => [])
+              residentResources
+                  .putIfAbsent(resId, () => [])
                   .add({'type': 'garage', 'numero': g['numero'].toString()});
             }
           }
           for (final pk in pkRes as List? ?? []) {
             final resId = benefToResident[pk['beneficiaire_id']?.toString()];
             if (resId != null && pk['numero'] != null) {
-              residentResources.putIfAbsent(resId, () => [])
+              residentResources
+                  .putIfAbsent(resId, () => [])
                   .add({'type': 'parking', 'numero': pk['numero'].toString()});
             }
           }
           for (final bx in bxRes as List? ?? []) {
             final resId = benefToResident[bx['beneficiaire_id']?.toString()];
             if (resId != null && bx['numero'] != null) {
-              residentResources.putIfAbsent(resId, () => [])
+              residentResources
+                  .putIfAbsent(resId, () => [])
                   .add({'type': 'box', 'numero': bx['numero'].toString()});
             }
           }
 
           final Map<String, Map<String, int>> typeCounters = {};
-
           for (final p in paiements) {
-            final pType    = p['type_paiement']?.toString() ?? '';
-            final pResId   = p['resident_id']?.toString();
-            final pId      = p['id']?.toString();
+            final pType = p['type_paiement']?.toString() ?? '';
+            final pResId = p['resident_id']?.toString();
+            final pId = p['id']?.toString();
             if (pType == 'charges' || pResId == null || pId == null) continue;
 
             final resources = residentResources[pResId] ?? [];
-            final typed = resources.where((r) => r['type'] == pType).toList();
+            final typed =
+            resources.where((r) => r['type'] == pType).toList();
             if (typed.isEmpty) continue;
 
             typeCounters.putIfAbsent(pResId, () => {});
@@ -155,7 +158,9 @@ class ResidentService {
         debugPrint('>>> ERREUR fetch numeros ressources: $e');
       }
 
+      // 7. Construction des ResidentModel
       final List<ResidentModel> result = [];
+
       for (final r in residents) {
         final user = users.firstWhere(
               (u) => u['id'] == r['user_id'],
@@ -169,7 +174,8 @@ class ResidentService {
             orElse: () => <String, dynamic>{})
             : <String, dynamic>{};
 
-        final immeuble = (appart.isNotEmpty && appart['immeuble_id'] != null)
+        final immeuble =
+        (appart.isNotEmpty && appart['immeuble_id'] != null)
             ? immeubles.firstWhere(
                 (i) => i['id'] == appart['immeuble_id'],
             orElse: () => <String, dynamic>{})
@@ -190,9 +196,7 @@ class ResidentService {
             .where((p) => p['appartement_id'] == r['appartement_id'])
             .toList();
 
-        // ── FILTRE CLÉ : n'afficher que les résidents ayant un paiement
-        // dans le mandat sélectionné. Les résidents sans ligne de paiement
-        // pour ce mandat sont exclus de la liste.
+        // Residents sans paiement dans ce mandat → exclus
         if (residentPaiements.isEmpty) continue;
 
         double totalM = 0;
@@ -210,9 +214,9 @@ class ResidentService {
             mainPaiementId = p['id'] as int;
           }
         }
-        if (residentPaiements.isNotEmpty) {
-          mainPaiementId ??= residentPaiements.first['id'] as int;
-        }
+        mainPaiementId ??= residentPaiements.isNotEmpty
+            ? residentPaiements.first['id'] as int
+            : null;
 
         String globalStatut = 'complet';
         if (hasImpaye) {
@@ -238,10 +242,9 @@ class ResidentService {
           montantPaye: payeM,
           statutPaiement: globalStatut,
           anneePaiement: DateTime.now().year,
-          paiements: residentPaiements
-              .map((p) {
+          paiements: residentPaiements.map((p) {
             final type = p['type_paiement']?.toString() ?? 'charges';
-            final pId  = p['id']?.toString() ?? '';
+            final pId = p['id']?.toString() ?? '';
             final refNumero = paiementNumero[pId];
             return PaiementModel(
               id: p['id'] as int,
@@ -265,10 +268,10 @@ class ResidentService {
               annee: (p['annee'] ?? DateTime.now().year) as int,
               reference: refNumero,
             );
-          })
-              .toList(),
+          }).toList(),
         ));
       }
+
       return result;
     } catch (e) {
       debugPrint('>>> ERREUR getResidentsByTranche: $e');
@@ -309,12 +312,9 @@ class ResidentService {
         if (user == null) continue;
 
         if (trancheId != null) {
-          final residentAppartId = r['appartement_id'];
           final residentTrancheId =
           r['appartements']?['immeubles']?['tranche_id'];
-          if (residentAppartId != null && residentTrancheId != trancheId) {
-            continue;
-          }
+          if (residentTrancheId != trancheId) continue;
         }
 
         result.add(ResidentModel(
@@ -370,31 +370,33 @@ class ResidentService {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // HISTORIQUE PAIEMENTS — joint avec paiements pour avoir annee + type_paiement
+  // HISTORIQUE PAIEMENTS — filtre par mandat_id
   // ─────────────────────────────────────────────────────────────────
+
   Future<List<Map<String, dynamic>>> getHistoriquePaiements(
-      dynamic residentUserId, {String? dateDebut, String? dateFin}) async {
+      dynamic residentUserId, {
+        int? mandatId,
+      }) async {
     try {
-      // Construire la requête de base — PAS encore de .order() ni .select() final
       var query = _db
           .from('historique_paiements')
           .select(
-          'id, montant, date, description, type, paiement_id, paiements(annee, type_paiement)')
+          'id, montant, date, description, type, paiement_id, paiements(annee, type_paiement, mandat_id)')
           .eq('resident_id', residentUserId);
 
-      // Filtres mandat — AVANT .order() pour rester sur PostgrestFilterBuilder
-      if (dateDebut != null) {
-        query = query.gte('date', dateDebut);
-      }
-      if (dateFin != null) {
-        query = query.lte('date', '${dateFin}T23:59:59');
-      }
-
-      // .order() en dernier
       final res = await query.order('date', ascending: false);
       final List list = res as List? ?? [];
 
-      return list.map((h) {
+      // Filtre cote Dart sur mandat_id via la relation jointe
+      final filtered = mandatId == null
+          ? list
+          : list.where((h) {
+        final pData = h['paiements'];
+        if (pData == null) return false;
+        return pData['mandat_id'] == mandatId;
+      }).toList();
+
+      return filtered.map((h) {
         final map = Map<String, dynamic>.from(h);
         final paiementData = h['paiements'];
         final int? anneeFromPaiement = paiementData?['annee'] as int?;
@@ -419,9 +421,11 @@ class ResidentService {
       return [];
     }
   }
+
   // ─────────────────────────────────────────────────────────────────
-  // ADD RESIDENT
+  // ADD RESIDENT — avec mandat_id obligatoire
   // ─────────────────────────────────────────────────────────────────
+
   Future<String?> addResident({
     required String nom,
     required String prenom,
@@ -432,31 +436,28 @@ class ResidentService {
     required dynamic trancheId,
     required dynamic appartementId,
     required double montantTotal,
+    required int mandatId,
     int? parkingId,
     int? boxId,
     int? garageId,
   }) async {
     try {
-      // ── 1. Créer le compte Supabase Auth avec le mot de passe fourni
-      // On ignore les erreurs (compte déjà existant, réseau, TLS, etc.)
+      // 1. Creer le compte Supabase Auth
       try {
         await _db.auth.signUp(email: email.trim(), password: password);
       } catch (_) {}
 
-      // ── 2. Envoyer un email de réinitialisation de mot de passe (fire & forget)
-      // Le résident reçoit un lien sécurisé pour définir son propre mot de passe
-      // Même mécanisme que "mot de passe oublié" dans Supabase Auth
+      // 2. Email de reinitialisation (fire & forget)
       try {
         await _db.auth.resetPasswordForEmail(
           email.trim(),
           redirectTo: 'io.supabase.resimanager://reset-callback/',
         );
-        debugPrint('>>> Email de réinitialisation envoyé à ${email.trim()}');
       } catch (e) {
-        // L'échec de l'email ne bloque pas la création du résident
-        debugPrint('>>> AVERTISSEMENT reset email non envoyé: $e');
+        debugPrint('>>> AVERTISSEMENT reset email non envoye: $e');
       }
 
+      // 3. Inserer dans users
       final userRes = await _db
           .from('users')
           .insert({
@@ -473,6 +474,7 @@ class ResidentService {
 
       final dynamic userId = userRes['id'];
 
+      // 4. Inserer dans residents
       await _db.from('residents').insert({
         'user_id': userId,
         'appartement_id': appartementId,
@@ -481,11 +483,13 @@ class ResidentService {
         'date_arrivee': DateTime.now().toIso8601String().substring(0, 10),
       });
 
+      // 5. Marquer l'appartement comme occupe
       await _db
           .from('appartements')
           .update({'statut': 'occupe', 'resident_id': userId})
           .eq('id', appartementId);
 
+      // 6. Recuperer les infos de la tranche
       final trData = await _db
           .from('tranches')
           .select('residence_id, inter_syndic_id, prix_annuel')
@@ -495,8 +499,10 @@ class ResidentService {
       final isId = trData?['inter_syndic_id'] ?? 1;
       final rawPrix = trData?['prix_annuel'] ?? 0;
       final double tranchePrix = double.tryParse(rawPrix.toString()) ?? 0.0;
-      final double montantEffectif = montantTotal > 0 ? montantTotal : tranchePrix;
+      final double montantEffectif =
+      montantTotal > 0 ? montantTotal : tranchePrix;
 
+      // 7. Creer la ligne de paiement charges liee au mandat
       await _db.from('paiements').insert({
         'resident_id': userId,
         'appartement_id': appartementId,
@@ -508,8 +514,10 @@ class ResidentService {
         'statut': 'impaye',
         'annee': DateTime.now().year,
         'mois': DateTime.now().month,
+        'mandat_id': mandatId,
       });
 
+      // 8. Assigner parking
       if (parkingId != null) {
         await ParkingService().assignerParking(
           parkingId: parkingId,
@@ -520,8 +528,17 @@ class ResidentService {
           trancheId: int.parse(trancheId.toString()),
           residentId: int.parse(userId.toString()),
         );
+        await createResourcePayment(
+          residentId: int.parse(userId.toString()),
+          trancheId: int.parse(trancheId.toString()),
+          residenceId: (trData?['residence_id'] as int?) ?? 1,
+          montant: 0,
+          type: 'parking',
+          mandatId: mandatId,
+        );
       }
 
+      // 9. Assigner box
       if (boxId != null) {
         await BoxService().assignerBox(
           boxId: boxId,
@@ -531,8 +548,17 @@ class ResidentService {
           trancheId: int.parse(trancheId.toString()),
           residentId: int.parse(userId.toString()),
         );
+        await createResourcePayment(
+          residentId: int.parse(userId.toString()),
+          trancheId: int.parse(trancheId.toString()),
+          residenceId: (trData?['residence_id'] as int?) ?? 1,
+          montant: 0,
+          type: 'box',
+          mandatId: mandatId,
+        );
       }
 
+      // 10. Assigner garage
       if (garageId != null) {
         await GarageService().assignerGarage(
           garageId: garageId,
@@ -543,6 +569,14 @@ class ResidentService {
           trancheId: int.parse(trancheId.toString()),
           residentId: int.parse(userId.toString()),
         );
+        await createResourcePayment(
+          residentId: int.parse(userId.toString()),
+          trancheId: int.parse(trancheId.toString()),
+          residenceId: (trData?['residence_id'] as int?) ?? 1,
+          montant: 0,
+          type: 'garage',
+          mandatId: mandatId,
+        );
       }
 
       return null;
@@ -551,6 +585,10 @@ class ResidentService {
       return e.toString();
     }
   }
+
+  // ─────────────────────────────────────────────────────────────────
+  // ENREGISTRER PAIEMENT (versement)
+  // ─────────────────────────────────────────────────────────────────
 
   Future<String?> enregistrerPaiement({
     required dynamic paiementId,
@@ -564,11 +602,13 @@ class ResidentService {
       final statut = nouveauMontant >= montantTotal
           ? 'complet'
           : (nouveauMontant > 0 ? 'partiel' : 'impaye');
+
       await _db.from('paiements').update({
         'montant_paye': nouveauMontant,
         'statut': statut,
         'date_paiement': DateTime.now().toIso8601String().substring(0, 10),
       }).eq('id', paiementId);
+
       await _db.from('historique_paiements').insert({
         'resident_id': residentUserId,
         'paiement_id': paiementId,
@@ -577,6 +617,7 @@ class ResidentService {
         'type': 'charges',
         'description': 'Paiement charges ${DateTime.now().year}',
       });
+
       return null;
     } catch (e) {
       return e.toString();
@@ -589,6 +630,7 @@ class ResidentService {
     required int residenceId,
     required double montant,
     required String type,
+    required int mandatId,
   }) async {
     try {
       final resData = await _db
@@ -617,11 +659,16 @@ class ResidentService {
         'statut': 'impaye',
         'annee': DateTime.now().year,
         'mois': DateTime.now().month,
+        'mandat_id': mandatId,
       });
     } catch (e) {
       debugPrint('>>> ERREUR createResourcePayment: $e');
     }
   }
+
+  // ─────────────────────────────────────────────────────────────────
+  // UPDATE RESIDENT
+  // ─────────────────────────────────────────────────────────────────
 
   Future<String?> updateResident({
     required int userId,
@@ -631,6 +678,7 @@ class ResidentService {
     required String type,
     double? montantTotal,
     int? annee,
+    int? mandatId,
   }) async {
     try {
       await _db.from('users').update({
@@ -646,13 +694,18 @@ class ResidentService {
       if (montantTotal != null && montantTotal > 0) {
         final targetAnnee = annee ?? DateTime.now().year;
 
-        final existingPaiement = await _db
+        var paiementQuery = _db
             .from('paiements')
             .select('id, montant_paye')
             .eq('resident_id', userId)
             .eq('type_paiement', 'charges')
-            .eq('annee', targetAnnee)
-            .maybeSingle();
+            .eq('annee', targetAnnee);
+
+        if (mandatId != null) {
+          paiementQuery = paiementQuery.eq('mandat_id', mandatId);
+        }
+
+        final existingPaiement = await paiementQuery.maybeSingle();
 
         if (existingPaiement != null) {
           final double paid =
@@ -675,7 +728,12 @@ class ResidentService {
     }
   }
 
-  Future<String?> deleteResident(dynamic userId, dynamic appartementId) async {
+  // ─────────────────────────────────────────────────────────────────
+  // DELETE RESIDENT
+  // ─────────────────────────────────────────────────────────────────
+
+  Future<String?> deleteResident(
+      dynamic userId, dynamic appartementId) async {
     try {
       if (appartementId != null) {
         await _db
@@ -703,7 +761,8 @@ class ResidentService {
   // SECTION RESIDENT
   // ═══════════════════════════════════════════════════════════════════
 
-  Future<Map<String, dynamic>> getChargesData(dynamic userId, int annee) async {
+  Future<Map<String, dynamic>> getChargesData(
+      dynamic userId, int annee) async {
     try {
       final resRow = await _db
           .from('residents')
@@ -812,6 +871,10 @@ class ResidentService {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────
+  // DEPENSES DETAILLEES PAR TRANCHE (espace resident)
+  // ─────────────────────────────────────────────────────────────────
+
   Future<Map<String, dynamic>> getTrancheExpensesDetailed(
       dynamic userId, int annee) async {
     try {
@@ -867,7 +930,8 @@ class ResidentService {
       double payeesResident = 0;
 
       for (final d in allDeps) {
-        final double montantSaisi = (d['montant'] as num?)?.toDouble() ?? 0.0;
+        final double montantSaisi =
+            (d['montant'] as num?)?.toDouble() ?? 0.0;
         final String typeCat =
             d['categories']?['type']?.toString().toLowerCase() ??
                 'individuelle';
@@ -893,12 +957,13 @@ class ResidentService {
         'attente': totalResident - payeesResident,
       };
     } catch (e) {
-      debugPrint('=== ERREUR getTrancheExpensesDetailed: $e ===');
+      debugPrint('>>> ERREUR getTrancheExpensesDetailed: $e');
       return {'depenses': [], 'total': 0.0};
     }
   }
 
-  Future<Map<String, dynamic>> getResidentDashboardData(dynamic userId) async {
+  Future<Map<String, dynamic>> getResidentDashboardData(
+      dynamic userId) async {
     try {
       final userRow = await _db
           .from('users')
@@ -1001,11 +1066,19 @@ class ResidentService {
     try {
       final resRow = await _db
           .from('residents')
-          .select('id, appartements(id, numero, immeubles(id, nom, tranches(id, nom)))')
+          .select(
+          'id, appartements(id, numero, immeubles(id, nom, tranches(id, nom)))')
           .eq('user_id', userId)
           .maybeSingle();
       if (resRow == null) {
-        return {'num_appart': '-', 'total_annee': 0.0, 'paye_annee': 0.0, 'reste_annee': 0.0, 'statut': 'impaye', 'lignes': []};
+        return {
+          'num_appart': '-',
+          'total_annee': 0.0,
+          'paye_annee': 0.0,
+          'reste_annee': 0.0,
+          'statut': 'impaye',
+          'lignes': []
+        };
       }
 
       final dynamic appartId = resRow['appartements']?['id'];
@@ -1023,26 +1096,29 @@ class ResidentService {
         final double mt = (p['montant_total'] as num).toDouble();
         final double mp = (p['montant_paye'] as num).toDouble();
         total += mt;
-        paye  += mp;
+        paye += mp;
 
         lignes.add({
-          'type':          p['type_paiement']?.toString() ?? 'charges',
-          'reference':     null,
+          'type': p['type_paiement']?.toString() ?? 'charges',
+          'reference': null,
           'montant_total': mt,
-          'montant_paye':  mp,
-          'reste':         mt - mp,
-          'statut':        p['statut']?.toString() ?? 'impaye',
+          'montant_paye': mp,
+          'reste': mt - mp,
+          'statut': p['statut']?.toString() ?? 'impaye',
         });
       }
 
       return {
-        'num_appart':   resRow['appartements']['numero'],
+        'num_appart': resRow['appartements']['numero'],
         'immeuble_nom': resRow['appartements']['immeubles']['nom'],
-        'tranche_nom':  resRow['appartements']['immeubles']['tranches']['nom'],
-        'total_annee':  total,
-        'paye_annee':   paye,
-        'reste_annee':  total - paye,
-        'statut': paye >= total ? 'complet' : (paye > 0 ? 'partiel' : 'impaye'),
+        'tranche_nom':
+        resRow['appartements']['immeubles']['tranches']['nom'],
+        'total_annee': total,
+        'paye_annee': paye,
+        'reste_annee': total - paye,
+        'statut': paye >= total
+            ? 'complet'
+            : (paye > 0 ? 'partiel' : 'impaye'),
         'lignes': lignes,
       };
     } catch (e) {
