@@ -8,6 +8,7 @@ import '../../../services/garage_service.dart';
 import '../../../models/parking_model.dart';
 import '../../../models/box_model.dart';
 import '../../../models/garage_model.dart';
+import '../../../utils/temp_session.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ignore_for_file: avoid_multiple_underscores_for_members
@@ -48,15 +49,31 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   List<ResidentModel> _filtered = [];
   bool _loading = true;
   String _filterStatut = 'tous';
-  int _selectedAnnee = DateTime.now().year;
-  List<int> _anneesDisponibles = [];
-  bool _loadingAnnees = true;
+  Map<String, dynamic>? _selectedMandat;
+  List<Map<String, dynamic>> _mandatsDisponibles = [];
+  bool _loadingMandats = true;
   final _searchCtrl = TextEditingController();
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
 
   double? _prixAnnuel;
   bool _loadingPrix = true;
+
+  int get _fallbackAnnee {
+    if (_selectedMandat == null || _selectedMandat!['date_debut'] == null) {
+      return DateTime.now().year;
+    }
+    final d = _selectedMandat!['date_debut'].toString();
+    if (d.length >= 4) {
+      return int.tryParse(d.substring(0, 4)) ?? DateTime.now().year;
+    }
+    return DateTime.now().year;
+  }
+
+  // ── Appartements libres (sans résident) pour paiement des charges
+  List<Map<String, dynamic>> _appartementsLibres = [];
+  List<Map<String, dynamic>> _appartementsLibresPaies = []; // déjà payés cette année
+  bool _loadingAppartementsLibres = true;
 
   @override
   void initState() {
@@ -65,7 +82,8 @@ class _ResidentsScreenState extends State<ResidentsScreen>
         vsync: this, duration: const Duration(milliseconds: 450));
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _loadPrixAnnuel();
-    _loadAnnees();
+    _loadMandats();
+    _loadAppartementsLibres();
     _searchCtrl.addListener(_applyFilter);
   }
 
@@ -76,64 +94,33 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     super.dispose();
   }
 
-  Future<void> _loadAnnees() async {
+  Future<void> _loadMandats() async {
     try {
       final db = Supabase.instance.client;
+      final mandatsRes = await db
+          .from('historique_affectations')
+          .select('id, date_debut, date_fin')
+          .eq('tranche_id', widget.trancheId)
+          .eq('inter_syndic_id', TempSession.interSyndicId ?? 0)
+          .order('date_debut', ascending: false);
 
-      final immRes = await db
-          .from('immeubles')
-          .select('id')
-          .eq('tranche_id', widget.trancheId);
-      final immIds = (immRes as List).map((i) => i['id']).toList();
-      if (immIds.isEmpty) {
-        setState(() {
-          _anneesDisponibles = [DateTime.now().year];
-          _loadingAnnees     = false;
-        });
-        _load();
-        return;
-      }
-
-      final appRes = await db
-          .from('appartements')
-          .select('id')
-          .inFilter('immeuble_id', immIds);
-      final appIds = (appRes as List).map((a) => a['id']).toList();
-      if (appIds.isEmpty) {
-        setState(() {
-          _anneesDisponibles = [DateTime.now().year];
-          _loadingAnnees     = false;
-        });
-        _load();
-        return;
-      }
-
-      final paiRes = await db
-          .from('paiements')
-          .select('annee')
-          .inFilter('appartement_id', appIds)
-          .not('annee', 'is', null);
-
-      final List paiList = paiRes as List? ?? [];
-      final Set<int> anneesSet = paiList
-          .map((p) => p['annee'])
-          .whereType<int>()
-          .toSet();
-
-      anneesSet.add(DateTime.now().year);
-      final anneesSorted = anneesSet.toList()..sort((a, b) => b.compareTo(a));
-      final defaultAnnee = anneesSorted.first;
-
+      final List mandatsList = mandatsRes as List? ?? [];
+      
       setState(() {
-        _anneesDisponibles = anneesSorted;
-        _selectedAnnee     = defaultAnnee;
-        _loadingAnnees     = false;
+        _mandatsDisponibles = mandatsList.cast<Map<String, dynamic>>();
+        if (_mandatsDisponibles.isNotEmpty) {
+          _selectedMandat = _mandatsDisponibles.first;
+        } else {
+          _selectedMandat = null;
+        }
+        _loadingMandats = false;
       });
     } catch (e) {
-      debugPrint('>>> ERREUR _loadAnnees: $e');
+      debugPrint('>>> ERREUR _loadMandats: $e');
       setState(() {
-        _anneesDisponibles = [DateTime.now().year];
-        _loadingAnnees     = false;
+        _mandatsDisponibles = [];
+        _selectedMandat = null;
+        _loadingMandats = false;
       });
     }
     _load();
@@ -164,11 +151,112 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     }
   }
 
+  // ── Charger les appartements libres + leur statut de paiement pour l'année
+  Future<void> _loadAppartementsLibres() async {
+    try {
+      final db = Supabase.instance.client;
+
+      // 1. Récupérer les immeubles de la tranche
+      final immRes = await db
+          .from('immeubles')
+          .select('id, nom')
+          .eq('tranche_id', widget.trancheId);
+      final immIds = (immRes as List).map((i) => i['id']).toList();
+      if (immIds.isEmpty) {
+        if (mounted) setState(() => _loadingAppartementsLibres = false);
+        return;
+      }
+
+      // 2. Récupérer tous les appartements libres avec leur immeuble
+      final appRes = await db
+          .from('appartements')
+          .select('id, numero, immeuble_id, immeubles(nom)')
+          .inFilter('immeuble_id', immIds)
+          .eq('statut', 'libre');
+      final List list = appRes as List? ?? [];
+      if (list.isEmpty) {
+        if (mounted) setState(() {
+          _appartementsLibres      = [];
+          _appartementsLibresPaies = [];
+          _loadingAppartementsLibres = false;
+        });
+        return;
+      }
+
+      final allIds = list.map((a) => a['id']).toList();
+
+      // 3. Récupérer les paiements charges du mandat pour ces appartements
+      var paiResQuery = db
+          .from('paiements')
+          .select('appartement_id, montant_total, montant_paye, statut, date_paiement')
+          .inFilter('appartement_id', allIds)
+          .eq('type_paiement', 'charges');
+          
+      if (_selectedMandat != null) {
+        if (_selectedMandat!['date_debut'] != null) {
+          paiResQuery = paiResQuery.gte('created_at', _selectedMandat!['date_debut']);
+        }
+        if (_selectedMandat!['date_fin'] != null) {
+          paiResQuery = paiResQuery.lte('created_at', '${_selectedMandat!['date_fin']}T23:59:59');
+        }
+      }
+      final paiRes = await paiResQuery;
+      final List paiList = paiRes as List? ?? [];
+
+      // Map appartementId -> paiement
+      final Map<dynamic, Map<String, dynamic>> paiByAppart = {};
+      for (final p in paiList) {
+        paiByAppart[p['appartement_id']] = Map<String, dynamic>.from(p);
+      }
+
+      final List<Map<String, dynamic>> nonPaies = [];
+      final List<Map<String, dynamic>> paies    = [];
+
+      for (final a in list) {
+        final entry = {
+          'id':       a['id'],
+          'numero':   a['numero']?.toString() ?? '',
+          'immeuble': a['immeubles']?['nom']?.toString() ?? '',
+          'label':    '${a['immeubles']?['nom'] ?? ''} - Appt. ${a['numero']}',
+        };
+        final paiement = paiByAppart[a['id']];
+        if (paiement != null) {
+          // Appartement avec un paiement — enrichir avec les infos du paiement
+          final double mt = double.tryParse(paiement['montant_total'].toString()) ?? 0;
+          final double mp = double.tryParse(paiement['montant_paye'].toString()) ?? 0;
+          paies.add({
+            ...entry,
+            'montant_total':  mt,
+            'montant_paye':   mp,
+            'reste':          mt - mp,
+            'statut':         paiement['statut']?.toString() ?? 'impaye',
+            'date_paiement':  paiement['date_paiement']?.toString() ?? '',
+          });
+        } else {
+          nonPaies.add(entry);
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _appartementsLibres      = nonPaies;
+          _appartementsLibresPaies = paies;
+          _loadingAppartementsLibres = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('>>> ERREUR _loadAppartementsLibres: $e');
+      if (mounted) setState(() => _loadingAppartementsLibres = false);
+    }
+  }
+
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
+      final dateDebut = _selectedMandat?['date_debut'];
+      final dateFin = _selectedMandat?['date_fin'];
       final data = await _service
-          .getResidentsByTranche(widget.trancheId, annee: _selectedAnnee)
+          .getResidentsByTranche(widget.trancheId, dateDebut: dateDebut, dateFin: dateFin)
           .timeout(const Duration(seconds: 15));
       setState(() {
         _residents = data;
@@ -442,9 +530,11 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                       const SizedBox(height: 16),
                       _buildPrixAnnuelBanner(),
                       const SizedBox(height: 12),
-                      _buildAnneeSelectorBanner(),
+                      _buildMandatSelectorBanner(),
                       const SizedBox(height: 16),
                       _buildStatsBanner(),
+                      const SizedBox(height: 12),
+                      _buildAppartementsLibresBanner(),
                       const SizedBox(height: 20),
                       _buildSearchBar(),
                       const SizedBox(height: 12),
@@ -618,7 +708,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     );
   }
 
-  Widget _buildAnneeSelectorBanner() {
+  Widget _buildMandatSelectorBanner() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -631,22 +721,24 @@ class _ResidentsScreenState extends State<ResidentsScreen>
           Container(
             width: 36, height: 36,
             decoration: BoxDecoration(color: _C.blueLight, borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.calendar_month_rounded, color: _C.blue, size: 18),
+            child: const Icon(Icons.date_range_rounded, color: _C.blue, size: 18),
           ),
           const SizedBox(width: 12),
-          const Text('Paiements de l\'annee :', style: TextStyle(color: _C.textMid, fontSize: 13, fontWeight: FontWeight.w500)),
+          const Text('Paiements du mandat :', style: TextStyle(color: _C.textMid, fontSize: 13, fontWeight: FontWeight.w500)),
           const Spacer(),
-          _loadingAnnees
+          _loadingMandats
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: _C.blue, strokeWidth: 2))
-              : GestureDetector(
-            onTap: () => _showAnneePickerMenu(),
+              : _mandatsDisponibles.isEmpty
+                  ? const Text('Aucun mandat', style: TextStyle(color: _C.textLight, fontSize: 13))
+                  : GestureDetector(
+            onTap: () => _showMandatPickerMenu(),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(color: _C.blue, borderRadius: BorderRadius.circular(22)),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('$_selectedAnnee', style: const TextStyle(color: _C.white, fontWeight: FontWeight.w800, fontSize: 14)),
+                  Text(_getMandatLabel(_selectedMandat), style: const TextStyle(color: _C.white, fontWeight: FontWeight.w800, fontSize: 13)),
                   const SizedBox(width: 6),
                   const Icon(Icons.keyboard_arrow_down_rounded, color: _C.white, size: 18),
                 ],
@@ -658,40 +750,49 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     );
   }
 
-  void _showAnneePickerMenu() {
+  String _getMandatLabel(Map<String, dynamic>? mandat) {
+    if (mandat == null) return "N/A";
+    final d = mandat['date_debut']?.toString().split('-').reversed.join('/') ?? '';
+    final f = mandat['date_fin']?.toString().split('-').reversed.join('/') ?? '';
+    if (f.isEmpty) return "Depuis $d";
+    return "$d - $f";
+  }
+
+  void _showMandatPickerMenu() {
     final RenderBox button = context.findRenderObject() as RenderBox;
     final RenderBox overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
 
-    showMenu<int>(
+    showMenu<Map<String, dynamic>>(
       context: context,
       color: const Color(0xFF2C2C2A),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       elevation: 12,
       position: RelativeRect.fromRect(
         Rect.fromLTWH(
-          button.localToGlobal(Offset.zero, ancestor: overlay).dx + button.size.width - 140,
+          button.localToGlobal(Offset.zero, ancestor: overlay).dx + button.size.width - 200,
           button.localToGlobal(Offset.zero, ancestor: overlay).dy + 180,
-          140, 0,
+          200, 0,
         ),
         Offset.zero & overlay.size,
       ),
-      items: _anneesDisponibles.map((annee) => PopupMenuItem<int>(
-        value: annee,
+      items: _mandatsDisponibles.map((mandat) => PopupMenuItem<Map<String, dynamic>>(
+        value: mandat,
         height: 52,
         child: Container(
           width: double.infinity,
-          alignment: Alignment.center,
-          child: Text('$annee', style: TextStyle(
-            color: annee == _selectedAnnee ? _C.blue : Colors.white,
-            fontWeight: annee == _selectedAnnee ? FontWeight.w800 : FontWeight.w500,
-            fontSize: 15,
+          alignment: Alignment.centerLeft,
+          child: Text(_getMandatLabel(mandat), style: TextStyle(
+            color: (mandat['id'] == _selectedMandat?['id']) ? _C.blue : Colors.white,
+            fontWeight: (mandat['id'] == _selectedMandat?['id']) ? FontWeight.w800 : FontWeight.w500,
+            fontSize: 14,
           )),
         ),
       )).toList(),
-    ).then((annee) {
-      if (annee != null && annee != _selectedAnnee) {
-        setState(() => _selectedAnnee = annee);
+    ).then((mandat) {
+      if (mandat != null && mandat['id'] != _selectedMandat?['id']) {
+        setState(() => _selectedMandat = mandat);
         _load();
+        _loadAppartementsLibres();
       }
     });
   }
@@ -704,6 +805,636 @@ class _ResidentsScreenState extends State<ResidentsScreen>
         SizedBox(height: 4),
         Text('Gestion des residents de la tranche', style: TextStyle(color: _C.textMid, fontSize: 13, fontWeight: FontWeight.w400)),
       ],
+    );
+  }
+
+  // ── Banner appartements libres — paiement charges sans résident
+  Widget _buildAppartementsLibresBanner() {
+    if (_loadingAppartementsLibres) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: _C.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _C.divider),
+        ),
+        child: const Row(children: [
+          SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: _C.green, strokeWidth: 2)),
+          SizedBox(width: 12),
+          Text('Chargement des appartements...', style: TextStyle(color: _C.textLight, fontSize: 13)),
+        ]),
+      );
+    }
+
+    final countLibres = _appartementsLibres.length;
+    final countPaies  = _appartementsLibresPaies.length;
+    final total       = countLibres + countPaies;
+    if (total == 0) return const SizedBox.shrink();
+
+    return GestureDetector(
+      onTap: _showAppartementsLibresPaiementDialog,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _C.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _C.green.withValues(alpha: 0.3)),
+          boxShadow: [
+            BoxShadow(color: _C.green.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                // ── Icône
+                Container(
+                  width: 46, height: 46,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF34C98B), Color(0xFF20A06A)],
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.home_work_rounded, color: _C.white, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        const Text('Appartements libres', style: TextStyle(color: _C.dark, fontWeight: FontWeight.w800, fontSize: 13)),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(20)),
+                          child: Text('$total', style: const TextStyle(color: _C.textMid, fontWeight: FontWeight.w800, fontSize: 11)),
+                        ),
+                      ]),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_prixAnnuel?.toInt() ?? 0} DH / an · Charges uniquement',
+                        style: const TextStyle(color: _C.textMid, fontSize: 11, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
+                // ── Bouton
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: countLibres > 0 ? _C.green : _C.iconBg,
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.payments_rounded, size: 14,
+                          color: countLibres > 0 ? _C.white : _C.textLight),
+                      const SizedBox(width: 6),
+                      Text('Payer',
+                          style: TextStyle(
+                              color: countLibres > 0 ? _C.white : _C.textLight,
+                              fontSize: 12, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // ── Chips statut
+            Row(children: [
+              _apptLibreChip(
+                icon: Icons.check_circle_rounded,
+                label: '$countPaies payé${countPaies > 1 ? 's' : ''}',
+                color: _C.green,
+                bg: _C.greenLight,
+              ),
+              const SizedBox(width: 8),
+              _apptLibreChip(
+                icon: Icons.radio_button_unchecked_rounded,
+                label: '$countLibres non payé${countLibres > 1 ? 's' : ''}',
+                color: _C.coral,
+                bg: _C.coralLight,
+              ),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _apptLibreChip({required IconData icon, required String label, required Color color, required Color bg}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, color: color, size: 12),
+        const SizedBox(width: 5),
+        Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+      ]),
+    );
+  }
+
+  // ── Dialog paiement appartements libres
+  void _showAppartementsLibresPaiementDialog() {
+    // Onglet actif : 0 = payer, 1 = historique
+    int activeTab = _appartementsLibres.isEmpty ? 1 : 0;
+
+    Map<String, dynamic>? selectedAppart =
+    _appartementsLibres.isNotEmpty ? _appartementsLibres.first : null;
+    final montantCtrl = TextEditingController(
+        text: (_prixAnnuel?.toInt() ?? 0).toString());
+    String? errorMsg;
+    bool saving      = false;
+    bool paymentDone = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Header
+                  _dialogHeader(ctx, 'Appartements Libres',
+                      icon: Icons.home_work_rounded, iconColor: _C.green),
+                  const SizedBox(height: 16),
+
+                  // ── Tabs Payer / Historique
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                        color: _C.bg, borderRadius: BorderRadius.circular(12)),
+                    child: Row(children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setDialog(() { activeTab = 0; paymentDone = false; }),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: activeTab == 0 ? _C.white : Colors.transparent,
+                              borderRadius: BorderRadius.circular(9),
+                              boxShadow: activeTab == 0
+                                  ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4)]
+                                  : [],
+                            ),
+                            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              Icon(Icons.payments_rounded, size: 13,
+                                  color: activeTab == 0 ? _C.green : _C.textLight),
+                              const SizedBox(width: 6),
+                              Text('Payer',
+                                  style: TextStyle(
+                                      color: activeTab == 0 ? _C.green : _C.textLight,
+                                      fontWeight: FontWeight.w700, fontSize: 12)),
+                              if (_appartementsLibres.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                      color: activeTab == 0 ? _C.greenLight : _C.divider,
+                                      borderRadius: BorderRadius.circular(10)),
+                                  child: Text('${_appartementsLibres.length}',
+                                      style: TextStyle(
+                                          color: activeTab == 0 ? _C.green : _C.textLight,
+                                          fontSize: 10, fontWeight: FontWeight.w800)),
+                                ),
+                              ],
+                            ]),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setDialog(() => activeTab = 1),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: activeTab == 1 ? _C.white : Colors.transparent,
+                              borderRadius: BorderRadius.circular(9),
+                              boxShadow: activeTab == 1
+                                  ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4)]
+                                  : [],
+                            ),
+                            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              Icon(Icons.history_rounded, size: 13,
+                                  color: activeTab == 1 ? _C.blue : _C.textLight),
+                              const SizedBox(width: 6),
+                              Text('Historique',
+                                  style: TextStyle(
+                                      color: activeTab == 1 ? _C.blue : _C.textLight,
+                                      fontWeight: FontWeight.w700, fontSize: 12)),
+                              if (_appartementsLibresPaies.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                      color: activeTab == 1 ? _C.blueLight : _C.divider,
+                                      borderRadius: BorderRadius.circular(10)),
+                                  child: Text('${_appartementsLibresPaies.length}',
+                                      style: TextStyle(
+                                          color: activeTab == 1 ? _C.blue : _C.textLight,
+                                          fontSize: 10, fontWeight: FontWeight.w800)),
+                                ),
+                              ],
+                            ]),
+                          ),
+                        ),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // ══════════════════════════════════
+                  // TAB 0 — PAYER
+                  // ══════════════════════════════════
+                  if (activeTab == 0) ...[
+                    if (_appartementsLibres.isEmpty) ...[
+                      // Tous payés
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                            color: _C.greenLight,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: _C.green.withValues(alpha: 0.25))),
+                        child: Column(children: [
+                          Container(
+                            width: 48, height: 48,
+                            decoration: BoxDecoration(color: _C.green, borderRadius: BorderRadius.circular(24)),
+                            child: const Icon(Icons.check_rounded, color: _C.white, size: 24),
+                          ),
+                          const SizedBox(height: 12),
+                          const Text('Tous les appartements sont payés !',
+                              style: TextStyle(color: _C.green, fontWeight: FontWeight.w800, fontSize: 14),
+                              textAlign: TextAlign.center),
+                          const SizedBox(height: 4),
+                          const Text('Consultez l\'historique pour voir les détails.',
+                              style: TextStyle(color: _C.textMid, fontSize: 11),
+                              textAlign: TextAlign.center),
+                        ]),
+                      ),
+                    ] else if (paymentDone) ...[
+                      // Succès paiement
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                            color: _C.greenLight,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: _C.green.withValues(alpha: 0.3))),
+                        child: Column(children: [
+                          Container(
+                            width: 52, height: 52,
+                            decoration: BoxDecoration(color: _C.green, borderRadius: BorderRadius.circular(26)),
+                            child: const Icon(Icons.check_rounded, color: _C.white, size: 26),
+                          ),
+                          const SizedBox(height: 12),
+                          const Text('Paiement enregistré !',
+                              style: TextStyle(color: _C.green, fontWeight: FontWeight.w800, fontSize: 15)),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${selectedAppart?['label'] ?? ''} · ${montantCtrl.text} DH',
+                            style: const TextStyle(color: _C.textMid, fontSize: 12),
+                            textAlign: TextAlign.center,
+                          ),
+                        ]),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              setDialog(() { paymentDone = false; selectedAppart = _appartementsLibres.isNotEmpty ? _appartementsLibres.first : null; });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                  color: _C.greenLight,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: _C.green.withValues(alpha: 0.3))),
+                              child: const Text('Payer un autre', textAlign: TextAlign.center,
+                                  style: TextStyle(color: _C.green, fontWeight: FontWeight.w700, fontSize: 13)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () { Navigator.pop(ctx); _load(); _loadAppartementsLibres(); },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(color: _C.green, borderRadius: BorderRadius.circular(12)),
+                              child: const Text('Fermer', textAlign: TextAlign.center,
+                                  style: TextStyle(color: _C.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                            ),
+                          ),
+                        ),
+                      ]),
+                    ] else ...[
+                      // ── Formulaire paiement
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                            color: _C.greenLight,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: _C.green.withValues(alpha: 0.2))),
+                        child: Row(children: [
+                          const Icon(Icons.info_outline_rounded, color: _C.green, size: 14),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Paiement des charges annuelles pour un appartement sans résident.',
+                              style: TextStyle(color: _C.green, fontSize: 11, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ]),
+                      ),
+                      const SizedBox(height: 16),
+
+                      _label('Appartement libre *'),
+                      _appartementsLibres.length == 1
+                          ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        decoration: BoxDecoration(
+                            color: _C.bg, borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: _C.divider)),
+                        child: Row(children: [
+                          const Icon(Icons.home_rounded, color: _C.green, size: 16),
+                          const SizedBox(width: 10),
+                          Text(_appartementsLibres.first['label'].toString(),
+                              style: const TextStyle(color: _C.dark, fontSize: 13, fontWeight: FontWeight.w600)),
+                        ]),
+                      )
+                          : _dropdownContainer(
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<Map<String, dynamic>>(
+                            isExpanded: true,
+                            value: selectedAppart,
+                            items: _appartementsLibres.map((a) => DropdownMenuItem(
+                              value: a,
+                              child: Row(children: [
+                                const Icon(Icons.home_rounded, color: _C.green, size: 14),
+                                const SizedBox(width: 8),
+                                Text(a['label'].toString(), style: const TextStyle(fontSize: 13)),
+                              ]),
+                            )).toList(),
+                            onChanged: (val) => setDialog(() => selectedAppart = val),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // ── Détail paiement
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                            color: _C.bg, borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: _C.divider)),
+                        child: Row(children: [
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            const Text('Type', style: TextStyle(color: _C.textLight, fontSize: 10, fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 2),
+                            const Text('Charges annuelles', style: TextStyle(color: _C.dark, fontWeight: FontWeight.w700, fontSize: 12)),
+                          ])),
+                          Container(width: 1, height: 30, color: _C.divider),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                            const Text('Année', style: TextStyle(color: _C.textLight, fontSize: 10, fontWeight: FontWeight.w500)),
+                            const SizedBox(height: 2),
+                            Text('$_fallbackAnnee', style: const TextStyle(color: _C.amber, fontWeight: FontWeight.w700, fontSize: 12)),
+                          ])),
+                        ]),
+                      ),
+                      const SizedBox(height: 14),
+
+                      _label('Montant (DH) *'),
+                      TextField(
+                        controller: montantCtrl,
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(fontSize: 15, color: _C.dark, fontWeight: FontWeight.w700),
+                        decoration: InputDecoration(
+                          hintText: '${_prixAnnuel?.toInt() ?? 0}',
+                          hintStyle: const TextStyle(color: _C.textLight, fontSize: 13),
+                          filled: true, fillColor: _C.bg,
+                          prefixIcon: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 14),
+                              child: Icon(Icons.payments_rounded, color: _C.green, size: 18)),
+                          suffixText: 'DH',
+                          suffixStyle: const TextStyle(color: _C.green, fontWeight: FontWeight.w700, fontSize: 14),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _C.green, width: 1.5)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        ),
+                      ),
+                      if ((_prixAnnuel ?? 0) > 0) ...[
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: () => setDialog(() => montantCtrl.text = _prixAnnuel!.toInt().toString()),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                                color: _C.greenLight, borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: _C.green.withValues(alpha: 0.25))),
+                            child: Row(children: [
+                              const Icon(Icons.bolt_rounded, color: _C.green, size: 13),
+                              const SizedBox(width: 6),
+                              Text('Prix tranche : ${_prixAnnuel!.toInt()} DH — Appuyer pour remplir',
+                                  style: const TextStyle(color: _C.green, fontSize: 11, fontWeight: FontWeight.w600)),
+                            ]),
+                          ),
+                        ),
+                      ],
+                      if (errorMsg != null) ...[const SizedBox(height: 10), _errorBanner(errorMsg!)],
+                      const SizedBox(height: 20),
+                      _dialogActions(
+                        ctx: ctx,
+                        saving: saving,
+                        confirmLabel: 'Enregistrer le paiement',
+                        confirmColor: _C.green,
+                        onConfirm: () async {
+                          final montant = double.tryParse(montantCtrl.text.trim()) ?? 0;
+                          if (montant <= 0) { setDialog(() => errorMsg = 'Entrez un montant valide'); return; }
+                          if (selectedAppart == null) { setDialog(() => errorMsg = 'Sélectionnez un appartement'); return; }
+                          setDialog(() { saving = true; errorMsg = null; });
+                          try {
+                            final db = Supabase.instance.client;
+                            final appartId = selectedAppart!['id'];
+                            final trData = await db.from('tranches').select('residence_id, inter_syndic_id').eq('id', widget.trancheId).maybeSingle();
+                            final residenceId = trData?['residence_id'] ?? 1;
+                            final isId        = trData?['inter_syndic_id'] ?? 1;
+                            final existing = await db.from('paiements').select('id, montant_paye, montant_total')
+                                .eq('appartement_id', appartId).eq('type_paiement', 'charges').eq('annee', _fallbackAnnee).maybeSingle();
+                            if (existing != null) {
+                              final double dejaP = double.tryParse(existing['montant_paye'].toString()) ?? 0;
+                              final double total = double.tryParse(existing['montant_total'].toString()) ?? montant;
+                              final double nouveau = dejaP + montant;
+                              final String statut = nouveau >= total ? 'complet' : (nouveau > 0 ? 'partiel' : 'impaye');
+                              await db.from('paiements').update({
+                                'montant_paye': nouveau, 'statut': statut,
+                                'date_paiement': DateTime.now().toIso8601String().substring(0, 10),
+                              }).eq('id', existing['id']);
+                            } else {
+                              await db.from('paiements').insert({
+                                'appartement_id': appartId, 'residence_id': residenceId,
+                                'inter_syndic_id': isId, 'montant_total': montant,
+                                'montant_paye': montant, 'type_paiement': 'charges',
+                                'statut': 'complet', 'annee': _fallbackAnnee,
+                                'mois': DateTime.now().month,
+                                'date_paiement': DateTime.now().toIso8601String().substring(0, 10),
+                              });
+                            }
+                            // Rafraîchir la liste des appartements libres en mémoire
+                            await _loadAppartementsLibres();
+                            if (ctx.mounted) setDialog(() { saving = false; paymentDone = true; selectedAppart = _appartementsLibres.isNotEmpty ? _appartementsLibres.first : null; });
+                          } catch (e) {
+                            setDialog(() { errorMsg = e.toString(); saving = false; });
+                          }
+                        },
+                      ),
+                    ],
+                  ],
+
+                  // ══════════════════════════════════
+                  // TAB 1 — HISTORIQUE
+                  // ══════════════════════════════════
+                  if (activeTab == 1) ...[
+                    if (_appartementsLibresPaies.isEmpty) ...[
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          child: Column(children: [
+                            Icon(Icons.receipt_long_outlined, color: _C.divider, size: 44),
+                            const SizedBox(height: 10),
+                            Text('Aucun appartement payé pour ce mandat',
+                                style: const TextStyle(color: _C.textLight, fontSize: 13)),
+                          ]),
+                        ),
+                      ),
+                    ] else ...[
+                      // ── Résumé total
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                            color: _C.greenLight, borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: _C.green.withValues(alpha: 0.25))),
+                        child: Row(children: [
+                          const Icon(Icons.check_circle_rounded, color: _C.green, size: 16),
+                          const SizedBox(width: 10),
+                          Text('${_appartementsLibresPaies.length} appartement${_appartementsLibresPaies.length > 1 ? 's' : ''} payé${_appartementsLibresPaies.length > 1 ? 's' : ''}',
+                              style: const TextStyle(color: _C.green, fontWeight: FontWeight.w700, fontSize: 12)),
+                          const Spacer(),
+                          Text(
+                            '${_appartementsLibresPaies.fold<double>(0, (s, a) => s + (a['montant_paye'] as double? ?? 0)).toInt()} DH',
+                            style: const TextStyle(color: _C.green, fontWeight: FontWeight.w800, fontSize: 14),
+                          ),
+                        ]),
+                      ),
+                      const SizedBox(height: 12),
+                      // ── Liste
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 280),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: _appartementsLibresPaies.length,
+                          separatorBuilder: (_, __) => Container(height: 1, color: _C.divider, margin: const EdgeInsets.symmetric(vertical: 2)),
+                          itemBuilder: (_, i) {
+                            final a = _appartementsLibresPaies[i];
+                            final double mt = a['montant_total'] as double? ?? 0;
+                            final double mp = a['montant_paye'] as double? ?? 0;
+                            final double reste = a['reste'] as double? ?? 0;
+                            final String statut = a['statut']?.toString() ?? 'impaye';
+                            final String dateStr = a['date_paiement']?.toString() ?? '';
+
+                            // Formatter date
+                            String dateFormatee = dateStr;
+                            try {
+                              final d = DateTime.parse(dateStr);
+                              dateFormatee = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+                            } catch (_) {}
+
+                            final Color statColor = statut == 'complet' ? _C.green : statut == 'partiel' ? _C.orange : _C.coral;
+                            final Color statBg    = statut == 'complet' ? _C.greenLight : statut == 'partiel' ? _C.orangeLight : _C.coralLight;
+
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              child: Row(children: [
+                                // ── Avatar appartement
+                                Container(
+                                  width: 40, height: 40,
+                                  decoration: BoxDecoration(color: _C.greenLight, borderRadius: BorderRadius.circular(10)),
+                                  child: const Icon(Icons.home_rounded, color: _C.green, size: 18),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                    Text(a['label']?.toString() ?? '',
+                                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: _C.dark),
+                                        overflow: TextOverflow.ellipsis),
+                                    const SizedBox(height: 2),
+                                    Row(children: [
+                                      if (dateFormatee.isNotEmpty) ...[
+                                        const Icon(Icons.calendar_today_rounded, size: 10, color: _C.textLight),
+                                        const SizedBox(width: 4),
+                                        Text(dateFormatee, style: const TextStyle(color: _C.textLight, fontSize: 10)),
+                                        const SizedBox(width: 8),
+                                      ],
+                                      if (reste > 0) ...[
+                                        const Icon(Icons.pending_rounded, size: 10, color: _C.orange),
+                                        const SizedBox(width: 3),
+                                        Text('Reste ${reste.toInt()} DH', style: const TextStyle(color: _C.orange, fontSize: 10, fontWeight: FontWeight.w600)),
+                                      ],
+                                    ]),
+                                  ]),
+                                ),
+                                const SizedBox(width: 8),
+                                // ── Montant + statut
+                                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                                  Text('+${mp.toInt()} DH',
+                                      style: TextStyle(color: statColor, fontWeight: FontWeight.w800, fontSize: 13)),
+                                  const SizedBox(height: 3),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(color: statBg, borderRadius: BorderRadius.circular(20)),
+                                    child: Text(
+                                      statut == 'complet' ? 'Complet' : statut == 'partiel' ? 'Partiel' : 'Impayé',
+                                      style: TextStyle(color: statColor, fontSize: 9, fontWeight: FontWeight.w700),
+                                    ),
+                                  ),
+                                ]),
+                              ]),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(ctx),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        decoration: BoxDecoration(
+                            color: _C.bg, borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: _C.divider)),
+                        child: const Text('Fermer', textAlign: TextAlign.center,
+                            style: TextStyle(color: _C.dark, fontWeight: FontWeight.w700, fontSize: 14)),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1501,22 +2232,28 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     bool fetchDone     = false;
     bool fetchLaunched = false;
     int? selectedAnnee;
-    final int anneeActuelle = DateTime.now().year;
+
+    // ── Libellé du mandat actif
+    final String mandatLabel = _getMandatLabel(_selectedMandat);
+    final String? dateDebut  = _selectedMandat?['date_debut']?.toString();
+    final String? dateFin    = _selectedMandat?['date_fin']?.toString();
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialog) {
-          // Chargement unique
           if (!fetchLaunched) {
             fetchLaunched = true;
-            _service.getHistoriquePaiements(r.userId).then((data) {
+            // Passer les dates du mandat sélectionné
+            _service
+                .getHistoriquePaiements(r.userId,
+                dateDebut: dateDebut, dateFin: dateFin)
+                .then((data) {
               if (ctx.mounted) {
                 setDialog(() {
                   historique = data;
                   fetchDone  = true;
 
-                  // Annees disponibles depuis annee_paiement (table paiements)
                   final anneesDispo = data
                       .map((h) => h['annee_paiement'] as int?)
                       .whereType<int>()
@@ -1524,19 +2261,14 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                       .toList()
                     ..sort((a, b) => b.compareTo(a));
 
-                  if (anneesDispo.contains(anneeActuelle)) {
-                    selectedAnnee = anneeActuelle;
-                  } else if (anneesDispo.isNotEmpty) {
-                    selectedAnnee = anneesDispo.first;
-                  } else {
-                    selectedAnnee = anneeActuelle;
-                  }
+                  selectedAnnee =
+                  anneesDispo.isNotEmpty ? anneesDispo.first : null;
                 });
               }
             });
           }
 
-          // Calcul des années disponibles pour les tabs
+          // Années disponibles dans CET historique (mandat)
           final anneesSet = historique
               .map((h) => h['annee_paiement'] as int?)
               .whereType<int>()
@@ -1544,18 +2276,12 @@ class _ResidentsScreenState extends State<ResidentsScreen>
               .toList()
             ..sort((a, b) => b.compareTo(a));
 
-          if (!anneesSet.contains(anneeActuelle)) {
-            anneesSet.insert(0, anneeActuelle);
-          }
-
-          // ── FILTRE PAR annee_paiement (depuis table paiements)
           final filtered = selectedAnnee == null
               ? historique
               : historique
               .where((h) => h['annee_paiement'] == selectedAnnee)
               .toList();
 
-          // Total versé pour l'année/filtre courant
           final totalAnnee = filtered.fold<double>(
               0, (sum, h) => sum + (double.tryParse(h['montant'].toString()) ?? 0));
 
@@ -1570,67 +2296,135 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _dialogHeader(ctx, 'Historique Paiements', icon: Icons.history_rounded, iconColor: _C.blue),
-                  const SizedBox(height: 16),
+                  _dialogHeader(ctx, 'Historique Paiements',
+                      icon: Icons.history_rounded, iconColor: _C.blue),
+                  const SizedBox(height: 12),
 
-                  // Récap global
+                  // ── Badge mandat actif
+                  Container(
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                        color: _C.blueLight,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: _C.blue.withValues(alpha: 0.3))),
+                    child: Row(children: [
+                      const Icon(Icons.date_range_rounded,
+                          color: _C.blue, size: 14),
+                      const SizedBox(width: 8),
+                      Text('Mandat : $mandatLabel',
+                          style: const TextStyle(
+                              color: _C.blue,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12)),
+                    ]),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ── Récap global
                   Container(
                     padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: _C.divider)),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        Text(r.nomComplet, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: _C.dark)),
-                        Text('${(pct * 100).toInt()}% paye', style: TextStyle(color: barColor, fontWeight: FontWeight.w700, fontSize: 12)),
-                      ]),
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(5),
-                        child: LinearProgressIndicator(value: pct.clamp(0.0, 1.0), backgroundColor: _C.divider, valueColor: AlwaysStoppedAnimation(barColor), minHeight: 6),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        _infoRow('Paye', '${r.montantPaye.toInt()} DH', _C.green),
-                        _infoRow('Reste', '${r.resteAPayer.toInt()} DH', _C.coral),
-                      ]),
-                    ]),
+                    decoration: BoxDecoration(
+                        color: _C.bg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _C.divider)),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(r.nomComplet,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 14,
+                                        color: _C.dark)),
+                                Text('${(pct * 100).toInt()}% payé',
+                                    style: TextStyle(
+                                        color: barColor,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12)),
+                              ]),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(5),
+                            child: LinearProgressIndicator(
+                                value: pct.clamp(0.0, 1.0),
+                                backgroundColor: _C.divider,
+                                valueColor: AlwaysStoppedAnimation(barColor),
+                                minHeight: 6),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _infoRow('Payé', '${r.montantPaye.toInt()} DH', _C.green),
+                                _infoRow('Reste', '${r.resteAPayer.toInt()} DH', _C.coral),
+                              ]),
+                        ]),
                   ),
                   const SizedBox(height: 14),
 
-                  // Tabs années — seulement après chargement
-                  if (fetchDone) ...[
+                  // ── Tabs années (uniquement celles du mandat)
+                  if (fetchDone && anneesSet.isNotEmpty) ...[
                     SizedBox(
                       height: 34,
                       child: ListView(
                         scrollDirection: Axis.horizontal,
                         children: [
-                          // Tab "Toutes"
+                          // "Toutes" = toutes les années du mandat
                           GestureDetector(
                             onTap: () => setDialog(() => selectedAnnee = null),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
                               margin: const EdgeInsets.only(right: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: selectedAnnee == null ? _C.blue : _C.bg,
+                                color: selectedAnnee == null
+                                    ? _C.blue
+                                    : _C.bg,
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: selectedAnnee == null ? _C.blue : _C.divider),
+                                border: Border.all(
+                                    color: selectedAnnee == null
+                                        ? _C.blue
+                                        : _C.divider),
                               ),
-                              child: Text('Toutes', style: TextStyle(color: selectedAnnee == null ? _C.white : _C.textMid, fontWeight: FontWeight.w600, fontSize: 12)),
+                              child: Text('Toutes',
+                                  style: TextStyle(
+                                      color: selectedAnnee == null
+                                          ? _C.white
+                                          : _C.textMid,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12)),
                             ),
                           ),
-                          // Tabs par année
                           ...anneesSet.map((annee) => GestureDetector(
-                            onTap: () => setDialog(() => selectedAnnee = annee),
+                            onTap: () =>
+                                setDialog(() => selectedAnnee = annee),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
                               margin: const EdgeInsets.only(right: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: selectedAnnee == annee ? _C.blue : _C.bg,
+                                color: selectedAnnee == annee
+                                    ? _C.blue
+                                    : _C.bg,
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: selectedAnnee == annee ? _C.blue : _C.divider),
+                                border: Border.all(
+                                    color: selectedAnnee == annee
+                                        ? _C.blue
+                                        : _C.divider),
                               ),
-                              child: Text('$annee', style: TextStyle(color: selectedAnnee == annee ? _C.white : _C.textMid, fontWeight: FontWeight.w600, fontSize: 12)),
+                              child: Text('$annee',
+                                  style: TextStyle(
+                                      color: selectedAnnee == annee
+                                          ? _C.white
+                                          : _C.textMid,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12)),
                             ),
                           )),
                         ],
@@ -1638,108 +2432,142 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                     ),
                     const SizedBox(height: 10),
 
-                    // Total année sélectionnée
-                    if (selectedAnnee != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                            color: _C.greenLight,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: _C.green.withValues(alpha: 0.3))),
-                        child: Row(children: [
-                          const Icon(Icons.calendar_today_outlined, size: 14, color: _C.green),
-                          const SizedBox(width: 8),
-                          Text('Total $selectedAnnee', style: const TextStyle(color: _C.green, fontSize: 12, fontWeight: FontWeight.w600)),
-                          const Spacer(),
-                          Text('${totalAnnee.toInt()} DH', style: const TextStyle(color: _C.green, fontSize: 15, fontWeight: FontWeight.w800)),
-                        ]),
-                      ),
+                    // Total de la sélection
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                          color: _C.greenLight,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: _C.green.withValues(alpha: 0.3))),
+                      child: Row(children: [
+                        const Icon(Icons.payments_rounded,
+                            size: 14, color: _C.green),
+                        const SizedBox(width: 8),
+                        Text(
+                            selectedAnnee != null
+                                ? 'Total $selectedAnnee'
+                                : 'Total mandat',
+                            style: const TextStyle(
+                                color: _C.green,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600)),
+                        const Spacer(),
+                        Text('${totalAnnee.toInt()} DH',
+                            style: const TextStyle(
+                                color: _C.green,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800)),
+                      ]),
+                    ),
                     const SizedBox(height: 10),
                   ],
 
                   Container(height: 1, color: _C.divider),
                   const SizedBox(height: 10),
 
-                  // Liste des paiements filtrés
+                  // ── Liste filtrée
                   !fetchDone
-                      ? const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: _C.blue)))
+                      ? const Center(
+                      child: Padding(
+                          padding: EdgeInsets.all(20),
+                          child: CircularProgressIndicator(color: _C.blue)))
                       : filtered.isEmpty
                       ? Center(
                     child: Padding(
                       padding: const EdgeInsets.all(20),
                       child: Column(children: [
-                        Icon(Icons.receipt_long_outlined, color: _C.divider, size: 40),
+                        Icon(Icons.receipt_long_outlined,
+                            color: _C.divider, size: 40),
                         const SizedBox(height: 8),
                         Text(
-                          selectedAnnee != null ? 'Aucun paiement en $selectedAnnee' : 'Aucun historique',
-                          style: const TextStyle(color: _C.textLight, fontSize: 13),
+                          selectedAnnee != null
+                              ? 'Aucun paiement en $selectedAnnee'
+                              : 'Aucun paiement pour ce mandat',
+                          style: const TextStyle(
+                              color: _C.textLight, fontSize: 13),
                         ),
                       ]),
                     ),
                   )
                       : ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 220),
+                    constraints:
+                    const BoxConstraints(maxHeight: 220),
                     child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: filtered.length,
-                      separatorBuilder: (_, __) => Container(height: 1, color: _C.divider),
+                      separatorBuilder: (_, __) =>
+                          Container(height: 1, color: _C.divider),
                       itemBuilder: (_, i) {
-                        final h          = filtered[i];
-                        final montant    = double.parse(h['montant'].toString()).toInt();
-                        final dateStr    = h['date']?.toString() ?? '';
+                        final h = filtered[i];
+                        final montant = double
+                            .parse(h['montant'].toString())
+                            .toInt();
+                        final dateStr =
+                            h['date']?.toString() ?? '';
+                        final typePaiement =
+                            h['type_paiement']?.toString() ??
+                                'charges';
+                        final anneeH =
+                            h['annee_paiement']?.toString() ?? '';
 
-                        // ── TYPE depuis table paiements (via join)
-                        final typePaiement = h['type_paiement']?.toString() ?? 'charges';
-                        // ── ANNEE depuis table paiements (via join)
-                        final anneeH = h['annee_paiement']?.toString() ?? '';
-
-                        // Formatage date JJ/MM/AAAA
                         String dateFormatee = dateStr;
                         try {
                           final d = DateTime.parse(dateStr);
-                          dateFormatee = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+                          dateFormatee =
+                          '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
                         } catch (_) {}
 
                         return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 10),
                           child: Row(children: [
-                            // ── Icône colorée selon le type
                             Container(
                               width: 38, height: 38,
                               decoration: BoxDecoration(
                                   color: _typeBgColor(typePaiement),
-                                  borderRadius: BorderRadius.circular(10)),
-                              child: Icon(
-                                _typeIcon(typePaiement),
-                                color: _typeColor(typePaiement),
-                                size: 16,
-                              ),
+                                  borderRadius:
+                                  BorderRadius.circular(10)),
+                              child: Icon(_typeIcon(typePaiement),
+                                  color: _typeColor(typePaiement),
+                                  size: 16),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                // ── Label : "Paiement Charges 2026" / "Paiement Garage 2026" / etc.
-                                Text(
-                                  'Paiement ${_typeLabel(typePaiement)}${anneeH.isNotEmpty ? ' $anneeH' : ''}',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 13,
-                                    color: _typeColor(typePaiement),
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(dateFormatee, style: const TextStyle(color: _C.textLight, fontSize: 11)),
-                              ]),
+                              child: Column(
+                                  crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Paiement ${_typeLabel(typePaiement)}${anneeH.isNotEmpty ? ' $anneeH' : ''}',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                          color:
+                                          _typeColor(typePaiement)),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(dateFormatee,
+                                        style: const TextStyle(
+                                            color: _C.textLight,
+                                            fontSize: 11)),
+                                  ]),
                             ),
-                            // ── Badge montant coloré selon le type
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
-                                  color: _typeBgColor(typePaiement),
-                                  borderRadius: BorderRadius.circular(20)),
+                                  color:
+                                  _typeBgColor(typePaiement),
+                                  borderRadius:
+                                  BorderRadius.circular(20)),
                               child: Text(
                                 '+$montant DH',
-                                style: TextStyle(color: _typeColor(typePaiement), fontWeight: FontWeight.w800, fontSize: 13),
+                                style: TextStyle(
+                                    color: _typeColor(typePaiement),
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13),
                               ),
                             ),
                           ]),
@@ -1754,8 +2582,16 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: _C.divider)),
-                      child: const Text('Fermer', textAlign: TextAlign.center, style: TextStyle(color: _C.dark, fontWeight: FontWeight.w700, fontSize: 14)),
+                      decoration: BoxDecoration(
+                          color: _C.bg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _C.divider)),
+                      child: const Text('Fermer',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: _C.dark,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14)),
                     ),
                   ),
                 ],
@@ -1781,7 +2617,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
           id: 0, residentId: 0, appartementId: 0, depenseId: 0,
           interSyndicId: 0, residenceId: 0, montantTotal: r.montantTotal,
           montantPaye: 0, typePaiement: TypePaiementEnum.charges,
-          statut: StatutPaiementEnum.impaye, annee: _selectedAnnee),
+          statut: StatutPaiementEnum.impaye, annee: _fallbackAnnee),
     );
     final prixCtrl = TextEditingController(text: chargesPaiement.montantTotal.toInt().toString());
 
@@ -1811,7 +2647,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                   _label('Telephone'),
                   _field(telCtrl, '', inputType: TextInputType.phone),
                   const SizedBox(height: 14),
-                  _label('Prix Annuel Charges ($_selectedAnnee)'),
+                  _label('Prix Annuel Charges (Mandat sélectionné)'),
                   _field(prixCtrl, 'ex: 3000', inputType: TextInputType.number),
                   const SizedBox(height: 14),
                   _label('Type'),
@@ -1836,7 +2672,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                         telephone: telCtrl.text.isEmpty ? null : telCtrl.text,
                         type: type,
                         montantTotal: nouveauFix,
-                        annee: _selectedAnnee,
+                        annee: _fallbackAnnee,
                       );
                       if (!ctx.mounted) return;
                       Navigator.pop(ctx);
