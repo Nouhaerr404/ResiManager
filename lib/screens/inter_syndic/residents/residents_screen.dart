@@ -566,30 +566,42 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                   onRefresh: _load,
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding:
-                    const EdgeInsets.fromLTRB(20, 24, 20, 40),
+                    padding: const EdgeInsets.symmetric(vertical: 32),
                     children: [
-                      _buildPageTitle(),
-                      const SizedBox(height: 16),
-                      _buildPrixAnnuelBanner(),
-                      const SizedBox(height: 12),
-                      _buildMandatSelectorBanner(),
-                      const SizedBox(height: 16),
-                      _buildStatsBanner(),
-                      const SizedBox(height: 12),
-                      _buildAppartementsLibresBanner(),
-                      const SizedBox(height: 20),
-                      _buildSearchBar(),
-                      const SizedBox(height: 12),
-                      _buildFilterTabs(),
-                      const SizedBox(height: 24),
-                      _buildSectionLabel(
-                          '${_filtered.length} resident${_filtered.length > 1 ? 's' : ''}'),
-                      const SizedBox(height: 14),
-                      if (_filtered.isEmpty)
-                        _buildEmpty()
-                      else
-                        ..._filtered.map(_buildResidentCard),
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 800),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _buildPageTitle(),
+                                const SizedBox(height: 32),
+                                _buildPrixAnnuelBanner(),
+                                const SizedBox(height: 16),
+                                _buildMandatSelectorBanner(),
+                                const SizedBox(height: 16),
+                                _buildStatsBanner(),
+                                const SizedBox(height: 16),
+                                _buildAppartementsLibresBanner(),
+                                const SizedBox(height: 32),
+                                _buildSearchBar(),
+                                const SizedBox(height: 16),
+                                _buildFilterTabs(),
+                                const SizedBox(height: 32),
+                                _buildSectionLabel(
+                                    '${_filtered.length} resident${_filtered.length > 1 ? 's' : ''}'),
+                                const SizedBox(height: 16),
+                                if (_filtered.isEmpty)
+                                  _buildEmpty()
+                                else
+                                  ..._filtered.map(_buildResidentCard),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -643,75 +655,102 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   );
 
   Widget _buildHeader() {
+    final nom = TempSession.interSyndicNom;
+    final initials = nom.split(' ').where((e) => e.isNotEmpty).map((e) => e[0].toUpperCase()).take(2).join('');
+
     return Container(
-      color: _C.white,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                  color: _C.bg,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _C.divider)),
-              child: const Icon(Icons.arrow_back_ios_new_rounded,
-                  size: 14, color: _C.dark),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-                color: _C.coral, borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.grid_view_rounded,
-                color: _C.white, size: 20),
-          ),
-          const SizedBox(width: 10),
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: Color(0xFFC7C7C7), // Gris/Argent selon l'image
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: Row(
             children: [
-              Text('ResiManager',
-                  style: TextStyle(
-                      color: _C.dark,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      letterSpacing: -0.2)),
-              Text('inter_syndic',
-                  style: TextStyle(
-                      color: _C.textLight,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500)),
-            ],
-          ),
-          const Spacer(),
-          GestureDetector(
-            onTap: _showAddResidentDialog,
-            child: Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-              decoration: BoxDecoration(
-                  color: _C.coral,
-                  borderRadius: BorderRadius.circular(22)),
-              child: const Row(
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.3))),
+                  child: const Icon(Icons.arrow_back_ios_new_rounded,
+                      size: 18, color: Colors.white),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(14)),
+                child: Center(
+                  child: Text(
+                    initials,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.add_rounded, size: 16, color: _C.white),
-                  SizedBox(width: 6),
-                  Text('Ajouter',
+                  Text(nom,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 20,
+                          letterSpacing: -0.4)),
+                  const SizedBox(height: 2),
+                  const Text('Inter-Syndic',
                       style: TextStyle(
-                          color: _C.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700)),
+                          color: Colors.white70,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600)),
                 ],
               ),
-            ),
+              const Spacer(),
+              GestureDetector(
+                onTap: _showAddResidentDialog,
+                child: Container(
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3)
+                        )
+                      ]),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add_rounded, size: 18, color: Color(0xFFB5B7BB)),
+                      SizedBox(width: 8),
+                      Text('Ajouter',
+                          style: TextStyle(
+                              color: Color(0xFFB5B7BB),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -740,8 +779,14 @@ class _ResidentsScreenState extends State<ResidentsScreen>
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: _C.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _C.amberLight),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: _C.amber.withValues(alpha: 0.05),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -846,8 +891,14 @@ class _ResidentsScreenState extends State<ResidentsScreen>
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: _C.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _C.divider),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: _C.blue.withValues(alpha: 0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -1015,16 +1066,15 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     return GestureDetector(
       onTap: _showAppartementsLibresPaiementDialog,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
           color: _C.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _C.green.withValues(alpha: 0.3)),
+          borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-                color: _C.green.withValues(alpha: 0.06),
-                blurRadius: 8,
-                offset: const Offset(0, 2)),
+                color: _C.green.withValues(alpha: 0.05),
+                blurRadius: 24,
+                offset: const Offset(0, 8)),
           ],
         ),
         child: Column(
@@ -1953,8 +2003,14 @@ class _ResidentsScreenState extends State<ResidentsScreen>
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: _C.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _C.divider),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: _C.coral.withValues(alpha: 0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -2065,8 +2121,15 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     return Container(
       decoration: BoxDecoration(
           color: _C.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _C.divider)),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+      ),
       child: TextField(
         controller: _searchCtrl,
         style: const TextStyle(fontSize: 14, color: _C.dark),
@@ -2115,9 +2178,14 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                   horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: isSelected ? _C.coral : _C.white,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                    color: isSelected ? _C.coral : _C.divider),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
