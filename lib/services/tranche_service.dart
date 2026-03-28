@@ -310,13 +310,29 @@ class TrancheService {
       int? interSyndicId,
       double? prixAnnuel) async {
 
-    await _db.from('tranches').insert({
+    // 1. Créer la tranche
+    final newTranche = await _db.from('tranches').insert({
       'residence_id':    residenceId,
       'nom':             nom,
+      'description':     description,
       'inter_syndic_id': interSyndicId,
       'prix_annuel':     (prixAnnuel != null && prixAnnuel > 0) ? prixAnnuel : null,
-      'date_affectation': interSyndicId != null ? DateTime.now().toIso8601String().split('T')[0] : null,
-    });
+    }).select('id').single();
+
+    final int trancheId = newTranche['id'];
+
+    // 2. Si un inter-syndic est assigné, créer l'entrée dans l'historique (1 an par défaut)
+    if (interSyndicId != null) {
+      final now = DateTime.now();
+      final oneYearLater = DateTime(now.year + 1, now.month, now.day - 1);
+
+      await _db.from('historique_affectations').insert({
+        'tranche_id': trancheId,
+        'inter_syndic_id': interSyndicId,
+        'date_debut': now.toIso8601String().split('T')[0],
+        'date_fin': oneYearLater.toIso8601String().split('T')[0],
+      });
+    }
   }
 
   Future<List<Map<String, dynamic>>> getAvailableInterSyndics() async {
@@ -329,10 +345,40 @@ class TrancheService {
   }
 
   Future<void> assignInterSyndic(int trancheId, int? interSyndicId) async {
+    // 1. Récupérer l'ancien syndic pour clore son mandat
+    final currentTranche = await _db.from('tranches').select('inter_syndic_id').eq('id', trancheId).single();
+    final int? oldSyndicId = currentTranche['inter_syndic_id'];
+
+    if (oldSyndicId == interSyndicId) return; // Pas de changement
+
+    // 2. Mettre à jour la table tranches
     await _db.from('tranches').update({
       'inter_syndic_id': interSyndicId,
-      'date_affectation': interSyndicId != null ? DateTime.now().toIso8601String().split('T')[0] : null
     }).eq('id', trancheId);
+
+    // 3. Gérer l'historique
+    final now = DateTime.now();
+    final String today = now.toIso8601String().split('T')[0];
+
+    // Clôturer l'ancien mandat (On cible celui dont la date de fin est dans le futur)
+    if (oldSyndicId != null) {
+      await _db.from('historique_affectations')
+          .update({'date_fin': today})
+          .eq('tranche_id', trancheId)
+          .eq('inter_syndic_id', oldSyndicId)
+          .gt('date_fin', today); 
+    }
+
+    // Ouvrir le nouveau mandat (1 an par défaut)
+    if (interSyndicId != null) {
+      final oneYearLater = DateTime(now.year + 1, now.month, now.day - 1);
+      await _db.from('historique_affectations').insert({
+        'tranche_id': trancheId,
+        'inter_syndic_id': interSyndicId,
+        'date_debut': today,
+        'date_fin': oneYearLater.toIso8601String().split('T')[0],
+      });
+    }
   }
 
   Future<List<Map<String, dynamic>>> getImmeublesByTranche(int trancheId) async {
@@ -360,22 +406,15 @@ class TrancheService {
       int? interSyndicId,
       double? prixAnnuel) async {
 
-    // On récupère l'ancien syndic pour savoir si on doit mettre à jour la date
-    final current = await _db.from('tranches').select('inter_syndic_id').eq('id', trancheId).single();
-    final int? oldId = current['inter_syndic_id'];
+    // On utilise assignInterSyndic pour gérer la logique complexe de l'historique
+    await assignInterSyndic(trancheId, interSyndicId);
 
-    Map<String, dynamic> updateData = {
+    // On met à jour le reste
+    await _db.from('tranches').update({
       'nom':             nom,
       'description':     description,
-      'inter_syndic_id': interSyndicId,
       'prix_annuel':     (prixAnnuel != null && prixAnnuel > 0) ? prixAnnuel : null,
-    };
-
-    if (interSyndicId != oldId) {
-      updateData['date_affectation'] = interSyndicId != null ? DateTime.now().toIso8601String().split('T')[0] : null;
-    }
-
-    await _db.from('tranches').update(updateData).eq('id', trancheId);
+    }).eq('id', trancheId);
   }
 
   Future<void> setTrancheStatut(int trancheId, String statut) async {
