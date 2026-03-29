@@ -26,12 +26,34 @@ class FinanceDashboardScreen extends StatefulWidget {
 class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
   final FinanceService _service = FinanceService();
   late Future<Map<String, dynamic>> _financesFuture;
-  int _selectedYear = DateTime.now().year;
+  List<Map<String, dynamic>> _mandats = [];
+  Map<String, dynamic>? _selectedMandat;
+  bool _loadingMandats = true;
 
   @override
   void initState() {
     super.initState();
-    _refresh();
+    // Initialisation immédiate pour éviter LateInitializationError lors du premier build
+    _financesFuture = _service.getInterSyndicFinances(
+      widget.interSyndicId, 
+      widget.residenceId, 
+      trancheId: widget.trancheId,
+    );
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    final mandats = await _service.getInterSyndicMandates(widget.interSyndicId, widget.residenceId);
+    if (mounted) {
+      setState(() {
+        _mandats = mandats;
+        if (_mandats.isNotEmpty) {
+          _selectedMandat = _mandats.first;
+        }
+        _loadingMandats = false;
+        _refresh();
+      });
+    }
   }
 
   void _refresh() {
@@ -39,7 +61,8 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
       _financesFuture = _service.getInterSyndicFinances(
           widget.interSyndicId, 
           widget.residenceId, 
-          annee: _selectedYear,
+          startDate: _selectedMandat?['date_debut'],
+          endDate: _selectedMandat?['date_fin'],
           trancheId: widget.trancheId,
       );
     });
@@ -124,7 +147,7 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
             ),
           ),
           const SizedBox(width: 10),
-          _buildYearPicker(),
+          _buildMandatPicker(),
           const SizedBox(width: 10),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
@@ -161,7 +184,8 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
       final res = await _service.getInterSyndicFinances(
         widget.interSyndicId,
         widget.residenceId,
-        annee: _selectedYear,
+        startDate: _selectedMandat?['date_debut'],
+        endDate: _selectedMandat?['date_fin'],
         trancheId: widget.trancheId,
       );
 
@@ -174,10 +198,14 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
         trancheNom = tData['nom'];
       }
 
+      final start = _selectedMandat?['date_debut'].toString().split('-').reversed.join('/');
+      final end = _selectedMandat?['date_fin']?.toString().split('-').reversed.join('/') ?? 'En cours';
+      final mandatLabel = _selectedMandat != null ? "$start au $end" : DateTime.now().year.toString();
+
       final bytes = await ExpenseReportPdfService.generate(
         residenceNom: resData['nom'],
         trancheNom: trancheNom,
-        annee: _selectedYear,
+        mandatLabel: mandatLabel,
         financeData: res,
       );
 
@@ -193,7 +221,16 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
     }
   }
 
-  Widget _buildYearPicker() {
+  Widget _buildMandatPicker() {
+    if (_loadingMandats) return const SizedBox();
+    if (_mandats.isEmpty) {
+       return Container(
+         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+         decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+         child: const Text("Aucun mandat", style: TextStyle(color: Colors.white, fontSize: 12)),
+       );
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
@@ -201,22 +238,25 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.white30),
       ),
-      child: DropdownButton<int>(
-        value: _selectedYear,
+      child: DropdownButton<Map<String, dynamic>>(
+        value: _selectedMandat,
         dropdownColor: const Color(0xFF2C2C2C),
         underline: const SizedBox(),
-        icon: const Icon(Icons.calendar_today, color: Colors.white, size: 16),
+        icon: const Icon(Icons.history, color: Colors.white, size: 16),
         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        items: [2024, 2025, 2026, 2027].map((int y) {
-          return DropdownMenuItem<int>(
-            value: y,
-            child: Text(y.toString()),
+        items: _mandats.map((m) {
+          final start = m['date_debut'].toString().split('-').reversed.join('/');
+          final end = m['date_fin']?.toString().split('-').reversed.join('/') ?? 'En cours';
+          final trancheNom = m['tranches']?['nom'] ?? 'Tranche';
+          return DropdownMenuItem<Map<String, dynamic>>(
+            value: m,
+            child: Text("$trancheNom : $start → $end", style: const TextStyle(fontSize: 12)),
           );
         }).toList(),
-        onChanged: (int? val) {
+        onChanged: (val) {
           if (val != null) {
             setState(() {
-              _selectedYear = val;
+              _selectedMandat = val;
               _refresh();
             });
           }
@@ -280,7 +320,10 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
             children: [
               const Text("Dépenses de la Tranche",
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1A1A1A))),
-              Text("$_selectedYear", style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+              Text(_selectedMandat != null 
+                ? "${_selectedMandat!['date_debut'].toString().split('-')[0]}/${_selectedMandat!['date_fin']?.toString().split('-')[0] ?? '?'}" 
+                : "Toutes", 
+                style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 20),
