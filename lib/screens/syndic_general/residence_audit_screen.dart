@@ -15,6 +15,7 @@ class ResidenceAuditScreen extends StatefulWidget {
 
 class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
   final AccountingService _service = AccountingService();
+  final TextEditingController _searchController = TextEditingController();
 
   int? _selectedTrancheId;
   String trancheName = "";
@@ -23,8 +24,15 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
   bool _loadingMandates = false;
   String _searchQuery = "";
 
+  // ✅ REDÉFINITION DES COULEURS (MANQUANTES DANS LA DERNIÈRE VERSION)
   final Color primaryOrange = const Color(0xFFFF6F4A);
   final Color darkGrey = const Color(0xFF2C2C2C);
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -116,10 +124,18 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
         final List<Map<String, dynamic>> apartments = List<Map<String, dynamic>>.from(snapshot.data!['apartments']);
 
         final query = _searchQuery.toLowerCase();
-        final filteredApartments = apartments.where((a) => a['numero'].toString().toLowerCase().contains(query)).toList();
+        
+        final filteredApartments = _searchQuery.isEmpty 
+          ? apartments 
+          : apartments.where((a) {
+              final immName = (a['immeubles']?['nom'] ?? "").toString().toLowerCase();
+              final appNum = (a['numero'] ?? "").toString().toLowerCase();
+              return immName.contains(query) || appNum.contains(query);
+            }).toList();
 
         double totalExp = expenses.fold(0, (sum, e) => sum + (e['montant'] as num).toDouble());
         double totalPay = payments.fold(0, (sum, p) => sum + (p['montant_paye'] as num).toDouble());
+        double totalDue = payments.fold(0, (sum, p) => sum + (p['montant_total'] as num).toDouble());
 
         return Container(
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: darkGrey.withOpacity(0.15))),
@@ -127,9 +143,22 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
               initiallyExpanded: true,
-              title: Text(
-                  trancheName.toUpperCase(),
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: isWeb ? 16 : 13, color: darkGrey)
+              title: Row(
+                children: [
+                  Text(
+                      trancheName.toUpperCase(),
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: isWeb ? 16 : 13, color: darkGrey)
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(20)),
+                    child: Text(
+                      "${totalPay.toInt()} / ${totalDue.toInt()} DH REÇUS",
+                      style: TextStyle(fontSize: isWeb ? 12 : 10, fontWeight: FontWeight.bold, color: Colors.green.shade700),
+                    ),
+                  ),
+                ],
               ),
               subtitle: Text(
                 "Responsable : ${_selectedMandate!.interSyndicNomComplet}",
@@ -138,9 +167,37 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
               children: [
                 Padding(padding: const EdgeInsets.all(12), child: Column(children: [
                   _buildSubTile("Dépenses", "${totalExp.toInt()} DH", Colors.redAccent, _buildExpenseTable(expenses, isWeb), isWeb),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 25),
+                  
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 15),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (val) => setState(() => _searchQuery = val),
+                      decoration: InputDecoration(
+                        hintText: "Rechercher un immeuble ou un appartement...",
+                        prefixIcon: Icon(Icons.search, color: primaryOrange),
+                        suffixIcon: _searchQuery.isNotEmpty 
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = "");
+                              },
+                            )
+                          : null,
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 15),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: primaryOrange)),
+                      ),
+                    ),
+                  ),
+
                   Align(alignment: Alignment.centerLeft, child: Text("PAIEMENTS REÇUS PAR IMMEUBLE", style: TextStyle(fontSize: isWeb ? 13 : 10, fontWeight: FontWeight.bold, color: Colors.grey))),
                   const SizedBox(height: 10),
+                  
                   _buildImmeubleGrouping(payments, filteredApartments, isWeb),
                   const Divider(height: 25),
                   _buildFinalBilanCard(totalExp, totalPay, isWeb),
@@ -160,6 +217,13 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
       immApps.putIfAbsent(iName, () => []).add(app);
     }
 
+    if (immApps.isEmpty && _searchQuery.isNotEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(20.0),
+        child: Text("Aucun résultat pour cette recherche.", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+      );
+    }
+
     return Column(
       children: immApps.entries.map((e) {
         double immPaye = payments.where((p) => p['appartements']?['immeuble_id'] == e.value.first['immeuble_id'])
@@ -169,6 +233,7 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(border: Border.all(color: Colors.purple.withOpacity(0.1)), borderRadius: BorderRadius.circular(12)),
           child: ExpansionTile(
+            initiallyExpanded: _searchQuery.isNotEmpty, 
             leading: const Icon(Icons.keyboard_arrow_right, size: 20, color: Colors.purple),
             title: Text(e.key, style: TextStyle(fontSize: isWeb ? 14 : 12, fontWeight: FontWeight.bold, color: Colors.purple)),
             trailing: Text("${immPaye.toInt()} DH", style: TextStyle(fontSize: isWeb ? 13 : 11, fontWeight: FontWeight.bold, color: Colors.purple)),
