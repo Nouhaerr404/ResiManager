@@ -217,7 +217,6 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
   // --- FORMULAIRE DE MODIFICATION ---
   void _showEditTrancheDialog(TrancheModel tranche) {
     final nomController = TextEditingController(text: tranche.nom);
-    final descController = TextEditingController(text: tranche.description ?? '');
     final prixController = TextEditingController(text: tranche.prixAnnuel.toString());
     int? selectedSyndicId = tranche.interSyndicId;
     bool isSaving = false;
@@ -236,9 +235,6 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
                 _buildFieldLabel("Nom de la tranche"),
                 TextField(controller: nomController, decoration: _buildInputDecoration("Nom")),
                 const SizedBox(height: 15),
-                _buildFieldLabel("Description (Optionnel)"),
-                TextField(controller: descController, maxLines: 2, decoration: _buildInputDecoration("Ex: Bloc Sud...")),
-                const SizedBox(height: 15),
                 _buildFieldLabel("L'Inter-Syndic Responsable"),
                 _buildSyndicDropdown(selectedSyndicId, (val) => setDialogState(() => selectedSyndicId = val)),
                 const SizedBox(height: 15),
@@ -254,7 +250,7 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
               onPressed: isSaving ? null : () async {
                 setDialogState(() => isSaving = true);
                 try {
-                  await _service.updateTrancheComplet(tranche.id, nomController.text.trim(), descController.text.trim(), selectedSyndicId, double.tryParse(prixController.text));
+                  await _service.updateTrancheComplet(tranche.id, nomController.text.trim(), "", selectedSyndicId, double.tryParse(prixController.text));
                   if (mounted) {
                     Navigator.pop(context);
                     _loadTranches();
@@ -289,6 +285,45 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
           children: [
             _buildResponsiveHeader(isWeb),
             const SizedBox(height: 25),
+
+            // ✅ MESSAGE D'ALERTE TRANCHES NON AFFECTÉES (GÉRÉ AU PLURIEL/SINGULIER)
+            FutureBuilder<List<TrancheModel>>(
+              future: _tranchesFuture,
+              builder: (context, snapshot) {
+                final unassigned = (snapshot.data ?? []).where((t) => t.interSyndicId == null).toList();
+                if (unassigned.isEmpty) return const SizedBox.shrink();
+
+                String msg;
+                if (unassigned.length == 1) {
+                  msg = "Alerte : La tranche '${unassigned.first.nom}' n'est plus affectée à un inter-syndic. Veuillez la réassigner.";
+                } else {
+                  msg = "Alerte : ${unassigned.length} tranches (${unassigned.map((e) => e.nom).join(', ')}) ne sont plus affectées à un inter-syndic. Veuillez les réassigner.";
+                }
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 25),
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          msg,
+                          style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+
             _buildSearchBar(),
             const SizedBox(height: 25),
             FutureBuilder<List<TrancheModel>>(

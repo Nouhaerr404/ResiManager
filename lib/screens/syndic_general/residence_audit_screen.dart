@@ -40,14 +40,11 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-          // 1. On récupère la liste des tranches
           final List<Map<String, dynamic>> tranches = snapshot.data!;
 
-          // 2. LOGIQUE POUR RÉCUPÉRER LE NOM (Une seule fois, proprement)
           String currentTrancheName = "Tranche";
           if (_selectedTrancheId != null) {
             try {
-              // On cherche dans la liste l'élément qui a le bon ID
               final found = tranches.firstWhere((t) => (t['id'] as num).toInt() == _selectedTrancheId);
               currentTrancheName = found['nom'] ?? "Tranche";
             } catch (e) {
@@ -69,7 +66,7 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
               const SizedBox(height: 60),
 
               if (_selectedMandate != null)
-                _buildMandateResultView(width, currentTrancheName) // ON ENVOIE LE NOM ICI
+                _buildMandateResultView(width, currentTrancheName, isWeb)
             ],
           );
         },
@@ -108,7 +105,7 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
     );
   }
 
-  Widget _buildMandateResultView(double screenWidth, String trancheName) {
+  Widget _buildMandateResultView(double screenWidth, String trancheName, bool isWeb) {
     return FutureBuilder<Map<String, dynamic>>(
       future: _service.getMandateAuditDetails(_selectedMandate!.id, _selectedTrancheId!),
       builder: (context, snapshot) {
@@ -132,21 +129,21 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
               initiallyExpanded: true,
               title: Text(
                   trancheName.toUpperCase(),
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: darkGrey)
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: isWeb ? 16 : 13, color: darkGrey)
               ),
               subtitle: Text(
                 "Responsable : ${_selectedMandate!.interSyndicNomComplet}",
-                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                style: TextStyle(fontSize: isWeb ? 13 : 11, color: Colors.grey),
               ),
               children: [
                 Padding(padding: const EdgeInsets.all(12), child: Column(children: [
-                  _buildSubTile("Dépenses", "${totalExp.toInt()} DH", Colors.redAccent, _buildExpenseTable(expenses)),
+                  _buildSubTile("Dépenses", "${totalExp.toInt()} DH", Colors.redAccent, _buildExpenseTable(expenses, isWeb), isWeb),
                   const SizedBox(height: 15),
-                  const Align(alignment: Alignment.centerLeft, child: Text("PAIEMENTS REÇUS PAR IMMEUBLE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey))),
+                  Align(alignment: Alignment.centerLeft, child: Text("PAIEMENTS REÇUS PAR IMMEUBLE", style: TextStyle(fontSize: isWeb ? 13 : 10, fontWeight: FontWeight.bold, color: Colors.grey))),
                   const SizedBox(height: 10),
-                  _buildImmeubleGrouping(payments, filteredApartments, screenWidth),
+                  _buildImmeubleGrouping(payments, filteredApartments, isWeb),
                   const Divider(height: 25),
-                  _buildFinalBilanCard(totalExp, totalPay),
+                  _buildFinalBilanCard(totalExp, totalPay, isWeb),
                 ])),
               ],
             ),
@@ -156,8 +153,7 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
     );
   }
 
-  // --- LOGIQUE IMMEUBLE ---
-  Widget _buildImmeubleGrouping(List<Map<String, dynamic>> payments, List<Map<String, dynamic>> apartments, double screenWidth) {
+  Widget _buildImmeubleGrouping(List<Map<String, dynamic>> payments, List<Map<String, dynamic>> apartments, bool isWeb) {
     Map<String, List<Map<String, dynamic>>> immApps = {};
     for (var app in apartments) {
       String iName = app['immeubles']?['nom'] ?? "Extérieur";
@@ -170,41 +166,43 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
             .fold(0, (sum, p) => sum + (p['montant_paye'] as num).toDouble());
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(border: Border.all(color: Colors.purple.withOpacity(0.1)), borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(border: Border.all(color: Colors.purple.withOpacity(0.1)), borderRadius: BorderRadius.circular(12)),
           child: ExpansionTile(
-            leading: const Icon(Icons.keyboard_arrow_right, size: 18, color: Colors.purple),
-            title: Text(e.key, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.purple)),
-            trailing: Text("${immPaye.toInt()} DH", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purple)),
-            children: [_buildPaymentTable(payments, e.value, screenWidth)],
+            leading: const Icon(Icons.keyboard_arrow_right, size: 20, color: Colors.purple),
+            title: Text(e.key, style: TextStyle(fontSize: isWeb ? 14 : 12, fontWeight: FontWeight.bold, color: Colors.purple)),
+            trailing: Text("${immPaye.toInt()} DH", style: TextStyle(fontSize: isWeb ? 13 : 11, fontWeight: FontWeight.bold, color: Colors.purple)),
+            children: [_buildPaymentTable(payments, e.value, isWeb)],
           ),
         );
       }).toList(),
     );
   }
 
-  // --- TABLEAU APPARTEMENTS (CORRECTION DES ERREURS DE TYPE) ---
-  Widget _buildPaymentTable(List<Map<String, dynamic>> payments, List<Map<String, dynamic>> apartments, double screenWidth) {
+  Widget _buildPaymentTable(List<Map<String, dynamic>> payments, List<Map<String, dynamic>> apartments, bool isWeb) {
     return LayoutBuilder(builder: (context, constraints) {
       return SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: ConstrainedBox(
           constraints: BoxConstraints(minWidth: constraints.maxWidth),
           child: DataTable(
-            columnSpacing: 12, headingRowHeight: 30, horizontalMargin: 10,
-            columns: [ _h("APP."), _h("FIXES"), _h("PARK."), _h("GAR."), _h("BOX."), _h("TOTAL") ],
+            columnSpacing: isWeb ? 40 : 12, 
+            headingRowHeight: isWeb ? 50 : 30, 
+            dataRowHeight: isWeb ? 60 : 48,
+            horizontalMargin: 10,
+            columns: [ _h("APP.", isWeb), _h("FIXES", isWeb), _h("PARK.", isWeb), _h("GAR.", isWeb), _h("BOX.", isWeb), _h("TOTAL", isWeb) ],
             rows: apartments.map((app) {
-              final appPays = payments.where((p) => p['appartement_id'] == app['id']).toList().cast<Map<String, dynamic>>(); // CAST ICI
+              final appPays = payments.where((p) => p['appartement_id'] == app['id']).toList().cast<Map<String, dynamic>>();
               double p = appPays.fold(0, (s, i) => s + (i['montant_paye'] as num).toDouble());
               double d = appPays.fold(0, (s, i) => s + (i['montant_total'] as num).toDouble());
 
               return DataRow(cells: [
-                DataCell(Text(app['numero'] ?? "-", style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold))),
-                _buildRatioCell(appPays, 'charges'),
-                _buildRatioCell(appPays, 'parking'),
-                _buildRatioCell(appPays, 'garage'),
-                _buildRatioCell(appPays, 'box'),
-                DataCell(Center(child: Text("${p.toInt()}/${d.toInt()}", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: p >= d && d > 0 ? Colors.green : primaryOrange)))),
+                DataCell(Text(app['numero'] ?? "-", style: TextStyle(fontSize: isWeb ? 13 : 9, fontWeight: FontWeight.bold))),
+                _buildRatioCell(appPays, 'charges', isWeb),
+                _buildRatioCell(appPays, 'parking', isWeb),
+                _buildRatioCell(appPays, 'garage', isWeb),
+                _buildRatioCell(appPays, 'box', isWeb),
+                DataCell(Center(child: Text("${p.toInt()}/${d.toInt()}", style: TextStyle(fontSize: isWeb ? 13 : 9, fontWeight: FontWeight.bold, color: p >= d && d > 0 ? Colors.green : primaryOrange)))),
               ]);
             }).toList(),
           ),
@@ -213,13 +211,12 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
     });
   }
 
-  // --- HELPERS ---
-  DataCell _buildRatioCell(List<Map<String, dynamic>> items, String type) {
+  DataCell _buildRatioCell(List<Map<String, dynamic>> items, String type, bool isWeb) {
     final pList = items.where((e) => e['type_paiement'] == type).toList();
-    if (pList.isEmpty) return const DataCell(Center(child: Text("-", style: TextStyle(color: Colors.grey, fontSize: 9))));
+    if (pList.isEmpty) return DataCell(Center(child: Text("-", style: TextStyle(color: Colors.grey, fontSize: isWeb ? 12 : 9))));
     double p = pList.fold(0, (s, i) => s + (i['montant_paye'] as num).toDouble());
     double d = pList.fold(0, (s, i) => s + (i['montant_total'] as num).toDouble());
-    return DataCell(Center(child: Container(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1), decoration: BoxDecoration(color: p >= d ? Colors.green.withOpacity(0.1) : primaryOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(4)), child: Text("${p.toInt()}/${d.toInt()}", style: TextStyle(fontSize: 8, color: p >= d ? Colors.green : primaryOrange, fontWeight: FontWeight.bold)))));
+    return DataCell(Center(child: Container(padding: EdgeInsets.symmetric(horizontal: isWeb ? 8 : 4, vertical: isWeb ? 4 : 1), decoration: BoxDecoration(color: p >= d ? Colors.green.withOpacity(0.1) : primaryOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(4)), child: Text("${p.toInt()}/${d.toInt()}", style: TextStyle(fontSize: isWeb ? 11 : 8, color: p >= d ? Colors.green : primaryOrange, fontWeight: FontWeight.bold)))));
   }
 
   Widget _buildIntroDescription() {
@@ -232,7 +229,7 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
             fontSize: 14,
             color: darkGrey.withOpacity(0.7),
             fontWeight: FontWeight.w400,
-            height: 1.4, // Donne de l'espace entre les lignes
+            height: 1.4,
           ),
         ),
         const SizedBox(height: 15),
@@ -248,8 +245,50 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
     );
   }
 
-  DataColumn _h(String l) => DataColumn(label: Expanded(child: Text(l, textAlign: TextAlign.center, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.grey))));
-  Widget _buildSubTile(String t, String a, Color c, Widget content) { return ExpansionTile(initiallyExpanded: true, title: Row(children: [Text(t, style: TextStyle(fontSize: 12, color: c, fontWeight: FontWeight.bold)), const SizedBox(width: 5), Icon(Icons.expand_more, size: 14, color: c)]), trailing: Text(a, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: c)), children: [content]); }
-  Widget _buildExpenseTable(List<Map<String, dynamic>> data) { return DataTable(columnSpacing: 10, headingRowHeight: 30, columns: const [DataColumn(label: Text('CATÉGORIE', style: TextStyle(fontSize: 8))), DataColumn(label: Text('DATE', style: TextStyle(fontSize: 8))), DataColumn(label: Text('MONTANT', style: TextStyle(fontSize: 8)))], rows: data.map((e) => DataRow(cells: [DataCell(Text(e['categories']?['nom'] ?? '-', style: const TextStyle(fontSize: 10))), DataCell(Text(e['date'] ?? '-', style: const TextStyle(fontSize: 10))), DataCell(Text("${e['montant']} DH", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.redAccent)))])).toList()); }
-  Widget _buildFinalBilanCard(double exp, double pay) { double solde = pay - exp; return Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: darkGrey, borderRadius: BorderRadius.circular(12)), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("SOLDE DU MANDAT", style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)), Text("${solde.toInt()} DH", style: TextStyle(color: solde >= 0 ? Colors.greenAccent : Colors.redAccent, fontSize: 18, fontWeight: FontWeight.w900))])); }
+  DataColumn _h(String l, bool isWeb) => DataColumn(label: Expanded(child: Text(l, textAlign: TextAlign.center, style: TextStyle(fontSize: isWeb ? 12 : 8, fontWeight: FontWeight.bold, color: Colors.grey))));
+  
+  Widget _buildSubTile(String t, String a, Color c, Widget content, bool isWeb) { 
+    return ExpansionTile(
+      initiallyExpanded: true, 
+      title: Row(children: [Text(t, style: TextStyle(fontSize: isWeb ? 15 : 12, color: c, fontWeight: FontWeight.bold)), const SizedBox(width: 5), Icon(Icons.expand_more, size: isWeb ? 18 : 14, color: c)]), 
+      trailing: Text(a, style: TextStyle(fontSize: isWeb ? 15 : 12, fontWeight: FontWeight.bold, color: c)), 
+      children: [content]
+    ); 
+  }
+
+  Widget _buildExpenseTable(List<Map<String, dynamic>> data, bool isWeb) { 
+    return SizedBox(
+      width: double.infinity,
+      child: DataTable(
+        columnSpacing: isWeb ? 40 : 10, 
+        headingRowHeight: isWeb ? 50 : 30,
+        dataRowHeight: isWeb ? 60 : 48,
+        columns: [
+          DataColumn(label: Text('CATÉGORIE', style: TextStyle(fontSize: isWeb ? 12 : 8, fontWeight: FontWeight.bold))), 
+          DataColumn(label: Text('DATE', style: TextStyle(fontSize: isWeb ? 12 : 8, fontWeight: FontWeight.bold))), 
+          DataColumn(label: Text('MONTANT', style: TextStyle(fontSize: isWeb ? 12 : 8, fontWeight: FontWeight.bold)))
+        ], 
+        rows: data.map((e) => DataRow(cells: [
+          DataCell(Text(e['categories']?['nom'] ?? '-', style: TextStyle(fontSize: isWeb ? 14 : 10))), 
+          DataCell(Text(e['date'] ?? '-', style: TextStyle(fontSize: isWeb ? 14 : 10))), 
+          DataCell(Text("${e['montant']} DH", style: TextStyle(fontSize: isWeb ? 14 : 10, fontWeight: FontWeight.bold, color: Colors.redAccent)))
+        ])).toList()
+      ),
+    ); 
+  }
+
+  Widget _buildFinalBilanCard(double exp, double pay, bool isWeb) { 
+    double solde = pay - exp; 
+    return Container(
+      padding: const EdgeInsets.all(20), 
+      decoration: BoxDecoration(color: darkGrey, borderRadius: BorderRadius.circular(15)), 
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+        children: [
+          Text("SOLDE DU MANDAT", style: TextStyle(color: Colors.white70, fontSize: isWeb ? 13 : 10, fontWeight: FontWeight.bold)), 
+          Text("${solde.toInt()} DH", style: TextStyle(color: solde >= 0 ? Colors.greenAccent : Colors.redAccent, fontSize: isWeb ? 24 : 18, fontWeight: FontWeight.w900))
+        ]
+      )
+    ); 
+  }
 }

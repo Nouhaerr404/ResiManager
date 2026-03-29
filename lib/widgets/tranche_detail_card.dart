@@ -35,13 +35,22 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ VERIFICATION SI LA TRANCHE N'EST PAS AFFECTÉE
+    final bool isUnassigned = widget.tranche.interSyndicId == null;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 15, offset: const Offset(0, 8))],
+        // ✅ CONTOUR ROUGE SI NON AFFECTÉ
+        border: isUnassigned ? Border.all(color: Colors.red.shade400, width: 2) : null,
+        boxShadow: [
+          isUnassigned 
+            ? BoxShadow(color: Colors.red.withOpacity(0.1), blurRadius: 10, spreadRadius: 2)
+            : BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 15, offset: const Offset(0, 8))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -54,6 +63,10 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
                 child: Row(
                   children: [
                     Flexible(child: Text(widget.tranche.nom, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkGrey), overflow: TextOverflow.ellipsis)),
+                    if (isUnassigned) ...[
+                      const SizedBox(width: 8),
+                      const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                    ]
                   ],
                 ),
               ),
@@ -80,11 +93,25 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
 
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: const Color(0xFFF8F9FA), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(
+              color: isUnassigned ? Colors.red.shade50 : const Color(0xFFF8F9FA), 
+              borderRadius: BorderRadius.circular(10)
+            ),
             child: Row(children: [
-              Icon(Icons.person_outline, size: 16, color: primaryOrange),
+              Icon(isUnassigned ? Icons.warning_amber_rounded : Icons.person_outline, 
+                   size: 16, 
+                   color: isUnassigned ? Colors.red : primaryOrange),
               const SizedBox(width: 8),
-              Expanded(child: Text(widget.tranche.interSyndicNom ?? "Non assigné", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+              Expanded(
+                child: Text(
+                  widget.tranche.interSyndicNom ?? "NON ASSIGNÉ (ALERTE)", 
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold, 
+                    fontSize: 13,
+                    color: isUnassigned ? Colors.red : Colors.black87
+                  )
+                )
+              ),
             ]),
           ),
 
@@ -96,7 +123,7 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
               _buildStatIcon(Icons.apartment, widget.tranche.nombreImmeubles, "Imm.", "imm"),
               _buildStatIcon(Icons.home_work_outlined, widget.tranche.nombreAppartements, "App.", "app"),
               _buildStatIcon(Icons.local_parking, widget.tranche.nombreParkings, "Park.", "park"),
-              _buildStatIcon(Icons.storefront_outlined, widget.tranche.nombreGarages, "Gar.", "gar"), // CHANGEMENT ICI
+              _buildStatIcon(Icons.storefront_outlined, widget.tranche.nombreGarages, "Gar.", "gar"), 
               _buildStatIcon(Icons.inventory_2, widget.tranche.nombreBoxes, "Box", "box"),
             ],
           ),
@@ -115,7 +142,7 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
               ))
             else 
               ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 120), // Empêche le dépassement vertical
+                constraints: const BoxConstraints(maxHeight: 120),
                 child: SingleChildScrollView(
                   child: Wrap(
                     spacing: 6, 

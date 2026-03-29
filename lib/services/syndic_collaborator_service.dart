@@ -6,6 +6,9 @@ class SyndicCollaboratorService {
   // --- 1. LECTURE (Filtrée par Résidence) ---
   Future<List<Map<String, dynamic>>> getMyInterSyndics(int myId, int residenceId) async {
     try {
+      // ✅ AVANT de charger, on nettoie les mandats expirés
+      await checkAndDisableExpiredMandates();
+
       print(">>> DEBUG : Recherche syndics pour SG: $myId et RES: $residenceId");
 
       final response = await _db.from('liens_syndics').select('''
@@ -90,6 +93,45 @@ class SyndicCollaboratorService {
       } catch (e) {
         print(">>> ERREUR lors du retrait des tranches : $e");
       }
+    }
+  }
+
+  /// Vérifie si des mandats d'inter-syndics sont expirés et les désactive si nécessaire.
+  /// Un syndic est désactivé si TOUS ses mandats sont passés (date_fin < aujourd'hui)
+  /// et qu'il n'en a aucun de futur ou en cours.
+  Future<void> checkAndDisableExpiredMandates() async {
+    final now = DateTime.now().toIso8601String().split('T')[0];
+    
+    try {
+      // 1. Identifier les syndics qui ont au moins un mandat terminé
+      final expiredRes = await _db
+          .from('historique_affectations')
+          .select('inter_syndic_id')
+          .lt('date_fin', now);
+          
+      final Set<int> potentialUserIds = (expiredRes as List)
+          .map((m) => m['inter_syndic_id'] as int)
+          .toSet();
+
+      for (int userId in potentialUserIds) {
+        // 2. Vérifier si ce syndic est actuellement actif
+        final userCheck = await _db.from('users').select('statut').eq('id', userId).maybeSingle();
+        if (userCheck == null || userCheck['statut'] != 'actif') continue;
+
+        // 3. Vérifier s'il a un mandat encore valide (aujourd'hui ou futur)
+        final activeMandatesRes = await _db
+            .from('historique_affectations')
+            .select('id')
+            .eq('inter_syndic_id', userId)
+            .gte('date_fin', now);
+            
+        if ((activeMandatesRes as List).isEmpty) {
+          print(">>> AUTO-DESACTIVATION : Le syndic $userId n'a plus de mandat valide. Désactivation...");
+          await toggleStatus(userId, 'actif');
+        }
+      }
+    } catch (e) {
+      print(">>> ERREUR checkAndDisableExpiredMandates : $e");
     }
   }
 }
