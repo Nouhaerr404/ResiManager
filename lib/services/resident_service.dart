@@ -7,9 +7,46 @@ import 'parking_service.dart';
 import 'box_service.dart';
 import 'garage_service.dart';
 import 'dart:typed_data';
+import 'dart:math';
 
 class ResidentService {
   final _db = Supabase.instance.client;
+
+  // ═══════════════════════════════════════════════════════════════════
+  // UTILITAIRE : Génération mot de passe aléatoire
+  // ═══════════════════════════════════════════════════════════════════
+
+  /// Génère un mot de passe aléatoire sécurisé (12 caractères)
+  String _generatePassword() {
+    const chars =
+        'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#!';
+    final rng = Random.secure();
+    return List.generate(12, (_) => chars[rng.nextInt(chars.length)]).join();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // UTILITAIRE : Vérification droits inter-syndic sur le mandat
+  // ═══════════════════════════════════════════════════════════════════
+
+  /// Vérifie que l'inter-syndic [interSyndicId] est bien affecté au mandat [mandatId].
+  /// Retourne true si autorisé, false sinon.
+  Future<bool> isMandatOwnedByInterSyndic({
+    required int mandatId,
+    required int interSyndicId,
+  }) async {
+    try {
+      final res = await _db
+          .from('historique_affectations')
+          .select('id')
+          .eq('id', mandatId)
+          .eq('inter_syndic_id', interSyndicId)
+          .maybeSingle();
+      return res != null;
+    } catch (e) {
+      debugPrint('>>> ERREUR isMandatOwnedByInterSyndic: $e');
+      return false;
+    }
+  }
 
   // ═══════════════════════════════════════════════════════════════════
   // SECTION ADMIN
@@ -30,11 +67,11 @@ class ResidentService {
 
       final immeubleIds = immeubles.map((i) => i['id']).toList();
 
-      // 2. Appartements
+      // 2. Appartements (tous statuts : libre ET occupe)
       final appartementsRes = await _db
           .from('appartements')
           .select(
-          'id, numero, immeuble_id, statut, immeubles!inner(id, nom, tranches!inner(nom, residences!inner(nom)))')
+          'id, numero, immeuble_id, statut, immeubles!inner(id, nom, tranches!inner(prix_annuel, nom, residences!inner(id, nom)))')
           .inFilter('immeuble_id', immeubleIds);
       final List appartements = appartementsRes as List? ?? [];
       if (appartements.isEmpty) return [];
@@ -59,21 +96,19 @@ class ResidentService {
           .inFilter('id', userIds);
       final users = usersRes as List;
 
-      // 5. Paiements filtres par mandat_id
-      var paiementsQuery = _db
-          .from('paiements')
-          .select(
-          'id, appartement_id, resident_id, montant_total, montant_paye, statut, date_paiement, type_paiement, annee, created_at, mandat_id')
-          .inFilter('appartement_id', appartementIds);
-
+      // 5. Paiements filtrés strictement par mandat_id
+      List paiements = [];
       if (mandatId != null) {
-        paiementsQuery = paiementsQuery.eq('mandat_id', mandatId);
+        final paiementsRes = await _db
+            .from('paiements')
+            .select(
+            'id, appartement_id, resident_id, montant_total, montant_paye, statut, date_paiement, type_paiement, annee, created_at, mandat_id')
+            .inFilter('appartement_id', appartementIds)
+            .eq('mandat_id', mandatId);
+        paiements = paiementsRes as List;
       }
 
-      final paiementsRes = await paiementsQuery;
-      final paiements = paiementsRes as List;
-
-      // 6. Numeros garage/parking/box par resident
+      // 6. Numéros garage/parking/box par résident
       final residentUserIds = residents.map((r) => r['user_id']).toList();
       final Map<String, String> paiementNumero = {};
 
@@ -122,7 +157,8 @@ class ResidentService {
             if (resId != null && pk['numero'] != null) {
               residentResources
                   .putIfAbsent(resId, () => [])
-                  .add({'type': 'parking', 'numero': pk['numero'].toString()});
+                  .add(
+                  {'type': 'parking', 'numero': pk['numero'].toString()});
             }
           }
           for (final bx in bxRes as List? ?? []) {
@@ -196,27 +232,35 @@ class ResidentService {
             .where((p) => p['appartement_id'] == r['appartement_id'])
             .toList();
 
-        // Residents sans paiement dans ce mandat → exclus
-        if (residentPaiements.isEmpty) continue;
-
         double totalM = 0;
         double payeM = 0;
         bool hasImpaye = false;
         bool hasPartiel = false;
         int? mainPaiementId;
 
-        for (final p in residentPaiements) {
-          totalM += double.parse((p['montant_total'] ?? 0).toString());
-          payeM += double.parse((p['montant_paye'] ?? 0).toString());
-          if (p['statut'] == 'impaye') hasImpaye = true;
-          if (p['statut'] == 'partiel') hasPartiel = true;
-          if (p['type_paiement'] == 'charges') {
-            mainPaiementId = p['id'] as int;
+        if (residentPaiements.isEmpty) {
+          final immRaw = appart['immeubles'] ?? {};
+          final tr = immRaw['tranches'] ?? {};
+          final basePrix =
+              double.tryParse((tr['prix_annuel'] ?? 0).toString()) ?? 0.0;
+          totalM = basePrix;
+          payeM = 0;
+          hasImpaye = true;
+          mainPaiementId = null;
+        } else {
+          for (final p in residentPaiements) {
+            totalM += double.parse((p['montant_total'] ?? 0).toString());
+            payeM += double.parse((p['montant_paye'] ?? 0).toString());
+            if (p['statut'] == 'impaye') hasImpaye = true;
+            if (p['statut'] == 'partiel') hasPartiel = true;
+            if (p['type_paiement'] == 'charges') {
+              mainPaiementId = p['id'] as int;
+            }
           }
+          mainPaiementId ??= residentPaiements.isNotEmpty
+              ? residentPaiements.first['id'] as int
+              : null;
         }
-        mainPaiementId ??= residentPaiements.isNotEmpty
-            ? residentPaiements.first['id'] as int
-            : null;
 
         String globalStatut = 'complet';
         if (hasImpaye) {
@@ -378,16 +422,14 @@ class ResidentService {
         int? mandatId,
       }) async {
     try {
-      var query = _db
+      final res = await _db
           .from('historique_paiements')
           .select(
           'id, montant, date, description, type, paiement_id, paiements(annee, type_paiement, mandat_id)')
-          .eq('resident_id', residentUserId);
-
-      final res = await query.order('date', ascending: false);
+          .eq('resident_id', residentUserId)
+          .order('date', ascending: false);
       final List list = res as List? ?? [];
 
-      // Filtre cote Dart sur mandat_id via la relation jointe
       final filtered = mandatId == null
           ? list
           : list.where((h) {
@@ -423,73 +465,153 @@ class ResidentService {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // ADD RESIDENT — avec mandat_id obligatoire
+  // ADD RESIDENT — mot de passe auto-généré + envoi email
+  //              — sans champ password dans le formulaire
   // ─────────────────────────────────────────────────────────────────
 
+  /// Ajoute un résident.
+  ///
+  /// Le mot de passe est généré automatiquement et envoyé au résident
+  /// par email (via Supabase resetPasswordForEmail).
+  ///
+  /// [mandatId] est obligatoire : si l'inter-syndic n'est pas propriétaire
+  /// du mandat, l'opération est refusée.
+  ///
+  /// Si le résident existe déjà (même email), il est simplement rattaché
+  /// au nouveau mandat sans recréer de compte — ses paiements précédents
+  /// ne sont PAS touchés.
   Future<String?> addResident({
     required String nom,
     required String prenom,
     required String email,
     String? telephone,
-    required String password,
     required String type,
     required dynamic trancheId,
     required dynamic appartementId,
     required double montantTotal,
     required int mandatId,
+    required int interSyndicId, // ← NOUVEAU : pour vérifier les droits
     int? parkingId,
     int? boxId,
     int? garageId,
   }) async {
     try {
-      // 1. Creer le compte Supabase Auth
-      try {
-        await _db.auth.signUp(email: email.trim(), password: password);
-      } catch (_) {}
-
-      // 2. Email de reinitialisation (fire & forget)
-      try {
-        await _db.auth.resetPasswordForEmail(
-          email.trim(),
-          redirectTo: 'io.supabase.resimanager://reset-callback/',
-        );
-      } catch (e) {
-        debugPrint('>>> AVERTISSEMENT reset email non envoye: $e');
+      // ── 0. Vérification droits inter-syndic sur le mandat ──────────
+      final isOwner = await isMandatOwnedByInterSyndic(
+        mandatId: mandatId,
+        interSyndicId: interSyndicId,
+      );
+      if (!isOwner) {
+        return 'Vous n\'êtes pas autorisé à ajouter un résident dans ce mandat.';
       }
 
-      // 3. Inserer dans users
-      final userRes = await _db
+      // ── 1. Vérifier si le résident existe déjà (même email) ────────
+      final existingUser = await _db
           .from('users')
-          .insert({
-        'nom': nom.trim(),
-        'prenom': prenom.trim(),
-        'email': email.trim(),
-        'telephone': telephone?.trim(),
-        'password': password,
-        'role': 'resident',
-        'statut': 'actif',
-      })
           .select('id')
-          .single();
+          .eq('email', email.trim().toLowerCase())
+          .maybeSingle();
 
-      final dynamic userId = userRes['id'];
+      dynamic userId;
+      bool isNewUser = existingUser == null;
 
-      // 4. Inserer dans residents
-      await _db.from('residents').insert({
-        'user_id': userId,
-        'appartement_id': appartementId,
-        'type': type,
-        'statut': 'actif',
-        'date_arrivee': DateTime.now().toIso8601String().substring(0, 10),
-      });
+      if (isNewUser) {
+        // ── 2a. Nouveau résident : générer mot de passe + créer compte ─
+        final generatedPassword = _generatePassword();
 
-      // 5. Marquer l'appartement comme occupe
-      await _db
-          .from('appartements')
-          .update({'statut': 'occupe', 'resident_id': userId})
-          .eq('id', appartementId);
+        // Créer le compte Supabase Auth
+        try {
+          await _db.auth.signUp(
+            email: email.trim(),
+            password: generatedPassword,
+          );
+        } catch (_) {}
 
-      // 6. Recuperer les infos de la tranche
+        // Envoyer le mot de passe par email via reset password
+        // L'email contiendra un lien pour définir/confirmer son mot de passe
+        try {
+          await _db.auth.resetPasswordForEmail(
+            email.trim(),
+            redirectTo: 'io.supabase.resimanager://reset-callback/',
+          );
+        } catch (e) {
+          debugPrint('>>> AVERTISSEMENT reset email non envoyé: $e');
+        }
+
+        // Insérer dans users
+        final userRes = await _db
+            .from('users')
+            .insert({
+          'nom': nom.trim(),
+          'prenom': prenom.trim(),
+          'email': email.trim().toLowerCase(),
+          'telephone': telephone?.trim(),
+          'password': generatedPassword, // stocké pour référence interne
+          'role': 'resident',
+          'statut': 'actif',
+        })
+            .select('id')
+            .single();
+
+        userId = userRes['id'];
+
+        // Insérer dans residents
+        await _db.from('residents').insert({
+          'user_id': userId,
+          'appartement_id': appartementId,
+          'type': type,
+          'statut': 'actif',
+          'date_arrivee': DateTime.now().toIso8601String().substring(0, 10),
+        });
+
+        // Marquer l'appartement comme occupé
+        await _db
+            .from('appartements')
+            .update({'statut': 'occupe', 'resident_id': userId})
+            .eq('id', appartementId);
+      } else {
+        // ── 2b. Résident existant : récupérer son userId ───────────────
+        userId = existingUser['id'];
+
+        // Mettre à jour ses infos si nécessaire
+        await _db.from('users').update({
+          'nom': nom.trim(),
+          'prenom': prenom.trim(),
+          'telephone': telephone?.trim(),
+        }).eq('id', userId);
+
+        // S'assurer que l'entrée residents pointe vers le bon appartement
+        final existingResident = await _db
+            .from('residents')
+            .select('id')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+        if (existingResident != null) {
+          await _db.from('residents').update({
+            'appartement_id': appartementId,
+            'type': type,
+            'statut': 'actif',
+          }).eq('user_id', userId);
+        } else {
+          await _db.from('residents').insert({
+            'user_id': userId,
+            'appartement_id': appartementId,
+            'type': type,
+            'statut': 'actif',
+            'date_arrivee':
+            DateTime.now().toIso8601String().substring(0, 10),
+          });
+        }
+
+        // Marquer l'appartement comme occupé
+        await _db
+            .from('appartements')
+            .update({'statut': 'occupe', 'resident_id': userId})
+            .eq('id', appartementId);
+      }
+
+      // ── 3. Récupérer les infos de la tranche ──────────────────────
       final trData = await _db
           .from('tranches')
           .select('residence_id, inter_syndic_id, prix_annuel')
@@ -498,26 +620,39 @@ class ResidentService {
       final residenceId = trData?['residence_id'] ?? 1;
       final isId = trData?['inter_syndic_id'] ?? 1;
       final rawPrix = trData?['prix_annuel'] ?? 0;
-      final double tranchePrix = double.tryParse(rawPrix.toString()) ?? 0.0;
+      final double tranchePrix =
+          double.tryParse(rawPrix.toString()) ?? 0.0;
       final double montantEffectif =
       montantTotal > 0 ? montantTotal : tranchePrix;
 
-      // 7. Creer la ligne de paiement charges liee au mandat
-      await _db.from('paiements').insert({
-        'resident_id': userId,
-        'appartement_id': appartementId,
-        'residence_id': residenceId,
-        'inter_syndic_id': isId,
-        'montant_total': montantEffectif,
-        'montant_paye': 0,
-        'type_paiement': 'charges',
-        'statut': 'impaye',
-        'annee': DateTime.now().year,
-        'mois': DateTime.now().month,
-        'mandat_id': mandatId,
-      });
+      // ── 4. Créer la ligne paiement charges pour CE mandat ─────────
+      // Les paiements des mandats précédents ne sont PAS touchés.
+      // On vérifie qu'il n'y a pas déjà un paiement charges pour ce mandat.
+      final existingPaiement = await _db
+          .from('paiements')
+          .select('id')
+          .eq('appartement_id', appartementId)
+          .eq('type_paiement', 'charges')
+          .eq('mandat_id', mandatId)
+          .maybeSingle();
 
-      // 8. Assigner parking
+      if (existingPaiement == null) {
+        await _db.from('paiements').insert({
+          'resident_id': userId,
+          'appartement_id': appartementId,
+          'residence_id': residenceId,
+          'inter_syndic_id': isId,
+          'montant_total': montantEffectif,
+          'montant_paye': 0,
+          'type_paiement': 'charges',
+          'statut': 'impaye',
+          'annee': DateTime.now().year,
+          'mois': DateTime.now().month,
+          'mandat_id': mandatId,
+        });
+      }
+
+      // ── 5. Assigner parking ────────────────────────────────────────
       if (parkingId != null) {
         await ParkingService().assignerParking(
           parkingId: parkingId,
@@ -538,7 +673,7 @@ class ResidentService {
         );
       }
 
-      // 9. Assigner box
+      // ── 6. Assigner box ───────────────────────────────────────────
       if (boxId != null) {
         await BoxService().assignerBox(
           boxId: boxId,
@@ -558,7 +693,7 @@ class ResidentService {
         );
       }
 
-      // 10. Assigner garage
+      // ── 7. Assigner garage ────────────────────────────────────────
       if (garageId != null) {
         await GarageService().assignerGarage(
           garageId: garageId,
@@ -579,7 +714,7 @@ class ResidentService {
         );
       }
 
-      return null;
+      return null; // succès
     } catch (e) {
       debugPrint('>>> ERREUR addResident: $e');
       return e.toString();
@@ -587,7 +722,7 @@ class ResidentService {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // ENREGISTRER PAIEMENT (versement)
+  // ENREGISTRER PAIEMENT — vérifie que l'inter-syndic est propriétaire
   // ─────────────────────────────────────────────────────────────────
 
   Future<String?> enregistrerPaiement({
@@ -596,8 +731,31 @@ class ResidentService {
     required double montantAjoute,
     required double montantDejaPane,
     required double montantTotal,
+    required int interSyndicId, // ← NOUVEAU
   }) async {
     try {
+      // Récupérer le mandat_id du paiement
+      final paiementData = await _db
+          .from('paiements')
+          .select('mandat_id')
+          .eq('id', paiementId)
+          .maybeSingle();
+
+      final int? mandatId = paiementData?['mandat_id'] as int?;
+
+      if (mandatId == null) {
+        return 'Paiement non lié à un mandat valide.';
+      }
+
+      // Vérifier que l'inter-syndic est propriétaire du mandat
+      final isOwner = await isMandatOwnedByInterSyndic(
+        mandatId: mandatId,
+        interSyndicId: interSyndicId,
+      );
+      if (!isOwner) {
+        return 'Vous n\'êtes pas autorisé à modifier ce paiement (mandat non affecté).';
+      }
+
       final nouveauMontant = montantDejaPane + montantAjoute;
       final statut = nouveauMontant >= montantTotal
           ? 'complet'
@@ -606,7 +764,8 @@ class ResidentService {
       await _db.from('paiements').update({
         'montant_paye': nouveauMontant,
         'statut': statut,
-        'date_paiement': DateTime.now().toIso8601String().substring(0, 10),
+        'date_paiement':
+        DateTime.now().toIso8601String().substring(0, 10),
       }).eq('id', paiementId);
 
       await _db.from('historique_paiements').insert({
@@ -621,6 +780,74 @@ class ResidentService {
       return null;
     } catch (e) {
       return e.toString();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // INIT PAIEMENT MANDAT — vérifie les droits
+  // ─────────────────────────────────────────────────────────────────
+
+  Future<int?> initPaiementMandat({
+    required int residentUserId,
+    required int appartementId,
+    required int mandatId,
+    required double montantTotal,
+    required int interSyndicId, // ← NOUVEAU
+  }) async {
+    try {
+      // Vérification droits
+      final isOwner = await isMandatOwnedByInterSyndic(
+        mandatId: mandatId,
+        interSyndicId: interSyndicId,
+      );
+      if (!isOwner) {
+        debugPrint(
+            '>>> REFUS initPaiementMandat : inter-syndic $interSyndicId non propriétaire du mandat $mandatId');
+        return null;
+      }
+
+      final appartData = await _db
+          .from('appartements')
+          .select('immeubles(tranche_id, residences(id))')
+          .eq('id', appartementId)
+          .maybeSingle();
+
+      final trancheId = appartData?['immeubles']?['tranche_id'];
+      final residenceId =
+          appartData?['immeubles']?['residences']?['id'] ?? 1;
+
+      int isId = 1;
+      if (trancheId != null) {
+        final trData = await _db
+            .from('tranches')
+            .select('inter_syndic_id')
+            .eq('id', trancheId)
+            .maybeSingle();
+        isId = trData?['inter_syndic_id'] ?? 1;
+      }
+
+      final res = await _db
+          .from('paiements')
+          .insert({
+        'resident_id': residentUserId,
+        'appartement_id': appartementId,
+        'residence_id': residenceId,
+        'inter_syndic_id': isId,
+        'montant_total': montantTotal,
+        'montant_paye': 0,
+        'type_paiement': 'charges',
+        'statut': 'impaye',
+        'annee': DateTime.now().year,
+        'mois': DateTime.now().month,
+        'mandat_id': mandatId,
+      })
+          .select('id')
+          .single();
+
+      return res['id'] as int;
+    } catch (e) {
+      debugPrint('>>> ERREUR initPaiementMandat: $e');
+      return null;
     }
   }
 
@@ -667,7 +894,7 @@ class ResidentService {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // UPDATE RESIDENT
+  // UPDATE RESIDENT — vérifie les droits sur le mandat
   // ─────────────────────────────────────────────────────────────────
 
   Future<String?> updateResident({
@@ -679,8 +906,20 @@ class ResidentService {
     double? montantTotal,
     int? annee,
     int? mandatId,
+    required int interSyndicId, // ← NOUVEAU
   }) async {
     try {
+      // Vérification droits si un mandat est ciblé
+      if (mandatId != null) {
+        final isOwner = await isMandatOwnedByInterSyndic(
+          mandatId: mandatId,
+          interSyndicId: interSyndicId,
+        );
+        if (!isOwner) {
+          return 'Vous n\'êtes pas autorisé à modifier ce résident dans ce mandat.';
+        }
+      }
+
       await _db.from('users').update({
         'nom': nom.trim(),
         'prenom': prenom.trim(),
@@ -691,21 +930,17 @@ class ResidentService {
           .from('residents')
           .update({'type': type}).eq('user_id', userId);
 
-      if (montantTotal != null && montantTotal > 0) {
+      if (montantTotal != null && montantTotal > 0 && mandatId != null) {
         final targetAnnee = annee ?? DateTime.now().year;
 
-        var paiementQuery = _db
+        final existingPaiement = await _db
             .from('paiements')
             .select('id, montant_paye')
             .eq('resident_id', userId)
             .eq('type_paiement', 'charges')
-            .eq('annee', targetAnnee);
-
-        if (mandatId != null) {
-          paiementQuery = paiementQuery.eq('mandat_id', mandatId);
-        }
-
-        final existingPaiement = await paiementQuery.maybeSingle();
+            .eq('annee', targetAnnee)
+            .eq('mandat_id', mandatId)
+            .maybeSingle();
 
         if (existingPaiement != null) {
           final double paid =
@@ -729,12 +964,27 @@ class ResidentService {
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // DELETE RESIDENT
+  // DELETE RESIDENT — vérifie les droits
   // ─────────────────────────────────────────────────────────────────
 
   Future<String?> deleteResident(
-      dynamic userId, dynamic appartementId) async {
+      dynamic userId,
+      dynamic appartementId, {
+        required int interSyndicId, // ← NOUVEAU
+        int? mandatId,              // ← NOUVEAU (mandat courant)
+      }) async {
     try {
+      // Vérification droits si un mandat est ciblé
+      if (mandatId != null) {
+        final isOwner = await isMandatOwnedByInterSyndic(
+          mandatId: mandatId,
+          interSyndicId: interSyndicId,
+        );
+        if (!isOwner) {
+          return 'Vous n\'êtes pas autorisé à supprimer ce résident dans ce mandat.';
+        }
+      }
+
       if (appartementId != null) {
         await _db
             .from('appartements')
@@ -758,7 +1008,7 @@ class ResidentService {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // SECTION RESIDENT
+  // SECTION RESIDENT (inchangée)
   // ═══════════════════════════════════════════════════════════════════
 
   Future<Map<String, dynamic>> getChargesData(
@@ -775,7 +1025,7 @@ class ResidentService {
       final imm = appart?['immeubles'] as Map<String, dynamic>?;
       final tranche = imm?['tranches'] as Map<String, dynamic>?;
       if (appart == null || imm == null || tranche == null) {
-        return _err('Donnees incompletes');
+        return _err('Données incomplètes');
       }
       final dynamic trancheId = tranche['id'];
       final int nbApparts = (imm['nombre_appartements'] as int?) ?? 1;
@@ -871,10 +1121,6 @@ class ResidentService {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // DEPENSES DETAILLEES PAR TRANCHE (espace resident)
-  // ─────────────────────────────────────────────────────────────────
-
   Future<Map<String, dynamic>> getTrancheExpensesDetailed(
       dynamic userId, int annee) async {
     try {
@@ -942,7 +1188,8 @@ class ResidentService {
           ...Map<String, dynamic>.from(d),
           'montant': montantFinal.toStringAsFixed(2),
           'montant_original': montantSaisi,
-          'type_affichage': typeCat == 'globale' ? 'Commune' : 'Individuelle',
+          'type_affichage':
+          typeCat == 'globale' ? 'Commune' : 'Individuelle',
         });
 
         totalResident += montantFinal;

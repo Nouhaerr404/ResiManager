@@ -863,7 +863,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
             InterSyndicHeader(
               title: 'ResiManager',
               subtitle: 'inter_syndic',
-              gridIcon: Icons.grid_view_rounded,
+              gridIcon: Icons.business_rounded,
               onBack: widget.onBack ?? () => Navigator.pop(context),
               onAdd: _showAddApartmentDialog,
               addLabel: 'Ajouter',
