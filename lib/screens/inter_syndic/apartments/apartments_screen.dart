@@ -922,11 +922,12 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildStatCard('Total', filteredApartments.length.toString(), Icons.home_rounded, InterSyndicPalette.textMid, InterSyndicPalette.surface),
-                  _buildStatCard('Occupés', occupiedCount.toString(), Icons.check_circle_rounded, InterSyndicPalette.coral, InterSyndicPalette.coralLight),
-                  _buildStatCard('Vacants', vacantCount.toString(), Icons.error_outline_rounded, InterSyndicPalette.textMid, InterSyndicPalette.surface),
+                   Expanded(child: _buildStatCard('Total', filteredApartments.length.toString(), Icons.home_rounded, InterSyndicPalette.textMid, InterSyndicPalette.surface)),
+                   const SizedBox(width: 8),
+                   Expanded(child: _buildStatCard('Occupés', occupiedCount.toString(), Icons.check_circle_rounded, InterSyndicPalette.coral, InterSyndicPalette.coralLight)),
+                   const SizedBox(width: 8),
+                   Expanded(child: _buildStatCard('Vacants', vacantCount.toString(), Icons.error_outline_rounded, InterSyndicPalette.textMid, InterSyndicPalette.surface)),
                 ],
               ),
             ),
@@ -1002,23 +1003,29 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
 
   Widget _buildStatCard(String label, String value, IconData icon, Color textColor, Color bgColor) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
       decoration: BoxDecoration(
         color: InterSyndicPalette.bgCard,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: InterSyndicPalette.divider),
       ),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: textColor, size: 20),
+            child: Icon(icon, color: textColor, size: 18),
           ),
           const SizedBox(height: 8),
-          Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: InterSyndicPalette.dark)),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: InterSyndicPalette.dark)),
+          ),
           const SizedBox(height: 2),
-          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: InterSyndicPalette.textLight)),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: InterSyndicPalette.textLight)),
+          ),
         ],
       ),
     );

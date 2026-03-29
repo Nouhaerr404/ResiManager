@@ -278,13 +278,11 @@ class _BoxesScreenState extends State<BoxesScreen>
           const SizedBox(height: 16),
           Row(
             children: [
-              _bannerStat('$_disponibles', 'Disponibles', _C.green,
-                  _C.greenLight),
-              const SizedBox(width: 10),
-              _bannerStat('$_occupes', 'Occupes', _C.coral, _C.coralLight),
-              const SizedBox(width: 10),
-              _bannerStat('${_revenusXan.toInt()} DH', 'Revenus/an', _C.amber,
-                  _C.amberLight),
+              _bannerStat('$_disponibles', 'Disponibles', _C.green, _C.greenLight),
+              const SizedBox(width: 6),
+              _bannerStat('$_occupes', 'Occupés', _C.coral, _C.coralLight),
+              const SizedBox(width: 6),
+              _bannerStat('${_revenusXan.toInt()} DH', 'Revenus/an', _C.amber, _C.amberLight),
             ],
           ),
         ],
@@ -292,27 +290,23 @@ class _BoxesScreenState extends State<BoxesScreen>
     );
   }
 
-  Widget _bannerStat(
-      String val, String label, Color color, Color bg) {
+  Widget _bannerStat(String val, String label, Color color, Color bg) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-        decoration: BoxDecoration(
-            color: bg, borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center, // Centré pour gagner de la place
           children: [
-            Text(val,
-                style: TextStyle(
-                    color: color,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800)),
+            FittedBox( // Empêche le texte de déborder
+              fit: BoxFit.scaleDown,
+              child: Text(val, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
+            ),
             const SizedBox(height: 2),
-            Text(label,
-                style: TextStyle(
-                    color: color.withOpacity(0.7),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(label, style: TextStyle(color: color.withOpacity(0.8), fontSize: 9, fontWeight: FontWeight.w600)),
+            ),
           ],
         ),
       ),

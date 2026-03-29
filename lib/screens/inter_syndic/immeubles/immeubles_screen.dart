@@ -214,8 +214,11 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
             const SizedBox(height: 20),
             const Divider(height: 1),
             const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 12,
               children: [
                 _infoColumn('Prix Annuel / Appt', '${displayPrice.toStringAsFixed(0)} DH'),
                 ElevatedButton(
@@ -238,13 +241,14 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
                     foregroundColor: _C.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   ),
                   child: const Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Voir Unités', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, size: 14),
+                      Text('Voir Unités', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11)),
+                      SizedBox(width: 6),
+                      Icon(Icons.arrow_forward_rounded, size: 12),
                     ],
                   ),
                 ),

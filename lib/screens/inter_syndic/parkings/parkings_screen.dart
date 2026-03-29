@@ -238,7 +238,7 @@ class _ParkingsScreenState extends State<ParkingsScreen>
   // ── Stats Banner
   Widget _buildStatsBanner() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       decoration: BoxDecoration(
         color: _C.white,
         borderRadius: BorderRadius.circular(16),
@@ -249,15 +249,15 @@ class _ParkingsScreenState extends State<ParkingsScreen>
           Row(
             children: [
               Container(
-                width: 46,
-                height: 46,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                     color: _C.coralLight,
-                    borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(10)),
                 child: const Icon(Icons.local_parking_rounded,
-                    color: _C.coral, size: 22),
+                    color: _C.coral, size: 20),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -266,11 +266,10 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                         style: const TextStyle(
                             color: _C.dark,
                             fontWeight: FontWeight.w800,
-                            fontSize: 18,
+                            fontSize: 17,
                             letterSpacing: -0.3)),
                     const Text('dans cette tranche',
-                        style:
-                        TextStyle(color: _C.textLight, fontSize: 11)),
+                        style: TextStyle(color: _C.textLight, fontSize: 10)),
                   ],
                 ),
               ),
@@ -281,13 +280,11 @@ class _ParkingsScreenState extends State<ParkingsScreen>
           const SizedBox(height: 16),
           Row(
             children: [
-              _bannerStat('$_disponibles', 'Disponibles', _C.green,
-                  _C.greenLight),
-              const SizedBox(width: 10),
-              _bannerStat('$_occupes', 'Occupes', _C.coral, _C.coralLight),
-              const SizedBox(width: 10),
-              _bannerStat('${_revenus.toInt()} DH', 'Revenus/an', _C.amber,
-                  _C.amberLight),
+              _bannerStat('$_disponibles', 'Disponibles', _C.green, _C.greenLight),
+              const SizedBox(width: 6),
+              _bannerStat('$_occupes', 'Occupés', _C.coral, _C.coralLight),
+              const SizedBox(width: 6),
+              _bannerStat('${_revenus.toInt()} DH', 'Revenus/an', _C.amber, _C.amberLight),
             ],
           ),
         ],
@@ -295,27 +292,32 @@ class _ParkingsScreenState extends State<ParkingsScreen>
     );
   }
 
-  Widget _bannerStat(
-      String val, String label, Color color, Color bg) {
+  Widget _bannerStat(String val, String label, Color color, Color bg) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
         decoration: BoxDecoration(
-            color: bg, borderRadius: BorderRadius.circular(12)),
+            color: bg, borderRadius: BorderRadius.circular(10)),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(val,
-                style: TextStyle(
-                    color: color,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(val,
+                  style: TextStyle(
+                      color: color,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold)),
+            ),
             const SizedBox(height: 2),
-            Text(label,
-                style: TextStyle(
-                    color: color.withValues(alpha: 0.7),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(label,
+                  style: TextStyle(
+                      color: color.withOpacity(0.8),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600)),
+            ),
           ],
         ),
       ),

@@ -62,7 +62,7 @@ class InterSyndicHeader extends StatelessWidget {
                   title,
                   style: const TextStyle(
                     color: InterSyndicPalette.dark,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.bold,
                     fontSize: 14,
                     letterSpacing: -0.2,
                   ),
@@ -72,43 +72,48 @@ class InterSyndicHeader extends StatelessWidget {
                   subtitle,
                   style: const TextStyle(
                     color: InterSyndicPalette.textLight,
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: FontWeight.w500,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
           ...extraActions.map((action) => Padding(
-                padding: const EdgeInsets.only(right: 8.0),
+                padding: const EdgeInsets.only(left: 4.0),
                 child: action,
               )),
           if (onAdd != null)
-            GestureDetector(
-              onTap: onAdd,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                decoration: BoxDecoration(
-                  color: InterSyndicPalette.coral,
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.add_rounded,
-                        size: 16, color: InterSyndicPalette.bgCard),
-                    if (addLabel != null && addLabel!.isNotEmpty) ...[
-                      const SizedBox(width: 6),
-                      Text(
-                        addLabel!,
-                        style: const TextStyle(
-                          color: InterSyndicPalette.bgCard,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
+            Padding(
+              padding: const EdgeInsets.only(left: 8.0),
+              child: GestureDetector(
+                onTap: onAdd,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: InterSyndicPalette.coral,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.add_rounded,
+                          size: 16, color: InterSyndicPalette.bgCard),
+                      if (addLabel != null && addLabel!.isNotEmpty && MediaQuery.of(context).size.width > 380) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          addLabel!,
+                          style: const TextStyle(
+                            color: InterSyndicPalette.bgCard,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                    ]
-                  ],
+                      ]
+                    ],
+                  ),
                 ),
               ),
             ),

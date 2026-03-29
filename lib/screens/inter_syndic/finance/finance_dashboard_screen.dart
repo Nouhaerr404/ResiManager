@@ -129,45 +129,67 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
   }
 
   Widget _buildHeader() {
+    final bool isSmallScreen = MediaQuery.of(context).size.width < 500;
+    
     return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Row(
+          Row(
+            children: [
+              IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
+              const Expanded(
+                child: Text("Finance",
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+              ),
+              IconButton(
+                onPressed: () => _generatePDF(context),
+                icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
+                tooltip: "PDF",
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withOpacity(0.2),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          isSmallScreen 
+          ? Column(
               children: [
-                IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
-                const Expanded(
-                  child: Text("Tableau de Bord Financier",
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                SizedBox(width: double.infinity, child: _buildMandatPicker()),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF6F4A),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddTrancheExpenseScreen(residenceId: widget.residenceId, interSyndicId: widget.interSyndicId))).then((_) => _refresh()),
+                    icon: const Icon(Icons.add, color: Colors.white, size: 20),
+                    label: const Text("Nouvelle Dépense", style: TextStyle(color: Colors.white, fontSize: 13)),
+                  ),
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(child: _buildMandatPicker()),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF6F4A),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddTrancheExpenseScreen(residenceId: widget.residenceId, interSyndicId: widget.interSyndicId))).then((_) => _refresh()),
+                  icon: const Icon(Icons.add, color: Colors.white, size: 20),
+                  label: const Text("Nouvelle Dépense", style: TextStyle(color: Colors.white, fontSize: 13)),
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 10),
-          _buildMandatPicker(),
-          const SizedBox(width: 10),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6F4A),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddTrancheExpenseScreen(residenceId: widget.residenceId, interSyndicId: widget.interSyndicId))).then((_) => _refresh()),
-            icon: const Icon(Icons.add, color: Colors.white, size: 20),
-            label: const Text("Nouvelle Dépense", style: TextStyle(color: Colors.white, fontSize: 13)),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            onPressed: () => _generatePDF(context),
-            icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
-            tooltip: "Générer Rapport PDF",
-            style: IconButton.styleFrom(
-              backgroundColor: Colors.white.withOpacity(0.2),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
         ],
       ),
     );
