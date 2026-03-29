@@ -3,7 +3,7 @@ import '../../../models/garage_model.dart';
 import '../../../models/resident_model.dart';
 import '../../../services/garage_service.dart';
 import '../../../services/resident_service.dart';
-
+import '../../../widgets/inter_syndic_header.dart';
 // ── Brand palette — aligned with ResiManager desktop app
 class _C {
   static const coral       = Color(0xFFE8603C);
@@ -208,75 +208,13 @@ class _GaragesScreenState extends State<GaragesScreen>
 
   // ── Header
   Widget _buildHeader() {
-    return Container(
-      color: _C.white,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                  color: _C.bg,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _C.divider)),
-              child: const Icon(Icons.arrow_back_ios_new_rounded,
-                  size: 14, color: _C.dark),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-                color: _C.coral, borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.grid_view_rounded,
-                color: _C.white, size: 20),
-          ),
-          const SizedBox(width: 10),
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('ResiManager',
-                  style: TextStyle(
-                      color: _C.dark,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      letterSpacing: -0.2)),
-              Text('inter_syndic',
-                  style: TextStyle(
-                      color: _C.textLight,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500)),
-            ],
-          ),
-          const Spacer(),
-          GestureDetector(
-            onTap: _showAddGarageDialog,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-              decoration: BoxDecoration(
-                  color: _C.coral,
-                  borderRadius: BorderRadius.circular(22)),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add_rounded, size: 16, color: _C.white),
-                  SizedBox(width: 6),
-                  Text('Ajouter',
-                      style: TextStyle(
-                          color: _C.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700)),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+    return InterSyndicHeader(
+      title: 'ResiManager',
+      subtitle: 'inter_syndic',
+      gridIcon: Icons.grid_view_rounded,
+      onBack: () => Navigator.pop(context),
+      onAdd: _showAddGarageDialog,
+      addLabel: 'Ajouter',
     );
   }
 

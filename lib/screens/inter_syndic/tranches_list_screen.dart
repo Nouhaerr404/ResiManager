@@ -366,22 +366,29 @@ class _TranchesListScreenState extends State<TranchesListScreen>
                 child: Icon(icon, color: iconColor, size: 20),
               ),
               const SizedBox(width: 14),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label,
-                      style: const TextStyle(
-                          color: _C.textMid,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 2),
-                  Text(value,
-                      style: const TextStyle(
-                          color: _C.dark,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 22,
-                          letterSpacing: -0.5)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(label,
+                          style: const TextStyle(
+                              color: _C.textMid,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500)),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(value,
+                        style: const TextStyle(
+                            color: _C.dark,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 22,
+                            letterSpacing: -0.5)),
+                  ],
+                ),
               ),
             ],
           ),
