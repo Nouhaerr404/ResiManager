@@ -55,6 +55,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
   String _selectedView = 'dashboard';
+  Map<String, dynamic>? _currentMandat;
 
   @override
   void initState() {
@@ -75,8 +76,28 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
     setState(() => _loading = true);
     try {
       final data = await _service.getTrancheStats(widget.tranche.id);
+      
+      // Récupérer le mandat actuel
+      final mandats = await _financeService.getInterSyndicMandates(TempSession.interSyndicId, widget.tranche.residenceId);
+      final now = DateTime.now();
+      Map<String, dynamic>? activeMandat;
+      
+      for (var m in mandats) {
+        if (m['tranche_id'] == widget.tranche.id) {
+          DateTime start = DateTime.parse(m['date_debut']);
+          DateTime? end = m['date_fin'] != null ? DateTime.parse(m['date_fin']) : null;
+          
+          if (now.isAfter(start.subtract(const Duration(days: 1))) && 
+              (end == null || now.isBefore(end.add(const Duration(days: 1))))) {
+            activeMandat = m;
+            break;
+          }
+        }
+      }
+
       setState(() {
         _stats = data;
+        _currentMandat = activeMandat;
         _loading = false;
       });
       _fadeCtrl.forward(from: 0);
@@ -297,6 +318,21 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
             ],
           ),
         const SizedBox(height: 4),
+        if (_currentMandat != null)
+          Row(
+            children: [
+              const Icon(Icons.history_rounded, color: Colors.white70, size: 14),
+              const SizedBox(width: 6),
+              Text(
+                "Mandat : ${DateTime.parse(_currentMandat!['date_debut']).day}/${DateTime.parse(_currentMandat!['date_debut']).month}/${DateTime.parse(_currentMandat!['date_debut']).year} → ${_currentMandat!['date_fin'] != null ? '${DateTime.parse(_currentMandat!['date_fin']).day}/${DateTime.parse(_currentMandat!['date_fin']).month}/${DateTime.parse(_currentMandat!['date_fin']).year}' : 'En cours'}",
+                style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        const SizedBox(height: 4),
         Row(
           children: [
             const Icon(Icons.person_pin_rounded, color: Colors.white70, size: 14),
@@ -390,7 +426,20 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildSectionLabel('Résumé Financier', color: Colors.white),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  _buildSectionLabel('Résumé Financier', color: Colors.white),
+                  if (_currentMandat != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 10, bottom: 2),
+                      child: Text(
+                        "(${DateTime.parse(_currentMandat!['date_debut']).year}/${_currentMandat!['date_fin'] != null ? DateTime.parse(_currentMandat!['date_fin']).year : '...' })",
+                        style: const TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                ],
+              ),
               IconButton(
                 onPressed: _generateReport,
                 icon: const Icon(Icons.picture_as_pdf_rounded, color: _C.white, size: 24),
@@ -847,12 +896,16 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
     );
 
     try {
-      final annee = DateTime.now().year;
+      final start = _currentMandat?['date_debut'].toString().split('-').reversed.join('/');
+      final end = _currentMandat?['date_fin']?.toString().split('-').reversed.join('/') ?? 'En cours';
+      final span = _currentMandat != null ? "$start au $end" : DateTime.now().year.toString();
+
       // 2. Fetch fresh data
       final financeData = await _financeService.getInterSyndicFinances(
         widget.tranche.interSyndicId ?? 0,
         widget.tranche.residenceId,
-        annee: annee,
+        startDate: _currentMandat?['date_debut'],
+        endDate: _currentMandat?['date_fin'],
         trancheId: widget.tranche.id,
       );
 
@@ -860,7 +913,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       final pdfBytes = await ExpenseReportPdfService.generate(
         residenceNom: widget.tranche.residenceNom ?? 'Résidence',
         trancheNom: widget.tranche.nom,
-        annee: annee,
+        mandatLabel: span,
         financeData: financeData,
       );
 

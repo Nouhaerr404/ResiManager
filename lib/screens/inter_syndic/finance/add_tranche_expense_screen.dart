@@ -133,7 +133,7 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
       future: _financeService.getAllCategories(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final categories = snapshot.data!;
+        final categories = snapshot.data!.where((c) => c['type'] == 'individuelle').toList();
         
         return Wrap(
           spacing: 12,
@@ -252,7 +252,7 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
               if (nom.isEmpty) return;
               
               try {
-                await _financeService.addExpenseCategory(nom);
+                await _financeService.addExpenseCategory(nom, type: 'individuelle');
                 Navigator.pop(ctx);
                 setState(() {}); // Refresh categories
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Catégorie '$nom' ajoutée avec succès")));
@@ -438,6 +438,37 @@ class _AddTrancheExpenseScreenState extends State<AddTrancheExpenseScreen> {
     setState(() => _isUploading = true);
 
     try {
+      // ÉTAPE 0 : Vérification du Mandat (Approche Sécurisée)
+      final mandats = await _financeService.getInterSyndicMandates(widget.interSyndicId, widget.residenceId);
+      final dateStr = _selectedDate.toIso8601String().split('T')[0];
+      
+      bool isPeriodValid = false;
+      for (var m in mandats) {
+        if (m['tranche_id'] != _selectedTrancheId && _selectedTrancheId != null) continue;
+        
+        DateTime start = DateTime.parse(m['date_debut']);
+        DateTime? end = m['date_fin'] != null ? DateTime.parse(m['date_fin']) : null;
+        
+        if (_selectedDate.isAfter(start.subtract(const Duration(days: 1))) && 
+            (end == null || _selectedDate.isBefore(end.add(const Duration(days: 1))))) {
+          isPeriodValid = true;
+          break;
+        }
+      }
+
+      if (!isPeriodValid) {
+        setState(() => _isUploading = false);
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text("Mandat Invalide", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            content: const Text("Vous n'aviez pas de mandat actif sur cette tranche à la date sélectionnée. Veuillez vérifier l'historique de vos affectations."),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Compris"))],
+          ),
+        );
+        return;
+      }
+
       double montant = double.parse(_montantController.text.replaceAll(',', '.'));
       String? fileUrl;
 

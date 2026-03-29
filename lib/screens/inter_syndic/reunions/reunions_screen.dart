@@ -1,10 +1,10 @@
 // lib/screens/inter_syndic/reunions/reunions_screen.dart
 // ignore_for_file: avoid_multiple_underscores_for_members
-
 import 'package:flutter/material.dart';
 import '../../../models/reunion_model.dart';
 import '../../../services/reunion_service.dart';
 import '../../../services/convocation_pdf_service.dart';
+import '../../../widgets/inter_syndic_header.dart';
 import 'dart:typed_data';
 import 'package:printing/printing.dart';
 
@@ -149,43 +149,13 @@ class _ReunionsScreenState extends State<ReunionsScreen> {
   }
 
   Widget _buildHeader() {
-    return Container(
-      color: _C.white,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      child: Row(children: [
-        GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Container(
-            width: 38, height: 38,
-            decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10), border: Border.all(color: _C.divider)),
-            child: const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: _C.dark),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Container(
-          width: 38, height: 38,
-          decoration: BoxDecoration(color: _C.coral, borderRadius: BorderRadius.circular(10)),
-          child: const Icon(Icons.grid_view_rounded, color: _C.white, size: 20),
-        ),
-        const SizedBox(width: 10),
-        const Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-          Text('ResiManager', style: TextStyle(color: _C.dark, fontWeight: FontWeight.w700, fontSize: 14, letterSpacing: -0.2)),
-          Text('inter_syndic', style: TextStyle(color: _C.textLight, fontSize: 11, fontWeight: FontWeight.w500)),
-        ]),
-        const Spacer(),
-        GestureDetector(
-          onTap: _showAddReunionDialog,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(color: _C.coral, borderRadius: BorderRadius.circular(22)),
-            child: const Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.add_rounded, size: 16, color: _C.white),
-              SizedBox(width: 6),
-              Text('Planifier', style: TextStyle(color: _C.white, fontSize: 13, fontWeight: FontWeight.w700)),
-            ]),
-          ),
-        ),
-      ]),
+    return InterSyndicHeader(
+      title: 'ResiManager',
+      subtitle: 'inter_syndic',
+      gridIcon: Icons.business_rounded,
+      onBack: () => Navigator.pop(context),
+      onAdd: _showAddReunionDialog,
+      addLabel: 'Planifier',
     );
   }
 

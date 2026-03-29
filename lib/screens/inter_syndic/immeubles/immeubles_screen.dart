@@ -4,6 +4,7 @@ import '../../../models/immeuble_model.dart';
 import '../../../models/tranche_model.dart';
 import '../../../services/immeuble_service.dart';
 import '../apartments/apartments_screen.dart';
+import '../../../widgets/inter_syndic_header.dart';
 
 class _C {
   static const coral = Color(0xFFE8603C);
@@ -121,36 +122,12 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
   }
 
   Widget _buildSliverHeader() {
-    return SliverAppBar(
-      backgroundColor: Colors.transparent,
-      expandedHeight: 140,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _C.white, size: 18),
-        onPressed: () => Navigator.pop(context),
-      ),
-      flexibleSpace: FlexibleSpaceBar(
-        titlePadding: const EdgeInsets.only(left: 60, bottom: 16),
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Espace Immeubles',
-              style: TextStyle(
-                  color: _C.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18,
-                  letterSpacing: -0.5),
-            ),
-            Text(
-              'Tranche ${widget.tranche.nom}',
-              style: TextStyle(
-                  color: _C.white.withOpacity(0.7),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500),
-            ),
-          ],
-        ),
+    return SliverToBoxAdapter(
+      child: InterSyndicHeader(
+        title: 'ResiManager',
+        subtitle: 'inter_syndic',
+        gridIcon: Icons.business_rounded,
+        onBack: () => Navigator.pop(context),
       ),
     );
   }
@@ -237,8 +214,11 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
             const SizedBox(height: 20),
             const Divider(height: 1),
             const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 12,
               children: [
                 _infoColumn('Prix Annuel / Appt', '${displayPrice.toStringAsFixed(0)} DH'),
                 ElevatedButton(
@@ -261,13 +241,14 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
                     foregroundColor: _C.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   ),
                   child: const Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Voir Unités', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, size: 14),
+                      Text('Voir Unités', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11)),
+                      SizedBox(width: 6),
+                      Icon(Icons.arrow_forward_rounded, size: 12),
                     ],
                   ),
                 ),

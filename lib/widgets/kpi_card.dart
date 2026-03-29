@@ -21,8 +21,8 @@ class KpiCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 240, // Largeur de la carte fixée
-      padding: const EdgeInsets.all(20),
+      constraints: const BoxConstraints(minWidth: 150),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),

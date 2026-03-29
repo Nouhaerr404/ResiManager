@@ -10,18 +10,16 @@ import '../../../models/box_model.dart';
 import '../../../models/garage_model.dart';
 import '../../../utils/temp_session.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../widgets/inter_syndic_header.dart';
 
 // ignore_for_file: avoid_multiple_underscores_for_members
 
-// ── Palette moderne — sans jaune
+// ── Palette moderne
 class _C {
-  // Primaires
-  static const coral      = Color(0xFFE47C55);
+  static const coral      = Color(0xFFD86233);
   static const coralDark  = Color(0xFFEF7136);
   static const coralLight = Color(0xFFFDF1E6);
   static const coralMid   = Color(0xFFFADCC2);
-
-  // Neutres
   static const bg         = Color(0xFFF5F6F8);
   static const bgCard     = Color(0xFFFFFFFF);
   static const dark       = Color(0xFF111827);
@@ -30,22 +28,14 @@ class _C {
   static const textLight  = Color(0xFF9CA3AF);
   static const divider    = Color(0xFFE5E7EB);
   static const surface    = Color(0xFFF9FAFB);
-
-  // Accent bleu (remplace orange/blue confus)
   static const blue       = Color(0xFF3B82F6);
   static const blueLight  = Color(0xFFEFF6FF);
   static const blueMid    = Color(0xFFBFDBFE);
-
-  // Vert succès
   static const green      = Color(0xFF10B981);
   static const greenLight = Color(0xFFECFDF5);
   static const greenMid   = Color(0xFFA7F3D0);
-
-  // Rouge/coral impayé
   static const red        = Color(0xFFEF4444);
   static const redLight   = Color(0xFFFEF2F2);
-
-  // Orange partiel
   static const orange     = Color(0xFFF97316);
   static const orangeLight= Color(0xFFFFF7ED);
 }
@@ -78,6 +68,17 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   bool _loadingPrix = true;
 
   int? get _currentMandatId => _selectedMandat?['id'] as int?;
+
+  /// ID de l'inter-syndic connecté — utilisé pour vérifier les droits
+  int get _interSyndicId => TempSession.interSyndicId ?? 0;
+
+  /// Vérifie si l'inter-syndic connecté est propriétaire du mandat sélectionné.
+  bool get _canEditCurrentMandat {
+    if (_selectedMandat == null) return false;
+    final mandatInterSyndic = _selectedMandat!['inter_syndic_id'];
+    if (mandatInterSyndic == null) return false;
+    return mandatInterSyndic == _interSyndicId;
+  }
 
   int get _fallbackAnnee {
     if (_selectedMandat == null || _selectedMandat!['date_debut'] == null) {
@@ -113,16 +114,22 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   Future<void> _loadMandats() async {
     try {
       final db = Supabase.instance.client;
+      // Charger TOUS les mandats de la tranche, pas seulement ceux de l'IS connecté
+      // afin que l'IS puisse voir l'historique mais ne modifier que le sien
       final mandatsRes = await db
           .from('historique_affectations')
-          .select('id, date_debut, date_fin')
+          .select('id, date_debut, date_fin, inter_syndic_id')
           .eq('tranche_id', widget.trancheId)
-          .eq('inter_syndic_id', TempSession.interSyndicId ?? 0)
           .order('date_debut', ascending: false);
       final List mandatsList = mandatsRes as List? ?? [];
       setState(() {
         _mandatsDisponibles = mandatsList.cast<Map<String, dynamic>>();
-        _selectedMandat = _mandatsDisponibles.isNotEmpty ? _mandatsDisponibles.first : null;
+        // Sélectionner par défaut le mandat de l'IS connecté (le plus récent)
+        _selectedMandat = _mandatsDisponibles.firstWhere(
+              (m) => m['inter_syndic_id'] == _interSyndicId,
+          orElse: () => _mandatsDisponibles.isNotEmpty ? _mandatsDisponibles.first : <String, dynamic>{},
+        );
+        if ((_selectedMandat as Map).isEmpty) _selectedMandat = null;
         _loadingMandats = false;
       });
     } catch (e) {
@@ -193,7 +200,9 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final data = await _service.getResidentsByTranche(widget.trancheId, mandatId: _currentMandatId).timeout(const Duration(seconds: 15));
+      final data = await _service
+          .getResidentsByTranche(widget.trancheId, mandatId: _currentMandatId)
+          .timeout(const Duration(seconds: 15));
       setState(() { _residents = data; _loading = false; });
       _applyFilter();
       _fadeCtrl.forward(from: 0);
@@ -288,60 +297,58 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // HEADER — identique à l'original
+  // HEADER
   // ─────────────────────────────────────────────────────────────────
 
   Widget _buildHeader() {
-    return Container(
-      color: _C.bgCard,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 38, height: 38,
-              decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10), border: Border.all(color: _C.divider)),
-              child: const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: _C.dark),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            width: 38, height: 38,
-            decoration: BoxDecoration(color: _C.coral, borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.grid_view_rounded, color: _C.bgCard, size: 20),
-          ),
-          const SizedBox(width: 10),
-          const Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            Text('ResiManager', style: TextStyle(color: _C.dark, fontWeight: FontWeight.w700, fontSize: 14, letterSpacing: -0.2)),
-            Text('inter_syndic', style: TextStyle(color: _C.textLight, fontSize: 11, fontWeight: FontWeight.w500)),
-          ]),
-          const Spacer(),
-          GestureDetector(
-            onTap: _showAddResidentDialog,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-              decoration: BoxDecoration(color: _C.coral, borderRadius: BorderRadius.circular(22)),
-              child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.add_rounded, size: 16, color: _C.bgCard),
-                SizedBox(width: 6),
-                Text('Ajouter', style: TextStyle(color: _C.bgCard, fontSize: 13, fontWeight: FontWeight.w700)),
-              ]),
-            ),
-          ),
-        ],
-      ),
+    return InterSyndicHeader(
+      title: 'ResiManager',
+      subtitle: 'inter_syndic',
+      gridIcon: Icons.business_rounded,
+      onBack: () => Navigator.pop(context),
+      // Le bouton Ajouter n'est visible que si l'IS est propriétaire du mandat
+      onAdd: _canEditCurrentMandat ? _showAddResidentDialog : null,
+      addLabel: 'Ajouter',
     );
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // SECTION HAUT — hero stats + mandat + prix + appts libres
+  // BANNIÈRE DE RESTRICTION MANDAT
+  // ─────────────────────────────────────────────────────────────────
+
+  Widget _buildReadOnlyBanner() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: _C.orangeLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _C.orange.withValues(alpha: 0.4)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.lock_rounded, color: _C.orange, size: 16),
+        const SizedBox(width: 10),
+        const Expanded(
+          child: Text(
+            'Ce mandat ne vous appartient pas. Consultation uniquement.',
+            style: TextStyle(color: _C.orange, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // SECTION HAUT
   // ─────────────────────────────────────────────────────────────────
 
   Widget _buildTopSection() {
     return Column(
       children: [
         _buildHeroStats(),
+        // Bannière si lecture seule
+        if (!_canEditCurrentMandat && _selectedMandat != null)
+          _buildReadOnlyBanner(),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
           child: Column(children: [
@@ -356,18 +363,16 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     );
   }
 
-  // ── Hero stats compact — grande bande colorée
   Widget _buildHeroStats() {
     final pct = _total == 0 ? 0.0 : _complets / _total;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       decoration: BoxDecoration(
-        color: _C.coral,
+        color: _canEditCurrentMandat ? _C.coral : _C.textMid,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         children: [
-          // Haut : titre + mandat
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
             child: Row(
@@ -379,11 +384,33 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                     children: [
                       const Text('Résidents', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 22, letterSpacing: -0.5)),
                       const SizedBox(height: 2),
-                      Text('$_total résidents · mandat actif', style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12, fontWeight: FontWeight.w500)),
+                      Row(children: [
+                        Text('$_total résidents', style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12, fontWeight: FontWeight.w500)),
+                        const SizedBox(width: 6),
+                        // Badge lecture seule ou édition
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(
+                              _canEditCurrentMandat ? Icons.edit_rounded : Icons.visibility_rounded,
+                              size: 9,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              _canEditCurrentMandat ? 'Votre mandat' : 'Lecture seule',
+                              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+                            ),
+                          ]),
+                        ),
+                      ]),
                     ],
                   ),
                 ),
-                // Sélecteur mandat compact
                 _loadingMandats
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                     : _mandatsDisponibles.isEmpty
@@ -405,7 +432,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
               ],
             ),
           ),
-          // Barre de progression
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
             child: Column(
@@ -427,7 +453,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
               ],
             ),
           ),
-          // 3 chips
           Container(
             margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             padding: const EdgeInsets.symmetric(vertical: 10),
@@ -463,11 +488,9 @@ class _ResidentsScreenState extends State<ResidentsScreen>
 
   Widget _dividerV() => Container(width: 1, height: 32, color: Colors.white.withValues(alpha: 0.25));
 
-  // ── Ligne info : prix annuel
   Widget _buildInfoRow() {
     return Row(
       children: [
-        // Prix annuel
         Expanded(
           child: _infoCard(
             icon: Icons.monetization_on_rounded,
@@ -475,14 +498,25 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             iconBg: _C.coralLight,
             label: 'Prix annuel',
             value: _loadingPrix ? '...' : '${_prixAnnuel?.toInt() ?? 0} DH',
-            onTap: _showEditPrixAnnuelDialog,
-            trailing: Container(
+            // Modification prix uniquement si l'IS est propriétaire
+            onTap: _canEditCurrentMandat ? _showEditPrixAnnuelDialog : null,
+            trailing: _canEditCurrentMandat
+                ? Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(color: _C.coralLight, borderRadius: BorderRadius.circular(8)),
               child: const Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(Icons.edit_rounded, size: 11, color: _C.coral),
                 SizedBox(width: 3),
                 Text('Modifier', style: TextStyle(color: _C.coral, fontSize: 10, fontWeight: FontWeight.w700)),
+              ]),
+            )
+                : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(8)),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.lock_rounded, size: 11, color: _C.textLight),
+                SizedBox(width: 3),
+                Text('Verrouillé', style: TextStyle(color: _C.textLight, fontSize: 10, fontWeight: FontWeight.w600)),
               ]),
             ),
           ),
@@ -511,11 +545,9 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     );
   }
 
-  // ── Banner appartements libres — compact
   Widget _buildAppartementsLibresBanner() {
     final countLibres = _appartementsLibres.length;
     final countPaies = _appartementsLibresPaies.length;
-    final total = countLibres + countPaies;
 
     return GestureDetector(
       onTap: _showAppartementsLibresPaiementDialog,
@@ -543,13 +575,28 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             ]),
           ])),
           const SizedBox(width: 8),
+          // Bouton Payer désactivé si lecture seule
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(color: countLibres > 0 ? _C.green : _C.surface, borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(
+              color: (_canEditCurrentMandat && countLibres > 0) ? _C.green : _C.surface,
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.payments_rounded, size: 13, color: countLibres > 0 ? Colors.white : _C.textLight),
+              Icon(
+                _canEditCurrentMandat ? Icons.payments_rounded : Icons.lock_rounded,
+                size: 13,
+                color: (_canEditCurrentMandat && countLibres > 0) ? Colors.white : _C.textLight,
+              ),
               const SizedBox(width: 5),
-              Text('Payer', style: TextStyle(color: countLibres > 0 ? Colors.white : _C.textLight, fontSize: 12, fontWeight: FontWeight.w700)),
+              Text(
+                _canEditCurrentMandat ? 'Payer' : 'Verrouillé',
+                style: TextStyle(
+                  color: (_canEditCurrentMandat && countLibres > 0) ? Colors.white : _C.textLight,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ]),
           ),
         ]),
@@ -569,7 +616,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
 
   Widget _buildSearchAndFilter() {
     return Column(children: [
-      // Search
       Container(
         decoration: BoxDecoration(color: _C.bgCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: _C.divider)),
         child: TextField(
@@ -588,7 +634,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
         ),
       ),
       const SizedBox(height: 10),
-      // Filter tabs
       Row(children: [
         _filterTab('tous', 'Tous', _total),
         const SizedBox(width: 6),
@@ -635,7 +680,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // CARD RÉSIDENT — compacte et moderne
+  // CARD RÉSIDENT
   // ─────────────────────────────────────────────────────────────────
 
   Widget _buildResidentCard(ResidentModel r) {
@@ -654,12 +699,10 @@ class _ResidentsScreenState extends State<ResidentsScreen>
       ),
       child: Column(
         children: [
-          // Ligne principale
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
             child: Row(
               children: [
-                // Avatar
                 Container(
                   width: 42, height: 42,
                   decoration: BoxDecoration(
@@ -674,7 +717,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                   ),
                 ),
                 const SizedBox(width: 11),
-                // Nom + adresse
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(r.nomComplet, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: _C.dark, letterSpacing: -0.2), overflow: TextOverflow.ellipsis),
@@ -687,7 +729,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                   ]),
                 ),
                 const SizedBox(width: 8),
-                // Badge statut
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                   decoration: BoxDecoration(color: sBg, borderRadius: BorderRadius.circular(20)),
@@ -700,11 +741,9 @@ class _ResidentsScreenState extends State<ResidentsScreen>
               ],
             ),
           ),
-          // Barre de paiement + montants
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
             child: Column(children: [
-              // Progress
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: LinearProgressIndicator(
@@ -726,7 +765,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
               ]),
             ]),
           ),
-          // Actions
           Container(
             decoration: BoxDecoration(
               color: _C.surface,
@@ -735,16 +773,51 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             ),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Row(children: [
-              _actionBtn('Payer', Icons.payments_rounded, _C.coral, onTap: () => _showPaiementDialog(r)),
+              // Bouton Payer — désactivé si lecture seule
+              _actionBtn(
+                'Payer',
+                Icons.payments_rounded,
+                _canEditCurrentMandat ? _C.coral : _C.textLight,
+                onTap: _canEditCurrentMandat ? () => _onPayButtonClicked(r) : () => _showReadOnlyMessage(),
+              ),
               const SizedBox(width: 6),
               _iconActionBtn(Icons.history_rounded, _C.blue, _C.blueLight, () => _showHistoriqueDialog(r)),
               const SizedBox(width: 6),
-              _iconActionBtn(Icons.edit_rounded, _C.textMid, _C.surface, () => _showEditDialog(r)),
+              // Modifier — désactivé si lecture seule
+              _iconActionBtn(
+                Icons.edit_rounded,
+                _canEditCurrentMandat ? _C.textMid : _C.textLight,
+                _C.surface,
+                _canEditCurrentMandat ? () => _showEditDialog(r) : () => _showReadOnlyMessage(),
+              ),
               const SizedBox(width: 6),
-              _iconActionBtn(Icons.delete_rounded, _C.red, _C.redLight, () => _showDeleteConfirm(r)),
+              // Supprimer — désactivé si lecture seule
+              _iconActionBtn(
+                Icons.delete_rounded,
+                _canEditCurrentMandat ? _C.red : _C.textLight,
+                _canEditCurrentMandat ? _C.redLight : _C.surface,
+                _canEditCurrentMandat ? () => _showDeleteConfirm(r) : () => _showReadOnlyMessage(),
+              ),
             ]),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Affiche un message indiquant que le mandat est en lecture seule
+  void _showReadOnlyMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Row(children: [
+          Icon(Icons.lock_rounded, color: Colors.white, size: 16),
+          SizedBox(width: 8),
+          Text('Ce mandat ne vous appartient pas. Action impossible.'),
+        ]),
+        backgroundColor: _C.orange,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -828,14 +901,45 @@ class _ResidentsScreenState extends State<ResidentsScreen>
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       elevation: 12,
       position: RelativeRect.fromRect(
-        Rect.fromLTWH(button.localToGlobal(Offset.zero, ancestor: overlay).dx + button.size.width - 220, button.localToGlobal(Offset.zero, ancestor: overlay).dy + 170, 220, 0),
+        Rect.fromLTWH(
+          button.localToGlobal(Offset.zero, ancestor: overlay).dx + button.size.width - 220,
+          button.localToGlobal(Offset.zero, ancestor: overlay).dy + 170,
+          220,
+          0,
+        ),
         Offset.zero & overlay.size,
       ),
-      items: _mandatsDisponibles.map((mandat) => PopupMenuItem<Map<String, dynamic>>(
-        value: mandat,
-        height: 48,
-        child: Text(_getMandatLabel(mandat), style: TextStyle(color: mandat['id'] == _selectedMandat?['id'] ? _C.coral : Colors.white, fontWeight: mandat['id'] == _selectedMandat?['id'] ? FontWeight.w800 : FontWeight.w500, fontSize: 13)),
-      )).toList(),
+      items: _mandatsDisponibles.map((mandat) {
+        final isOwn = mandat['inter_syndic_id'] == _interSyndicId;
+        return PopupMenuItem<Map<String, dynamic>>(
+          value: mandat,
+          height: 52,
+          child: Row(children: [
+            Icon(
+              isOwn ? Icons.edit_rounded : Icons.visibility_rounded,
+              size: 13,
+              color: mandat['id'] == _selectedMandat?['id'] ? _C.coral : (isOwn ? Colors.white : Colors.white54),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _getMandatLabel(mandat),
+                style: TextStyle(
+                  color: mandat['id'] == _selectedMandat?['id'] ? _C.coral : Colors.white,
+                  fontWeight: mandat['id'] == _selectedMandat?['id'] ? FontWeight.w800 : FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            if (isOwn)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: _C.coral.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
+                child: const Text('Vous', style: TextStyle(color: _C.coral, fontSize: 9, fontWeight: FontWeight.w700)),
+              ),
+          ]),
+        );
+      }).toList(),
     ).then((mandat) {
       if (mandat != null && mandat['id'] != _selectedMandat?['id']) {
         setState(() => _selectedMandat = mandat);
@@ -846,10 +950,9 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // DIALOGS — Design unifié moderne
+  // DIALOGS UTILITAIRES
   // ═══════════════════════════════════════════════════════════════
 
-  // ── Helpers dialog
   Widget _dHeader(BuildContext ctx, String title, {IconData? icon, Color? iconColor}) {
     return Row(children: [
       if (icon != null) ...[
@@ -925,6 +1028,8 @@ class _ResidentsScreenState extends State<ResidentsScreen>
 
   // ── DIALOG MODIFIER PRIX ANNUEL
   void _showEditPrixAnnuelDialog() {
+    if (!_canEditCurrentMandat) { _showReadOnlyMessage(); return; }
+
     final prixCtrl = TextEditingController(text: _prixAnnuel != null ? _prixAnnuel!.toInt().toString() : '');
     bool saving = false;
     String? errorMsg;
@@ -962,16 +1067,17 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   }
 
   // ── DIALOG AJOUTER RÉSIDENT
+  // NOUVEAU : pas de champ mot de passe — généré automatiquement et envoyé par email
   void _showAddResidentDialog() {
+    if (!_canEditCurrentMandat) { _showReadOnlyMessage(); return; }
+
     final prenomCtrl = TextEditingController();
     final nomCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
     final telCtrl = TextEditingController();
-    final passwordCtrl = TextEditingController();
     String type = 'proprietaire';
     String? errorMsg;
     bool saving = false;
-    bool obscurePassword = true;
     List<Map<String, dynamic>> appartementsLibres = [];
     int? selectedAppartId;
     int? selectedParkingId;
@@ -996,7 +1102,8 @@ class _ResidentsScreenState extends State<ResidentsScreen>
           child: Padding(padding: const EdgeInsets.all(22), child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             _dHeader(ctx, 'Ajouter un résident', icon: Icons.person_add_rounded, iconColor: _C.coral),
             const SizedBox(height: 14),
-            // Mandat + prix infos
+
+            // Info mandat + prix
             Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: _C.divider)), child: Row(children: [
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('Mandat actif', style: TextStyle(color: _C.textLight, fontSize: 10, fontWeight: FontWeight.w500)),
@@ -1009,25 +1116,29 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                 Text('${_prixAnnuel?.toInt() ?? 0} DH', style: const TextStyle(color: _C.coral, fontWeight: FontWeight.w700, fontSize: 12)),
               ])),
             ])),
+            const SizedBox(height: 12),
+
+            // Bannière info mot de passe automatique
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: _C.blueLight, borderRadius: BorderRadius.circular(10)),
+              child: Row(children: [
+                const Icon(Icons.email_rounded, color: _C.blue, size: 15),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Un mot de passe sécurisé sera généré automatiquement et envoyé par email au résident.',
+                    style: TextStyle(color: _C.blue, fontSize: 11, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ]),
+            ),
             const SizedBox(height: 14),
+
             if (errorMsg != null) _dError(errorMsg!),
             _dLabel('Prénom *'), _dField(prenomCtrl, 'ex: Ahmed'), const SizedBox(height: 12),
             _dLabel('Nom *'), _dField(nomCtrl, 'ex: Bennani'), const SizedBox(height: 12),
             _dLabel('Email *'), _dField(emailCtrl, 'ex: ahmed@example.com', inputType: TextInputType.emailAddress), const SizedBox(height: 12),
-            _dLabel('Mot de passe *'),
-            StatefulBuilder(builder: (_, setLocal) => TextField(
-              controller: passwordCtrl, obscureText: obscurePassword,
-              style: const TextStyle(fontSize: 14, color: _C.dark),
-              decoration: InputDecoration(
-                hintText: 'Min. 8 caractères', hintStyle: const TextStyle(color: _C.textLight, fontSize: 13),
-                filled: true, fillColor: _C.surface,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _C.coral, width: 1.5)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                suffixIcon: GestureDetector(onTap: () => setDialog(() => obscurePassword = !obscurePassword), child: Icon(obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: _C.textLight, size: 18)),
-              ),
-            )),
-            const SizedBox(height: 12),
             _dLabel('Téléphone'), _dField(telCtrl, 'ex: 0612345678', inputType: TextInputType.phone), const SizedBox(height: 12),
             _dLabel('Appartement *'),
             appartementsLibres.isEmpty ? _dEmpty('Aucun appartement libre') : _dDropdown(child: DropdownButtonHideUnderline(child: DropdownButton<int>(isExpanded: true, hint: const Text('Sélectionner', style: TextStyle(color: _C.textLight, fontSize: 13)), value: selectedAppartId, items: appartementsLibres.map((a) => DropdownMenuItem<int>(value: a['id'] as int, child: Text(a['label'].toString()))).toList(), onChanged: (val) => setDialog(() => selectedAppartId = val)))),
@@ -1049,19 +1160,100 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             ]),
             const SizedBox(height: 20),
             _dActions(ctx: ctx, saving: saving, label: 'Ajouter', color: _C.coral, onConfirm: () async {
-              if (prenomCtrl.text.trim().isEmpty || nomCtrl.text.trim().isEmpty || emailCtrl.text.trim().isEmpty) { setDialog(() => errorMsg = 'Prénom, Nom et Email obligatoires'); return; }
-              if (passwordCtrl.text.trim().length < 8) { setDialog(() => errorMsg = 'Mot de passe : 8 caractères minimum'); return; }
+              if (prenomCtrl.text.trim().isEmpty || nomCtrl.text.trim().isEmpty || emailCtrl.text.trim().isEmpty) {
+                setDialog(() => errorMsg = 'Prénom, Nom et Email obligatoires');
+                return;
+              }
               if (selectedAppartId == null) { setDialog(() => errorMsg = 'Sélectionnez un appartement'); return; }
               if (_currentMandatId == null) { setDialog(() => errorMsg = 'Aucun mandat actif sélectionné'); return; }
               setDialog(() { saving = true; errorMsg = null; });
-              final err = await _service.addResident(nom: nomCtrl.text, prenom: prenomCtrl.text, email: emailCtrl.text, telephone: telCtrl.text.isEmpty ? null : telCtrl.text, password: passwordCtrl.text.trim(), type: type, trancheId: widget.trancheId, appartementId: selectedAppartId!, montantTotal: _prixAnnuel ?? 0.0, mandatId: _currentMandatId!, parkingId: selectedParkingId, boxId: selectedBoxId, garageId: selectedGarageId);
+              final err = await _service.addResident(
+                nom: nomCtrl.text,
+                prenom: prenomCtrl.text,
+                email: emailCtrl.text,
+                telephone: telCtrl.text.isEmpty ? null : telCtrl.text,
+                type: type,
+                trancheId: widget.trancheId,
+                appartementId: selectedAppartId!,
+                montantTotal: _prixAnnuel ?? 0.0,
+                mandatId: _currentMandatId!,
+                interSyndicId: _interSyndicId, // ← vérification droits
+                parkingId: selectedParkingId,
+                boxId: selectedBoxId,
+                garageId: selectedGarageId,
+              );
               if (!ctx.mounted) return;
-              if (err != null) { setDialog(() { errorMsg = err; saving = false; }); } else { Navigator.pop(ctx); _load(); }
+              if (err != null) {
+                setDialog(() { errorMsg = err; saving = false; });
+              } else {
+                Navigator.pop(ctx);
+                _load();
+                // Confirmation succès
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Row(children: [
+                      Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
+                      SizedBox(width: 8),
+                      Text('Résident ajouté. Email de connexion envoyé.'),
+                    ]),
+                    backgroundColor: _C.green,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                );
+              }
             }),
           ]))),
         );
       }),
     );
+  }
+
+  // ── INIT PAIEMENT AVANT DIALOG
+  Future<void> _onPayButtonClicked(ResidentModel r) async {
+    if (!_canEditCurrentMandat) { _showReadOnlyMessage(); return; }
+
+    if (r.paiements.isNotEmpty) {
+      _showPaiementDialog(r);
+      return;
+    }
+
+    if (_currentMandatId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Aucun mandat sélectionné'),
+        backgroundColor: _C.red,
+      ));
+      return;
+    }
+
+    setState(() => _loading = true);
+
+    final double montantPourNouveauMandat = _prixAnnuel ?? r.montantTotal;
+
+    final newId = await _service.initPaiementMandat(
+      residentUserId: r.userId,
+      appartementId: r.appartementId ?? 0,
+      mandatId: _currentMandatId!,
+      montantTotal: montantPourNouveauMandat,
+      interSyndicId: _interSyndicId, // ← vérification droits
+    );
+
+    if (newId != null) {
+      await _load();
+      final updatedR = _filtered.firstWhere(
+            (res) => res.id == r.id,
+        orElse: () => r,
+      );
+      if (mounted) _showPaiementDialog(updatedR);
+    } else {
+      if (mounted) setState(() => _loading = false);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Erreur : opération refusée ou paiement introuvable'),
+          backgroundColor: _C.red,
+        ),
+      );
+    }
   }
 
   // ── DIALOG PAIEMENT
@@ -1078,7 +1270,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
         child: Padding(padding: const EdgeInsets.all(22), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           _dHeader(ctx, 'Enregistrer un paiement', icon: Icons.payments_rounded, iconColor: _C.coral),
           const SizedBox(height: 14),
-          // Résident info
           Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: _C.divider)), child: Row(children: [
             Container(width: 36, height: 36, decoration: BoxDecoration(color: _C.coralLight, borderRadius: BorderRadius.circular(10)), child: Center(child: Text(r.nomComplet.isNotEmpty ? r.nomComplet[0].toUpperCase() : '?', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _C.coral)))),
             const SizedBox(width: 10),
@@ -1089,7 +1280,12 @@ class _ResidentsScreenState extends State<ResidentsScreen>
           ])),
           const SizedBox(height: 14),
           _dLabel('Ligne de paiement *'),
-          _dDropdown(child: DropdownButtonHideUnderline(child: DropdownButton<PaiementModel>(value: selectedPaiement, isExpanded: true, onChanged: (val) => setDialog(() => selectedPaiement = val), items: r.paiements.map((p) => DropdownMenuItem(value: p, child: Text(_paiementLabel(p), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)))).toList()))),
+          _dDropdown(child: DropdownButtonHideUnderline(child: DropdownButton<PaiementModel>(
+            value: selectedPaiement,
+            isExpanded: true,
+            onChanged: (val) => setDialog(() => selectedPaiement = val),
+            items: r.paiements.map((p) => DropdownMenuItem(value: p, child: Text(_paiementLabel(p), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)))).toList(),
+          ))),
           if (selectedPaiement != null) ...[
             const SizedBox(height: 10),
             Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(10)), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -1108,7 +1304,14 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             if (montant <= 0) { setDialog(() => errorMsg = 'Entrez un montant valide'); return; }
             if (selectedPaiement == null) { setDialog(() => errorMsg = 'Sélectionnez une ligne de paiement'); return; }
             setDialog(() { saving = true; errorMsg = null; });
-            final err = await _service.enregistrerPaiement(paiementId: selectedPaiement!.id, residentUserId: r.userId, montantAjoute: montant, montantDejaPane: selectedPaiement!.montantPaye, montantTotal: selectedPaiement!.montantTotal);
+            final err = await _service.enregistrerPaiement(
+              paiementId: selectedPaiement!.id,
+              residentUserId: r.userId,
+              montantAjoute: montant,
+              montantDejaPane: selectedPaiement!.montantPaye,
+              montantTotal: selectedPaiement!.montantTotal,
+              interSyndicId: _interSyndicId, // ← vérification droits
+            );
             if (!ctx.mounted) return;
             if (err != null) { setDialog(() { errorMsg = err; saving = false; }); } else { Navigator.pop(ctx); _load(); }
           }),
@@ -1159,10 +1362,8 @@ class _ResidentsScreenState extends State<ResidentsScreen>
           child: Padding(padding: const EdgeInsets.all(22), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             _dHeader(ctx, 'Historique', icon: Icons.history_rounded, iconColor: _C.blue),
             const SizedBox(height: 12),
-            // Mandat badge
             Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7), decoration: BoxDecoration(color: _C.blueLight, borderRadius: BorderRadius.circular(8)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.calendar_today_rounded, color: _C.blue, size: 12), const SizedBox(width: 6), Text(mandatLabel, style: const TextStyle(color: _C.blue, fontWeight: FontWeight.w700, fontSize: 11))])),
             const SizedBox(height: 12),
-            // Récap résident
             Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(12)), child: Column(children: [
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 Text(r.nomComplet, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: _C.dark)),
@@ -1177,7 +1378,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
               ]),
             ])),
             const SizedBox(height: 12),
-            // Tabs années
             if (fetchDone && anneesSet.isNotEmpty) ...[
               SizedBox(height: 32, child: ListView(scrollDirection: Axis.horizontal, children: [
                 GestureDetector(onTap: () => setDialog(() => selectedAnnee = null), child: AnimatedContainer(duration: const Duration(milliseconds: 200), margin: const EdgeInsets.only(right: 6), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: selectedAnnee == null ? _C.blue : _C.surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: selectedAnnee == null ? _C.blue : _C.divider)), child: Text('Toutes', style: TextStyle(color: selectedAnnee == null ? Colors.white : _C.textMid, fontWeight: FontWeight.w600, fontSize: 11)))),
@@ -1229,11 +1429,17 @@ class _ResidentsScreenState extends State<ResidentsScreen>
 
   // ── DIALOG MODIFIER RÉSIDENT
   void _showEditDialog(ResidentModel r) {
+    if (!_canEditCurrentMandat) { _showReadOnlyMessage(); return; }
+
     final nomCtrl = TextEditingController(text: r.nom);
     final prenomCtrl = TextEditingController(text: r.prenom);
     final telCtrl = TextEditingController(text: r.telephone ?? '');
-    final chargesPaiement = r.paiements.firstWhere((p) => p.typePaiement == TypePaiementEnum.charges, orElse: () => r.paiements.isNotEmpty ? r.paiements.first : PaiementModel(id: 0, residentId: 0, appartementId: 0, depenseId: 0, interSyndicId: 0, residenceId: 0, montantTotal: r.montantTotal, montantPaye: 0, typePaiement: TypePaiementEnum.charges, statut: StatutPaiementEnum.impaye, annee: _fallbackAnnee));
-    final prixCtrl = TextEditingController(text: chargesPaiement.montantTotal.toInt().toString());
+
+    final double montantRef = (_prixAnnuel != null && _prixAnnuel! > 0)
+        ? _prixAnnuel!
+        : r.montantTotal;
+    final prixCtrl = TextEditingController(text: montantRef.toInt().toString());
+
     String type = r.type;
     bool saving = false;
 
@@ -1257,10 +1463,27 @@ class _ResidentsScreenState extends State<ResidentsScreen>
           const SizedBox(height: 20),
           _dActions(ctx: ctx, saving: saving, label: 'Enregistrer', color: _C.blue, onConfirm: () async {
             setDialog(() => saving = true);
-            await _service.updateResident(userId: r.userId, nom: nomCtrl.text, prenom: prenomCtrl.text, telephone: telCtrl.text.isEmpty ? null : telCtrl.text, type: type, montantTotal: double.tryParse(prixCtrl.text.trim()), annee: _fallbackAnnee, mandatId: _currentMandatId);
+            final err = await _service.updateResident(
+              userId: r.userId,
+              nom: nomCtrl.text,
+              prenom: prenomCtrl.text,
+              telephone: telCtrl.text.isEmpty ? null : telCtrl.text,
+              type: type,
+              montantTotal: double.tryParse(prixCtrl.text.trim()),
+              annee: _fallbackAnnee,
+              mandatId: _currentMandatId,
+              interSyndicId: _interSyndicId, // ← vérification droits
+            );
             if (!ctx.mounted) return;
-            Navigator.pop(ctx);
-            _load();
+            if (err != null) {
+              setDialog(() { saving = false; });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(err), backgroundColor: _C.red),
+              );
+            } else {
+              Navigator.pop(ctx);
+              _load();
+            }
           }),
         ]))),
       )),
@@ -1269,6 +1492,8 @@ class _ResidentsScreenState extends State<ResidentsScreen>
 
   // ── DIALOG SUPPRIMER
   void _showDeleteConfirm(ResidentModel r) {
+    if (!_canEditCurrentMandat) { _showReadOnlyMessage(); return; }
+
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -1283,7 +1508,26 @@ class _ResidentsScreenState extends State<ResidentsScreen>
           Row(children: [
             Expanded(child: GestureDetector(onTap: () => Navigator.pop(ctx), child: Container(padding: const EdgeInsets.symmetric(vertical: 13), decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(12), border: Border.all(color: _C.divider)), child: const Text('Annuler', textAlign: TextAlign.center, style: TextStyle(color: _C.dark, fontWeight: FontWeight.w700, fontSize: 13))))),
             const SizedBox(width: 10),
-            Expanded(child: GestureDetector(onTap: () async { await _service.deleteResident(r.userId, r.appartementId); if (!ctx.mounted) return; Navigator.pop(ctx); _load(); }, child: Container(padding: const EdgeInsets.symmetric(vertical: 13), decoration: BoxDecoration(color: _C.red, borderRadius: BorderRadius.circular(12)), child: const Text('Supprimer', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13))))),
+            Expanded(child: GestureDetector(
+              onTap: () async {
+                final err = await _service.deleteResident(
+                  r.userId,
+                  r.appartementId,
+                  interSyndicId: _interSyndicId, // ← vérification droits
+                  mandatId: _currentMandatId,
+                );
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
+                if (err != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(err), backgroundColor: _C.red),
+                  );
+                } else {
+                  _load();
+                }
+              },
+              child: Container(padding: const EdgeInsets.symmetric(vertical: 13), decoration: BoxDecoration(color: _C.red, borderRadius: BorderRadius.circular(12)), child: const Text('Supprimer', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13))),
+            )),
           ]),
         ])),
       ),
@@ -1306,15 +1550,16 @@ class _ResidentsScreenState extends State<ResidentsScreen>
         child: Padding(padding: const EdgeInsets.all(22), child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           _dHeader(ctx, 'Appartements libres', icon: Icons.home_work_rounded, iconColor: _C.green),
           const SizedBox(height: 14),
-          // Tabs
           Container(padding: const EdgeInsets.all(3), decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(12)), child: Row(children: [
             Expanded(child: GestureDetector(onTap: () => setDialog(() { activeTab = 0; paymentDone = false; }), child: AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.symmetric(vertical: 9), decoration: BoxDecoration(color: activeTab == 0 ? _C.bgCard : Colors.transparent, borderRadius: BorderRadius.circular(10), boxShadow: activeTab == 0 ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4)] : []), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.payments_rounded, size: 12, color: activeTab == 0 ? _C.green : _C.textLight), const SizedBox(width: 5), Text('Payer (${_appartementsLibres.length})', style: TextStyle(color: activeTab == 0 ? _C.green : _C.textLight, fontWeight: FontWeight.w700, fontSize: 12))])))),
             Expanded(child: GestureDetector(onTap: () => setDialog(() => activeTab = 1), child: AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.symmetric(vertical: 9), decoration: BoxDecoration(color: activeTab == 1 ? _C.bgCard : Colors.transparent, borderRadius: BorderRadius.circular(10), boxShadow: activeTab == 1 ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4)] : []), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.history_rounded, size: 12, color: activeTab == 1 ? _C.blue : _C.textLight), const SizedBox(width: 5), Text('Historique (${_appartementsLibresPaies.length})', style: TextStyle(color: activeTab == 1 ? _C.blue : _C.textLight, fontWeight: FontWeight.w700, fontSize: 12))])))),
           ])),
           const SizedBox(height: 16),
-          // TAB 0
           if (activeTab == 0) ...[
-            if (_appartementsLibres.isEmpty) ...[
+            // Lecture seule si mandat pas le sien
+            if (!_canEditCurrentMandat) ...[
+              _buildReadOnlyBanner(),
+            ] else if (_appartementsLibres.isEmpty) ...[
               Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: _C.greenLight, borderRadius: BorderRadius.circular(12)), child: Column(children: [Container(width: 44, height: 44, decoration: BoxDecoration(color: _C.green, borderRadius: BorderRadius.circular(22)), child: const Icon(Icons.check_rounded, color: Colors.white, size: 22)), const SizedBox(height: 10), const Text('Tous les appartements sont payés !', style: TextStyle(color: _C.green, fontWeight: FontWeight.w700, fontSize: 13), textAlign: TextAlign.center)])),
             ] else if (paymentDone) ...[
               Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: _C.greenLight, borderRadius: BorderRadius.circular(12)), child: Column(children: [Container(width: 44, height: 44, decoration: BoxDecoration(color: _C.green, borderRadius: BorderRadius.circular(22)), child: const Icon(Icons.check_rounded, color: Colors.white, size: 22)), const SizedBox(height: 10), const Text('Paiement enregistré !', style: TextStyle(color: _C.green, fontWeight: FontWeight.w700, fontSize: 13))])),
@@ -1366,7 +1611,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
               }),
             ],
           ],
-          // TAB 1
           if (activeTab == 1) ...[
             if (_appartementsLibresPaies.isEmpty) ...[
               Padding(padding: const EdgeInsets.symmetric(vertical: 24), child: Center(child: Column(children: [Icon(Icons.receipt_long_outlined, color: _C.divider, size: 40), const SizedBox(height: 8), const Text('Aucun appartement payé pour ce mandat', style: TextStyle(color: _C.textLight, fontSize: 12))]))),

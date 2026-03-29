@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import '../../../services/tranche_service.dart';
+import '../../../widgets/inter_syndic_header.dart';
 
 // ── Palette (identique aux autres écrans inter-syndic)
 class _C {
@@ -132,31 +133,12 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
 
   // ── Header ─────────────────────────────────────────────────
   Widget _buildHeader() {
-    return Container(
-      color: _C.white,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      child: Row(children: [
-        GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Container(
-            width: 38, height: 38,
-            decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10), border: Border.all(color: _C.divider)),
-            child: const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: _C.dark),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Container(
-          width: 38, height: 38,
-          decoration: BoxDecoration(color: _C.coral, borderRadius: BorderRadius.circular(10)),
-          child: const Icon(Icons.campaign_rounded, color: _C.white, size: 20),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            const Text('Annonces', style: TextStyle(color: _C.dark, fontWeight: FontWeight.w800, fontSize: 17, letterSpacing: -0.3)),
-            Text('${_all.length} au total', style: const TextStyle(color: _C.textLight, fontSize: 12)),
-          ]),
-        ),
+    return InterSyndicHeader(
+      title: 'ResiManager',
+      subtitle: 'inter_syndic',
+      gridIcon: Icons.business_rounded,
+      onBack: () => Navigator.pop(context),
+      extraActions: [
         if (_nbUrgente > 0)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -168,7 +150,7 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
                   style: const TextStyle(color: _C.coral, fontSize: 11, fontWeight: FontWeight.w700)),
             ]),
           ),
-      ]),
+      ],
     );
   }
 
@@ -186,15 +168,15 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
   Widget _statCard(IconData icon, String value, String label, Color color, Color bg) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: _C.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _C.divider)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(width: 36, height: 36, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color, size: 18)),
-          const SizedBox(height: 10),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: _C.dark, letterSpacing: -0.5)),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(color: _C.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _C.divider)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          Container(width: 32, height: 32, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+              child: Icon(icon, color: color, size: 16)),
+          const SizedBox(height: 8),
+          FittedBox(fit: BoxFit.scaleDown, child: Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _C.dark, letterSpacing: -0.5))),
           const SizedBox(height: 2),
-          Text(label, style: const TextStyle(color: _C.textLight, fontSize: 10), overflow: TextOverflow.ellipsis),
+          FittedBox(fit: BoxFit.scaleDown, child: Text(label, style: const TextStyle(color: _C.textLight, fontSize: 9))),
         ]),
       ),
     );
@@ -331,35 +313,35 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Expanded(
-                      child: Text(
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      Text(
                         a['titre'] ?? '',
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _C.dark, letterSpacing: -0.2, height: 1.3),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: _C.dark, letterSpacing: -0.2),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    if (isUrgent)
+                      if (isUrgent)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(color: _C.coral, borderRadius: BorderRadius.circular(20)),
+                          child: const Text('URGENT', style: TextStyle(color: _C.white, fontSize: 8, fontWeight: FontWeight.w800)),
+                        ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(color: _C.coral, borderRadius: BorderRadius.circular(20)),
-                        child: const Text('URGENT', style: TextStyle(color: _C.white, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isPubliee ? _C.greenLight : _C.bg,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: isPubliee ? _C.green.withValues(alpha: 0.4) : _C.divider),
+                        ),
+                        child: Text(
+                          isPubliee ? 'Publiée' : 'Archivée',
+                          style: TextStyle(color: isPubliee ? _C.green : _C.textLight, fontSize: 8, fontWeight: FontWeight.w700),
+                        ),
                       ),
-                    const SizedBox(width: 6),
-                    // Badge statut
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: isPubliee ? _C.greenLight : _C.bg,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: isPubliee ? _C.green.withValues(alpha: 0.4) : _C.divider),
-                      ),
-                      child: Text(
-                        isPubliee ? 'Publiée' : 'Archivée',
-                        style: TextStyle(color: isPubliee ? _C.green : _C.textLight, fontSize: 9, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ]),
+                    ],
+                  ),
                   const SizedBox(height: 6),
                   Text(
                     a['contenu'] ?? '',
@@ -386,61 +368,57 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
             borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(15), bottomRight: Radius.circular(15)),
             border: Border(top: BorderSide(color: _C.divider)),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(children: [
-
-            // Publier / Dépublier
-            GestureDetector(
-              onTap: () => _togglePublish(a),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  color: isPubliee ? _C.bg : _C.greenLight,
-                  borderRadius: BorderRadius.circular(9),
-                  border: Border.all(color: isPubliee ? _C.divider : _C.green.withValues(alpha: 0.4)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              GestureDetector(
+                onTap: () => _togglePublish(a),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isPubliee ? _C.bg : _C.greenLight,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: isPubliee ? _C.divider : _C.green.withValues(alpha: 0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(isPubliee ? Icons.visibility_off_rounded : Icons.visibility_rounded, size: 12, color: isPubliee ? _C.textMid : _C.green),
+                      const SizedBox(width: 4),
+                      Text(isPubliee ? 'Dépublier' : 'Publier', style: TextStyle(color: isPubliee ? _C.textMid : _C.green, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
                 ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(
-                    isPubliee ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                    size: 13,
-                    color: isPubliee ? _C.textMid : _C.green,
+              ),
+              GestureDetector(
+                onTap: () => _showFormDialog(a),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(color: _C.blueLight, borderRadius: BorderRadius.circular(9)),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.edit_rounded, size: 12, color: _C.blue),
+                      SizedBox(width: 4),
+                      Text('Modifier', style: TextStyle(color: _C.blue, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
                   ),
-                  const SizedBox(width: 5),
-                  Text(
-                    isPubliee ? 'Dépublier' : 'Publier',
-                    style: TextStyle(color: isPubliee ? _C.textMid : _C.green, fontSize: 11, fontWeight: FontWeight.w700),
-                  ),
-                ]),
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-
-            // Modifier
-            GestureDetector(
-              onTap: () => _showFormDialog(a),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(color: _C.blueLight, borderRadius: BorderRadius.circular(9)),
-                child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.edit_rounded, size: 13, color: _C.blue),
-                  SizedBox(width: 5),
-                  Text('Modifier', style: TextStyle(color: _C.blue, fontSize: 11, fontWeight: FontWeight.w700)),
-                ]),
+              GestureDetector(
+                onTap: () => _confirmDelete(a),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(9), border: Border.all(color: _C.divider)),
+                  child: const Icon(Icons.delete_outline_rounded, size: 16, color: _C.coral),
+                ),
               ),
-            ),
-
-            const Spacer(),
-
-            // Supprimer
-            GestureDetector(
-              onTap: () => _confirmDelete(a),
-              child: Container(
-                width: 32, height: 32,
-                decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(9), border: Border.all(color: _C.divider)),
-                child: const Icon(Icons.delete_outline_rounded, size: 16, color: _C.coral),
-              ),
-            ),
-          ]),
+            ],
+          ),
         ),
       ]),
     );

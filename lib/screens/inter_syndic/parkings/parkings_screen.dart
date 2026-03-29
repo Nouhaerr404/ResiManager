@@ -4,6 +4,7 @@ import '../../../models/resident_model.dart';
 import '../../../services/parking_service.dart';
 import '../../../services/resident_service.dart';
 import '../../../services/tranche_service.dart';
+import '../../../widgets/inter_syndic_header.dart';
 
 // ── Brand palette — aligned with ResiManager desktop app
 class _C {
@@ -203,75 +204,13 @@ class _ParkingsScreenState extends State<ParkingsScreen>
 
   // ── Header
   Widget _buildHeader() {
-    return Container(
-      color: _C.white,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                  color: _C.bg,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _C.divider)),
-              child: const Icon(Icons.arrow_back_ios_new_rounded,
-                  size: 14, color: _C.dark),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-                color: _C.coral, borderRadius: BorderRadius.circular(10)),
-            child:
-            const Icon(Icons.grid_view_rounded, color: _C.white, size: 20),
-          ),
-          const SizedBox(width: 10),
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('ResiManager',
-                  style: TextStyle(
-                      color: _C.dark,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      letterSpacing: -0.2)),
-              Text('inter_syndic',
-                  style: TextStyle(
-                      color: _C.textLight,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500)),
-            ],
-          ),
-          const Spacer(),
-          GestureDetector(
-            onTap: _showAddParkingDialog,
-            child: Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-              decoration: BoxDecoration(
-                  color: _C.coral, borderRadius: BorderRadius.circular(22)),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.add_rounded, size: 16, color: _C.white),
-                  SizedBox(width: 6),
-                  Text('Ajouter',
-                      style: TextStyle(
-                          color: _C.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700)),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+    return InterSyndicHeader(
+      title: 'ResiManager',
+      subtitle: 'inter_syndic',
+      gridIcon: Icons.business_rounded,
+      onBack: () => Navigator.pop(context),
+      onAdd: _showAddParkingDialog,
+      addLabel: 'Ajouter',
     );
   }
 
@@ -299,7 +238,7 @@ class _ParkingsScreenState extends State<ParkingsScreen>
   // ── Stats Banner
   Widget _buildStatsBanner() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       decoration: BoxDecoration(
         color: _C.white,
         borderRadius: BorderRadius.circular(16),
@@ -310,15 +249,15 @@ class _ParkingsScreenState extends State<ParkingsScreen>
           Row(
             children: [
               Container(
-                width: 46,
-                height: 46,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                     color: _C.coralLight,
-                    borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(10)),
                 child: const Icon(Icons.local_parking_rounded,
-                    color: _C.coral, size: 22),
+                    color: _C.coral, size: 20),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -327,11 +266,10 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                         style: const TextStyle(
                             color: _C.dark,
                             fontWeight: FontWeight.w800,
-                            fontSize: 18,
+                            fontSize: 17,
                             letterSpacing: -0.3)),
                     const Text('dans cette tranche',
-                        style:
-                        TextStyle(color: _C.textLight, fontSize: 11)),
+                        style: TextStyle(color: _C.textLight, fontSize: 10)),
                   ],
                 ),
               ),
@@ -342,13 +280,11 @@ class _ParkingsScreenState extends State<ParkingsScreen>
           const SizedBox(height: 16),
           Row(
             children: [
-              _bannerStat('$_disponibles', 'Disponibles', _C.green,
-                  _C.greenLight),
-              const SizedBox(width: 10),
-              _bannerStat('$_occupes', 'Occupes', _C.coral, _C.coralLight),
-              const SizedBox(width: 10),
-              _bannerStat('${_revenus.toInt()} DH', 'Revenus/an', _C.amber,
-                  _C.amberLight),
+              _bannerStat('$_disponibles', 'Disponibles', _C.green, _C.greenLight),
+              const SizedBox(width: 6),
+              _bannerStat('$_occupes', 'Occupés', _C.coral, _C.coralLight),
+              const SizedBox(width: 6),
+              _bannerStat('${_revenus.toInt()} DH', 'Revenus/an', _C.amber, _C.amberLight),
             ],
           ),
         ],
@@ -356,27 +292,32 @@ class _ParkingsScreenState extends State<ParkingsScreen>
     );
   }
 
-  Widget _bannerStat(
-      String val, String label, Color color, Color bg) {
+  Widget _bannerStat(String val, String label, Color color, Color bg) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
         decoration: BoxDecoration(
-            color: bg, borderRadius: BorderRadius.circular(12)),
+            color: bg, borderRadius: BorderRadius.circular(10)),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(val,
-                style: TextStyle(
-                    color: color,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(val,
+                  style: TextStyle(
+                      color: color,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold)),
+            ),
             const SizedBox(height: 2),
-            Text(label,
-                style: TextStyle(
-                    color: color.withValues(alpha: 0.7),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(label,
+                  style: TextStyle(
+                      color: color.withOpacity(0.8),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600)),
+            ),
           ],
         ),
       ),
