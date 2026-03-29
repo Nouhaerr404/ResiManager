@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../screens/syndic_general/dashboard_screen.dart';
 import '../screens/syndic_general/residence_audit_screen.dart';
 import '../screens/syndic_general/syndics_management_screen.dart';
@@ -67,7 +68,7 @@ class SyndicSidebar extends StatelessWidget {
             const Spacer(),
 
             // Lien pour sortir de la résidence
-            _buildMenuItem(context, Icons.logout, 'Mes Résidences', false, () {
+            _buildMenuItem(context, Icons.location_city_outlined, 'Mes Résidences', false, () {
               Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => ResidenceSelectionScreen(syndicGeneralId: syndicId)));
             }),
 
@@ -75,11 +76,12 @@ class SyndicSidebar extends StatelessWidget {
 
             _buildMenuItem(
                 context,
-                Icons.home_rounded, // Icône de maison pour l'accueil
-                'Accueil Principal',
+                Icons.logout_rounded,
+                'Se déconnecter',
                 false,
-                    () {
-                  // Cette commande efface tout et revient à la page de ton ami
+                    () async {
+                  await Supabase.instance.client.auth.signOut();
+                  // Cette commande efface tout et revient à la page principale (RoleSelector)
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(builder: (context) => const RoleSelectorScreen()),

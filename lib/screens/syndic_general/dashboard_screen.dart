@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../widgets/main_layout.dart';
 import '../../widgets/kpi_card.dart';
 import '../../services/syndic_dashboard_service.dart';
+import 'residence_selection_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final int residenceId;
@@ -25,95 +26,105 @@ class _DashboardScreenState extends State<DashboardScreen> {
     double width = MediaQuery.of(context).size.width;
     bool isWeb = width > 900;
 
-    return MainLayout(
-      title: 'Statistiques Globales',
-      activePage: 'Dashboard',
-      residenceId: widget.residenceId,
-      syndicId: widget.syndicId,
-      body: Stack(
-        children: [
-          // 1. IMAGE D'ARRIÈRE-PLAN
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/residence_bg.png',
-              fit: BoxFit.cover,
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => ResidenceSelectionScreen(syndicGeneralId: widget.syndicId)),
+          (route) => false,
+        );
+        return false;
+      },
+      child: MainLayout(
+        title: 'Statistiques Globales',
+        activePage: 'Dashboard',
+        residenceId: widget.residenceId,
+        syndicId: widget.syndicId,
+        body: Stack(
+          children: [
+            // 1. IMAGE D'ARRIÈRE-PLAN
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/residence_bg.png',
+                fit: BoxFit.cover,
+              ),
             ),
-          ),
-          // 2. VOILE SOMBRE POUR LA LISIBILITÉ
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.3),
-                    Colors.black.withOpacity(0.7),
-                  ],
+            // 2. VOILE SOMBRE POUR LA LISIBILITÉ
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.3),
+                      Colors.black.withOpacity(0.7),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          // 3. CONTENU DU DASHBOARD
-          FutureBuilder<List<dynamic>>(
-            future: Future.wait([
-              _service.fetchDashboardStats(widget.residenceId),
-              _service.getChartsData(widget.residenceId),
-            ]),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator(color: Colors.white));
-              }
-              if (snapshot.hasError) return Center(child: Text("Erreur: ${snapshot.error}", style: const TextStyle(color: Colors.white)));
-              if (!snapshot.hasData) return const Center(child: Text("Aucune donnée", style: TextStyle(color: Colors.white)));
+            // 3. CONTENU DU DASHBOARD
+            FutureBuilder<List<dynamic>>(
+              future: Future.wait([
+                _service.fetchDashboardStats(widget.residenceId),
+                _service.getChartsData(widget.residenceId),
+              ]),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: Colors.white));
+                }
+                if (snapshot.hasError) return Center(child: Text("Erreur: ${snapshot.error}", style: const TextStyle(color: Colors.white)));
+                if (!snapshot.hasData) return const Center(child: Text("Aucune donnée", style: TextStyle(color: Colors.white)));
 
-              final DashboardStats stats = snapshot.data![0];
-              final Map<String, dynamic> chartData = snapshot.data![1];
-              final List<double> expenses = chartData['expenses'];
-              final List<double> revenues = chartData['revenues'];
+                final DashboardStats stats = snapshot.data![0];
+                final Map<String, dynamic> chartData = snapshot.data![1];
+                final List<double> expenses = chartData['expenses'];
+                final List<double> revenues = chartData['revenues'];
 
-              return SingleChildScrollView(
-                padding: EdgeInsets.all(isWeb ? 40 : 15),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // N'affiche le titre que sur WEB pour éviter la répétition sur Mobile
-                    if (isWeb) ...[
-                      const Text("Statistiques Globales", 
-                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white)),
-                      const Text("Analyse en temps réel de votre résidence", 
-                        style: TextStyle(color: Colors.white70, fontSize: 14)),
-                      const SizedBox(height: 30),
+                return SingleChildScrollView(
+                  padding: EdgeInsets.all(isWeb ? 40 : 15),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // N'affiche le titre que sur WEB pour éviter la répétition sur Mobile
+                      if (isWeb) ...[
+                        const Text("Statistiques Globales", 
+                          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white)),
+                        const Text("Analyse en temps réel de votre résidence", 
+                          style: TextStyle(color: Colors.white70, fontSize: 14)),
+                        const SizedBox(height: 30),
+                      ],
+
+                      // CARTES KPI
+                      _buildKpiSection(stats, isWeb),
+                      const SizedBox(height: 35),
+
+                      // ANALYSES (Graphiques)
+                      if (isWeb)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(flex: 2, child: _buildMonthlyBalanceChart(revenues, expenses)),
+                            const SizedBox(width: 25),
+                            Expanded(flex: 1, child: _buildRecoveryGauge(stats.recoveryRate, true)),
+                          ],
+                        )
+                      else
+                        Column(
+                          children: [
+                            _buildMonthlyBalanceChart(revenues, expenses),
+                            const SizedBox(height: 25),
+                            _buildRecoveryGauge(stats.recoveryRate, false),
+                          ],
+                        ),
                     ],
-
-                    // CARTES KPI
-                    _buildKpiSection(stats, isWeb),
-                    const SizedBox(height: 35),
-
-                    // ANALYSES (Graphiques)
-                    if (isWeb)
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(flex: 2, child: _buildMonthlyBalanceChart(revenues, expenses)),
-                          const SizedBox(width: 25),
-                          Expanded(flex: 1, child: _buildRecoveryGauge(stats.recoveryRate, true)),
-                        ],
-                      )
-                    else
-                      Column(
-                        children: [
-                          _buildMonthlyBalanceChart(revenues, expenses),
-                          const SizedBox(height: 25),
-                          _buildRecoveryGauge(stats.recoveryRate, false),
-                        ],
-                      ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ],
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

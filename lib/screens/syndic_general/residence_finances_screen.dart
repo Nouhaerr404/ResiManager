@@ -56,25 +56,21 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
   }
 
   Widget _buildActionHeader(bool isWeb) {
-    if (!isWeb) {
-      return _addBtn(true);
-    }
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text("Gestion des Dépenses",style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: darkGrey)),
-
-          const Text("Gérez les factures et sorties d'argent", style: TextStyle(color: Colors.grey, fontSize: 16)),
-        ]),
-        _addBtn(false),
+        if (isWeb)
+          Text("Gestion des Dépenses", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: darkGrey))
+        else
+          const SizedBox.shrink(),
+        _addBtn(!isWeb),
       ],
     );
   }
 
-  Widget _addBtn(bool isFullWidth) {
+  Widget _addBtn(bool isMobile) {
     return SizedBox(
-      width: isFullWidth ? double.infinity : null,
+      width: isMobile ? MediaQuery.of(context).size.width - 30 : null,
       child: ElevatedButton.icon(
         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AddGlobalExpenseScreen(residenceId: widget.residenceId, syndicId: widget.syndicId))).then((_) => setState((){})),
         icon: const Icon(Icons.add, color: Colors.white),

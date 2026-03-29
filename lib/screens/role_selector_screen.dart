@@ -152,7 +152,7 @@ class RoleSelectorScreen extends StatelessWidget {
                       Column(
                         children: [
                           Text(
-                            'Choisissez votre espace pour commencer',
+                            'Créez votre espace pour commencer',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: _white.withOpacity(0.60),

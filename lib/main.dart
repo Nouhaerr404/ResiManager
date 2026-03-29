@@ -56,6 +56,7 @@ class ResiManagerApp extends StatelessWidget {
       title: 'ResiManager',
       debugShowCheckedModeBanner: false,
       theme: theme,
+      // Définit RoleSelectorScreen comme page de démarrage par défaut
       home: const RoleSelectorScreen(),
       routes: {
         '/home':           (context) => const HomePage(),

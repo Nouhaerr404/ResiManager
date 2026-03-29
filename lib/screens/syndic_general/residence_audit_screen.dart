@@ -58,8 +58,10 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
           return ListView(
             padding: EdgeInsets.symmetric(horizontal: isWeb ? 40 : 15, vertical: 20),
             children: [
-              Text("Audit & Bilans",style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: darkGrey)),
-              const SizedBox(height: 15),
+              if (isWeb) ...[
+                Text("Audit & Bilans", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF2C2C2C))),
+                const SizedBox(height: 15),
+              ],
               _buildIntroDescription(),
               const SizedBox(height: 20),
 

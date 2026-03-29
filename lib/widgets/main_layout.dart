@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'syndic_sidebar.dart';
+import '../screens/syndic_general/dashboard_screen.dart';
 
 class MainLayout extends StatelessWidget {
   final Widget body;
@@ -21,23 +22,37 @@ class MainLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     bool isWeb = MediaQuery.of(context).size.width >= 900;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFFCF9F6),
-      // AppBar affichée seulement sur mobile pour le menu burger
-      appBar: !isWeb ? AppBar(title: Text(title), elevation: 0) : null,
+    return WillPopScope(
+      onWillPop: () async {
+        if (activePage != 'Dashboard') {
+          // Sur Mobile, le bouton retour physique ramène au Dashboard
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => DashboardScreen(residenceId: residenceId, syndicId: syndicId)),
+            (route) => false,
+          );
+          return false;
+        }
+        // Si on est sur le Dashboard, on laisse le WillPopScope du Dashboard gérer le retour vers la sélection
+        return true;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFCF9F6),
+        // On laisse Flutter gérer le leading (burger menu) automatiquement
+        appBar: !isWeb ? AppBar(
+          title: Text(title, style: const TextStyle(fontSize: 22)), 
+          elevation: 0,
+        ) : null,
 
-      // Le menu caché (Mobile)
-      drawer: !isWeb ? SyndicSidebar(activePage: activePage, residenceId: residenceId, syndicId: syndicId) : null,
+        drawer: !isWeb ? SyndicSidebar(activePage: activePage, residenceId: residenceId, syndicId: syndicId) : null,
 
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Le menu fixe (Web)
-          if (isWeb) SizedBox(width: 260, child: SyndicSidebar(activePage: activePage, residenceId: residenceId, syndicId: syndicId)),
-
-          // Le contenu de la page
-          Expanded(child: body),
-        ],
+        body: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isWeb) SizedBox(width: 260, child: SyndicSidebar(activePage: activePage, residenceId: residenceId, syndicId: syndicId)),
+            Expanded(child: body),
+          ],
+        ),
       ),
     );
   }
