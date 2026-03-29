@@ -11,13 +11,13 @@ class AccountingService {
           .select('*, categories(nom, type), tranches(nom), inter_syndic:inter_syndic_id(nom, prenom)')
           .eq('residence_id', residenceId)
           .eq('annee', annee),
-          
+
       // Paiements avec info inter-syndic
       _db.from('paiements')
           .select('*, inter_syndic:inter_syndic_id(nom, prenom), resident:resident_id(nom, prenom), appartements(id, numero, immeubles(id, nom, tranches(id, nom)))')
           .eq('residence_id', residenceId)
           .eq('annee', annee),
-          
+
       // Tranches avec l'inter-syndic actuel
       _db.from('tranches')
           .select('*, inter_syndic:inter_syndic_id(id, nom, prenom)')

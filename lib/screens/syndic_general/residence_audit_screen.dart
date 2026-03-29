@@ -61,7 +61,7 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
           final List allExpenses = data['expenses'] ?? [];
           final List allPayments = data['payments'] ?? [];
           final List tranches = data['tranches'] ?? [];
-          
+
           final List<AffectationHistoryModel> history = (data['history'] as List)
               .map((h) => AffectationHistoryModel.fromJson(h))
               .toList();
@@ -72,7 +72,7 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
           }
 
           final query = _searchQuery.toLowerCase();
-          
+
           List filteredExpenses = allExpenses;
           List filteredPayments = allPayments;
           if (_filterInterSyndicId != null) {
@@ -118,12 +118,12 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
   Widget _buildTrancheAuditCard(Map<String, dynamic> tranche, List expenses, List payments, List<AffectationHistoryModel> history, bool isWeb) {
     final String name = tranche['nom'] ?? "Sans nom";
     final String? status = tranche['statut'];
-    
+
     AffectationHistoryModel? current;
-    try { 
-      current = history.firstWhere((h) => h.isCurrent && h.trancheId == tranche['id']); 
+    try {
+      current = history.firstWhere((h) => h.isCurrent && h.trancheId == tranche['id']);
     } catch(_) {}
-    
+
     final String currentName = current != null ? current.interSyndicNomComplet : "Non assigné";
 
     final stats = _getPaymentStats(payments);
@@ -175,15 +175,15 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
     );
   }
 
-  Widget _buildStatusBadge(String status) { 
-    Color color = Colors.grey; 
-    String label = status.toLowerCase(); 
-    if (label == 'actif' || label == 'ouverte') color = Colors.green; 
-    if (label == 'terminé' || label == 'cloturée') color = Colors.blue; 
-    return Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withOpacity(0.3))), child: Text(status.toUpperCase(), style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: color))); 
+  Widget _buildStatusBadge(String status) {
+    Color color = Colors.grey;
+    String label = status.toLowerCase();
+    if (label == 'actif' || label == 'ouverte') color = Colors.green;
+    if (label == 'terminé' || label == 'cloturée') color = Colors.blue;
+    return Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withOpacity(0.3))), child: Text(status.toUpperCase(), style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: color)));
   }
-  
-  Widget _buildHeader(Map<int, String> syndics) { 
+
+  Widget _buildHeader(Map<int, String> syndics) {
     return Wrap(
       alignment: WrapAlignment.spaceBetween,
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -219,57 +219,57 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
           ],
         ),
       ],
-    ); 
+    );
   }
 
   Widget _buildSearchBar() { return TextField(onChanged: (v) => setState(() => _searchQuery = v), decoration: InputDecoration(hintText: "Rechercher une tranche...", prefixIcon: const Icon(Icons.search), filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade200)))); }
-  
-  Widget _buildGlobalAuditCard(List expenses, bool isWeb) { 
-    double total = expenses.fold(0, (sum, e) => sum + (e['montant'] as num).toDouble()); 
+
+  Widget _buildGlobalAuditCard(List expenses, bool isWeb) {
+    double total = expenses.fold(0, (sum, e) => sum + (e['montant'] as num).toDouble());
     return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.blue.withOpacity(0.2), width: 1.2)), 
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          leading: const Icon(Icons.account_balance, color: Colors.blue, size: 20), 
-          title: const Text("Frais Généraux Résidence", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blue)), 
-          trailing: Text("${total.toInt()} DH", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blue)), 
-          children: [Padding(padding: const EdgeInsets.all(16), child: _buildExpenseTable(expenses, isWeb))]
-        ),
-      )
-    ); 
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.blue.withOpacity(0.2), width: 1.2)),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+              leading: const Icon(Icons.account_balance, color: Colors.blue, size: 20),
+              title: const Text("Frais Généraux Résidence", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blue)),
+              trailing: Text("${total.toInt()} DH", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blue)),
+              children: [Padding(padding: const EdgeInsets.all(16), child: _buildExpenseTable(expenses, isWeb))]
+          ),
+        )
+    );
   }
-  
-  Widget _buildImmeubleGrouping(List payments, bool isWeb, List<AffectationHistoryModel> history) { 
-    Map<String, List<Map<String, dynamic>>> immGroups = {}; 
-    for (var p in payments) { 
-      String iName = p['appartements']?['immeubles']?['nom'] ?? "Extérieur"; 
-      if (!immGroups.containsKey(iName)) immGroups[iName] = []; 
-      immGroups[iName]!.add(p); 
-    } 
-    return Column(children: immGroups.entries.map((e) => _buildImmeubleLevel(e.key, e.value, isWeb, history)).toList()); 
+
+  Widget _buildImmeubleGrouping(List payments, bool isWeb, List<AffectationHistoryModel> history) {
+    Map<String, List<Map<String, dynamic>>> immGroups = {};
+    for (var p in payments) {
+      String iName = p['appartements']?['immeubles']?['nom'] ?? "Extérieur";
+      if (!immGroups.containsKey(iName)) immGroups[iName] = [];
+      immGroups[iName]!.add(p);
+    }
+    return Column(children: immGroups.entries.map((e) => _buildImmeubleLevel(e.key, e.value, isWeb, history)).toList());
   }
-  
-  Widget _buildImmeubleLevel(String name, List<Map<String, dynamic>> data, bool isWeb, List<AffectationHistoryModel> history) { 
-    final stats = _getPaymentStats(data); 
+
+  Widget _buildImmeubleLevel(String name, List<Map<String, dynamic>> data, bool isWeb, List<AffectationHistoryModel> history) {
+    final stats = _getPaymentStats(data);
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
-        leading: const Icon(Icons.business, size: 18, color: Colors.purple), 
-        title: Text(name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.purple)), 
-        trailing: Text("${stats['paye']!.toInt()} / ${stats['du']!.toInt()} DH", style: const TextStyle(fontSize: 12, color: Colors.purple, fontWeight: FontWeight.bold)), 
-        children: [_buildCustomPaymentList(data, isWeb, history)]
+          leading: const Icon(Icons.business, size: 18, color: Colors.purple),
+          title: Text(name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.purple)),
+          trailing: Text("${stats['paye']!.toInt()} / ${stats['du']!.toInt()} DH", style: const TextStyle(fontSize: 12, color: Colors.purple, fontWeight: FontWeight.bold)),
+          children: [_buildCustomPaymentList(data, isWeb, history)]
       ),
-    ); 
+    );
   }
-  
-  Widget _buildExpenseTable(List data, bool isWeb) { 
+
+  Widget _buildExpenseTable(List data, bool isWeb) {
     if (data.isEmpty) return const Center(child: Padding(padding: EdgeInsets.all(10), child: Text("Aucune dépense", style: TextStyle(fontSize: 11, color: Colors.grey))));
     return LayoutBuilder(builder: (context, constraints) {
       return SingleChildScrollView(scrollDirection: Axis.horizontal, child: ConstrainedBox(constraints: BoxConstraints(minWidth: constraints.maxWidth), child: DataTable(columnSpacing: isWeb ? 40 : 15, headingRowHeight: 35, columns: const [DataColumn(label: Text('CATÉGORIE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold))), DataColumn(label: Text('DATE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold))), DataColumn(label: Text('MONTANT', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold)))], rows: data.map((e) => DataRow(cells: [DataCell(Text(e['categories']?['nom'] ?? 'Inconnue', style: const TextStyle(fontSize: 11))), DataCell(Text(e['date'] ?? '-', style: const TextStyle(fontSize: 11))), DataCell(Text("${e['montant']} DH", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.redAccent)))])).toList())));
     });
   }
-  
+
   Widget _buildCustomPaymentList(List data, bool isWeb, List<AffectationHistoryModel> history) {
     Map<int, List<Map<String, dynamic>>> groupedByApp = {};
     for (var p in data) {
@@ -343,7 +343,7 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
                       ...syndicAgg.entries.map((sEntry) {
                         final sData = sEntry.value;
                         final List sDetails = sData['details'];
-                        
+
                         return Container(
                           margin: const EdgeInsets.only(bottom: 10),
                           padding: const EdgeInsets.all(10),

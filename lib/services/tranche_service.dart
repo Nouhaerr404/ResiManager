@@ -148,7 +148,7 @@ class TrancheService {
       // 2. Récupérer les effectifs pour les divisions
       final allResTranches = await _db.from('tranches').select('id').eq('residence_id', resId);
       final int totalTranches = (allResTranches as List).isEmpty ? 1 : allResTranches.length;
-      
+
       int tranchesSameIS = 1;
       if (isId != null) {
         final sameISTranches = await _db.from('tranches').select('id').eq('inter_syndic_id', isId).eq('residence_id', resId);
@@ -170,10 +170,10 @@ class TrancheService {
 
       // 4. Calcul des Dépenses (avec quote-part)
       final allExpenses = await _db.from('depenses').select('montant, tranche_id, inter_syndic_id, syndic_general_id').eq('residence_id', resId).eq('annee', anneeEnCours);
-      
+
       for (var ex in allExpenses as List) {
         double amount = (ex['montant'] as num).toDouble();
-        
+
         if (ex['tranche_id'] == trancheId) {
           // Dépense 100% spécifique à cette tranche
           depenses += amount;
@@ -366,7 +366,7 @@ class TrancheService {
           .update({'date_fin': today})
           .eq('tranche_id', trancheId)
           .eq('inter_syndic_id', oldSyndicId)
-          .gt('date_fin', today); 
+          .gt('date_fin', today);
     }
 
     // Ouvrir le nouveau mandat (1 an par défaut)
@@ -435,16 +435,16 @@ class TrancheService {
 
       // 2. Gardien Financier : Dépenses, Paiements (via appartements)
       final List depRes = await _db.from('depenses').select('id').eq('tranche_id', trancheId);
-      
+
       // Paiements via appartements des immeubles de la tranche
       int paiementsCount = 0;
       if (immRes.isNotEmpty) {
         final List<int> immIds = immRes.map((i) => i['id'] as int).toList();
         final List apparts = await _db.from('appartements').select('id').inFilter('immeuble_id', immIds);
         if (apparts.isNotEmpty) {
-           final List<int> appIds = apparts.map((a) => a['id'] as int).toList();
-           final List payRes = await _db.from('paiements').select('id').inFilter('appartement_id', appIds);
-           paiementsCount = payRes.length;
+          final List<int> appIds = apparts.map((a) => a['id'] as int).toList();
+          final List payRes = await _db.from('paiements').select('id').inFilter('appartement_id', appIds);
+          paiementsCount = payRes.length;
         }
       }
 
