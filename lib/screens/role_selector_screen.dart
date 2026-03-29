@@ -47,55 +47,69 @@ class RoleSelectorScreen extends StatelessWidget {
           SafeArea(
             child: Column(
               children: [
-                // ── TOP BAR
+                // ── TOP BAR (CORRIGÉ POUR MOBILE)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Logo
-                      Row(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      bool isSmall = constraints.maxWidth < 380;
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(7),
-                            decoration: BoxDecoration(
-                              color: _coral,
-                              borderRadius: BorderRadius.circular(10),
+                          // Logo + Texte
+                          Expanded(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(7),
+                                  decoration: BoxDecoration(
+                                    color: _coral,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(Icons.domain,
+                                      color: _white, size: 18),
+                                ),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    'ResiManager',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: _white,
+                                      fontSize: isSmall ? 15 : 18,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.3,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            child: const Icon(Icons.domain,
-                                color: _white, size: 18),
                           ),
-                          const SizedBox(width: 10),
-                          const Text(
-                            'ResiManager',
-                            style: TextStyle(
-                              color: _white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.3,
-                            ),
+                          
+                          const SizedBox(width: 5),
+
+                          // Boutons
+                          Row(
+                            children: [
+                              _OutlineBtn(
+                                label: 'Connexion', // Texte plus court pour mobile
+                                onTap: () => Navigator.push(context,
+                                    MaterialPageRoute(
+                                        builder: (_) => const LoginScreen())),
+                              ),
+                              const SizedBox(width: 6),
+                              _FilledBtn(
+                                label: "Inscription", // Texte plus court pour mobile
+                                onTap: () => Navigator.push(context,
+                                    MaterialPageRoute(
+                                        builder: (_) => const RegisterScreen())),
+                              ),
+                            ],
                           ),
                         ],
-                      ),
-                      // Boutons
-                      Row(
-                        children: [
-                          _OutlineBtn(
-                            label: 'Se connecter',
-                            onTap: () => Navigator.push(context,
-                                MaterialPageRoute(
-                                    builder: (_) => const LoginScreen())),
-                          ),
-                          const SizedBox(width: 8),
-                          _FilledBtn(
-                            label: "S'inscrire",
-                            onTap: () => Navigator.push(context,
-                                MaterialPageRoute(
-                                    builder: (_) => const RegisterScreen())),
-                          ),
-                        ],
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
 
@@ -227,7 +241,7 @@ class _OutlineBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Padding réduit
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
           border: Border.all(color: Colors.white.withOpacity(0.55), width: 1),
@@ -235,7 +249,7 @@ class _OutlineBtn extends StatelessWidget {
         child: Text(
           label,
           style: const TextStyle(
-              color: _white, fontSize: 12, fontWeight: FontWeight.w600),
+              color: _white, fontSize: 11, fontWeight: FontWeight.w600), // Taille police réduite
         ),
       ),
     );
@@ -252,7 +266,7 @@ class _FilledBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // Padding réduit
         decoration: BoxDecoration(
           color: _coral,
           borderRadius: BorderRadius.circular(22),
@@ -260,7 +274,7 @@ class _FilledBtn extends StatelessWidget {
         child: Text(
           label,
           style: const TextStyle(
-              color: _white, fontSize: 12, fontWeight: FontWeight.w600),
+              color: _white, fontSize: 11, fontWeight: FontWeight.w600), // Taille police réduite
         ),
       ),
     );
