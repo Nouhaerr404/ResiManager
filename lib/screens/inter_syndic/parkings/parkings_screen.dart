@@ -207,7 +207,7 @@ class _ParkingsScreenState extends State<ParkingsScreen>
     return InterSyndicHeader(
       title: 'ResiManager',
       subtitle: 'inter_syndic',
-      gridIcon: Icons.grid_view_rounded,
+      gridIcon: Icons.business_rounded,
       onBack: () => Navigator.pop(context),
       onAdd: _showAddParkingDialog,
       addLabel: 'Ajouter',

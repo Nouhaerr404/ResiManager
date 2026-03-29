@@ -126,7 +126,7 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
       child: InterSyndicHeader(
         title: 'ResiManager',
         subtitle: 'inter_syndic',
-        gridIcon: Icons.grid_view_rounded,
+        gridIcon: Icons.business_rounded,
         onBack: () => Navigator.pop(context),
       ),
     );

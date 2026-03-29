@@ -211,7 +211,7 @@ class _GaragesScreenState extends State<GaragesScreen>
     return InterSyndicHeader(
       title: 'ResiManager',
       subtitle: 'inter_syndic',
-      gridIcon: Icons.grid_view_rounded,
+      gridIcon: Icons.business_rounded,
       onBack: () => Navigator.pop(context),
       onAdd: _showAddGarageDialog,
       addLabel: 'Ajouter',

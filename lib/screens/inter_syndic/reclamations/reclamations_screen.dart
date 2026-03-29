@@ -345,7 +345,7 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
     return InterSyndicHeader(
       title: 'ResiManager',
       subtitle: 'inter_syndic',
-      gridIcon: Icons.grid_view_rounded,
+      gridIcon: Icons.business_rounded,
       onBack: () => Navigator.pop(context),
       extraActions: [
         if (_nbEnCours > 0)
