@@ -9,6 +9,7 @@ import '../../../services/tranche_service.dart';
 import '../../../services/apartment_pdf_service.dart';
 import '../../../widgets/inter_syndic_header.dart';
 import '../../../theme/inter_syndic_palette.dart';
+import 'package:url_launcher/url_launcher.dart';
 class ApartmentsListScreen extends StatefulWidget {
   final int? trancheId;
   final int? residenceId;
@@ -255,6 +256,62 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     } catch (e) {
       debugPrint('Erreur delete: $e');
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur suppression en base')));
+    }
+  }
+
+  Future<void> _callResident(String? phoneNumber) async {
+    if (phoneNumber == null || phoneNumber.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Numéro de téléphone non disponible')));
+      return;
+    }
+    final Uri url = Uri.parse('tel:$phoneNumber');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    } else {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Impossible de lancer l\'appel')));
+    }
+  }
+
+  Future<void> _unassignResidentInDb(AppartementModel apartment) async {
+    try {
+      setState(() => loading = true);
+      final now = DateTime.now().toIso8601String();
+      
+      // 1. Libérer le résident lié à cet appartement
+      await _supabase
+          .from('residents')
+          .update({'appartement_id': null, 'updated_at': now})
+          .eq('appartement_id', apartment.id);
+
+      // 2. Mettre à jour l'appartement : statut libre et resident_id null
+      final updated = await _supabase
+          .from('appartements')
+          .update({
+            'resident_id': null, 
+            'statut': 'libre', 
+            'updated_at': now
+          })
+          .eq('id', apartment.id)
+          .select('*, users(*), immeubles!inner(id, nom, tranche_id, tranches!inner(id, nom, residence_id, residences!inner(id, nom)))') as List<dynamic>;
+
+      if (updated.isNotEmpty) {
+        final ap = AppartementModel.fromJson(Map<String, dynamic>.from(updated.first));
+        setState(() {
+          final idx = apartments.indexWhere((a) => a.id == ap.id);
+          if (idx != -1) apartments[idx] = ap;
+          if (searchController.text.isEmpty) {
+            filteredApartments = apartments;
+          } else {
+            _search(searchController.text);
+          }
+        });
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Résident désassigné de ${apartment.numero}')));
+      }
+    } catch (e) {
+      debugPrint('Erreur unassign: $e');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de la désassignation')));
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
   }
 
@@ -740,7 +797,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () async {
               Navigator.pop(context);
               await _deleteApartmentFromDb(apartment);
@@ -752,85 +809,239 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     );
   }
 
+  void _showUnassignResidentConfirm(AppartementModel apartment) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Désassigner le résident ?'),
+        content: Text('Voulez-vous vraiment retirer le résident de l\'appartement ${apartment.numero} ? L\'appartement redeviendra "Vacant".'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: InterSyndicPalette.orange, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(context);
+              await _unassignResidentInDb(apartment);
+              if (mounted) Navigator.pop(context); // Close details sheet if still open
+            },
+            child: const Text('Confirmer'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showApartmentDetails(AppartementModel apartment) {
+    final isOccupied = apartment.statut == StatutAppartEnum.occupe;
+    final accentColor = isOccupied ? InterSyndicPalette.green : InterSyndicPalette.orange;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (context, scrollController) => SingleChildScrollView(
-          controller: scrollController,
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
-                const SizedBox(height: 24),
-                Row(children: [Icon(Icons.home, size: 32, color: Theme.of(context).primaryColor), const SizedBox(width: 12), Expanded(child: Text(apartment.titreAffichage, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis))]),
-                const SizedBox(height: 24),
-                _buildDetailRow('Résidence', 'Résidence ${apartment.residence}', Icons.location_city),
-                _buildDetailRow('Tranche', 'Tranche ${apartment.tranche}', Icons.category),
-                _buildDetailRow('Immeuble', 'Immeuble ${apartment.immeubleNom ?? apartment.immeubleNum}', Icons.business),
-                _buildDetailRow('N° Appartement', '${apartment.numeroAppartement}', Icons.meeting_room),
-                _buildDetailRow('Statut', apartment.statut == StatutAppartEnum.occupe ? 'Occupé' : 'Libre', Icons.info_outline),
-                if (apartment.statut == StatutAppartEnum.occupe) ...[
-                  const Divider(height: 32),
-                  _buildDetailRow('Résident', apartment.residentNomComplet ?? 'ID: ${apartment.residentId}', Icons.person),
-                ],
-                const SizedBox(height: 32),
-                Row(
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: InterSyndicPalette.bg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (context, scrollController) => Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: InterSyndicPalette.divider, borderRadius: BorderRadius.circular(10))),
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(24),
                   children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _showEditApartmentDialog(apartment);
-                        },
-                        icon: const Icon(Icons.edit),
-                        label: const Text('Modifier'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    if (apartment.estLibre) ...[
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            _showAssignResidentDialog(apartment);
-                          },
-                          icon: const Icon(Icons.person_add),
-                          label: const Text('Assigner'),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    // Header Section
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: accentColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Icon(Icons.home_work_rounded, color: accentColor, size: 32),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            _showDeleteConfirmation(apartment);
-                          },
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          label: const Text('Supprimer', style: TextStyle(color: Colors.red)),
-                          style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                apartment.titreAffichage,
+                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: InterSyndicPalette.dark),
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(color: accentColor.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+                                child: Text(
+                                  isOccupied ? 'OCCUPÉ' : 'VACANT',
+                                  style: TextStyle(color: accentColor, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, color: InterSyndicPalette.textLight)),
+                      ],
+                    ),
+
+                    const SizedBox(height: 32),
+                    const Text('Détails du bien', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: InterSyndicPalette.darkMid)),
+                    const SizedBox(height: 16),
+                    
+                    _buildDetailBox(
+                      items: [
+                        _DetailItem(Icons.location_city_rounded, 'Résidence', apartment.residenceNom ?? 'N/A'),
+                        _DetailItem(Icons.layers_rounded, 'Tranche', apartment.trancheNom ?? 'N/A'),
+                        _DetailItem(Icons.business_rounded, 'Immeuble', 'Immeuble ${apartment.immeubleNum}'),
+                        _DetailItem(Icons.meeting_room_rounded, 'Numéro', 'Appartement ${apartment.numeroAppartement}'),
+                      ],
+                    ),
+
+                    if (isOccupied) ...[
+                      const SizedBox(height: 32),
+                      const Text('Résident actuel', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: InterSyndicPalette.darkMid)),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: InterSyndicPalette.bgCard,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: InterSyndicPalette.divider.withOpacity(0.5)),
+                        ),
+                        child: Row(
+                          children: [
+                            const CircleAvatar(
+                              radius: 20,
+                              backgroundColor: InterSyndicPalette.coralLight,
+                              child: Icon(Icons.person_rounded, color: InterSyndicPalette.coral),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    apartment.residentNomComplet ?? 'Utilisateur',
+                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: InterSyndicPalette.dark),
+                                  ),
+                                  const Text('Occupant assigné', style: TextStyle(fontSize: 12, color: InterSyndicPalette.textLight)),
+                                ],
+                              ),
+                            ),
+                            if (apartment.residentId != null)
+                              Container(
+                                decoration: BoxDecoration(color: InterSyndicPalette.greenLight, borderRadius: BorderRadius.circular(12)),
+                                child: IconButton(
+                                  onPressed: () => _callResident(apartment.residentTelephone),
+                                  icon: const Icon(Icons.phone_in_talk_rounded, color: InterSyndicPalette.green, size: 20),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     ],
+
+                    const SizedBox(height: 48),
+                    
+                    // Actions
+                    const Text('Actions disponibles', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: InterSyndicPalette.darkMid)),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(child: _buildActionButton(Icons.edit_rounded, 'Modifier', InterSyndicPalette.blue, () { Navigator.pop(context); _showEditApartmentDialog(apartment); })),
+                        const SizedBox(width: 12),
+                        if (apartment.estLibre)
+                          Expanded(child: _buildActionButton(Icons.person_add_rounded, 'Assigner', InterSyndicPalette.green, () { Navigator.pop(context); _showAssignResidentDialog(apartment); }))
+                        else
+                          Expanded(child: _buildActionButton(Icons.person_remove_rounded, 'Désassigner', InterSyndicPalette.orange, () { Navigator.pop(context); _showUnassignResidentConfirm(apartment); })),
+                      ],
+                    ),
+                    if (apartment.estLibre && apartment.residentId == null) ...[
+                      const SizedBox(height: 12),
+                      _buildActionButton(Icons.delete_outline_rounded, 'Supprimer définitivement', InterSyndicPalette.red, () { Navigator.pop(context); _showDeleteConfirmation(apartment); }, fullWidth: true),
+                    ],
+                    const SizedBox(height: 24),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
+  Widget _buildDetailBox({required List<_DetailItem> items}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: InterSyndicPalette.bgCard,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: InterSyndicPalette.divider.withOpacity(0.5)),
+      ),
+      child: Column(
+        children: items.asMap().entries.map((entry) {
+          final i = entry.key;
+          final item = entry.value;
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(
+                  children: [
+                    Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: InterSyndicPalette.bg, borderRadius: BorderRadius.circular(12)), child: Icon(item.icon, size: 18, color: InterSyndicPalette.textMid)),
+                    const SizedBox(width: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.label, style: const TextStyle(fontSize: 11, color: InterSyndicPalette.textLight, fontWeight: FontWeight.w600)),
+                        Text(item.value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: InterSyndicPalette.darkMid)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              if (i < items.length - 1) Divider(height: 1, indent: 64, color: InterSyndicPalette.divider.withOpacity(0.5)),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildActionButton(IconData icon, String label, Color color, VoidCallback onTap, {bool fullWidth = false}) {
+    final btn = Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 10),
+            Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 14)),
+          ],
+        ),
+      ),
+    );
+    return fullWidth ? SizedBox(width: double.infinity, child: btn) : btn;
+  }
   Widget _buildDetailRow(String label, String value, IconData icon) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -885,101 +1096,151 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
               ],
             ),
 
-            // Barre de recherche
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: InterSyndicPalette.bgCard,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: InterSyndicPalette.divider),
-                ),
-                child: TextField(
-                  controller: searchController,
-                  onChanged: _search,
-                  style: const TextStyle(fontSize: 14, color: InterSyndicPalette.dark),
-                  decoration: InputDecoration(
-                    hintText: 'Rechercher un appartement...',
-                    hintStyle: const TextStyle(color: InterSyndicPalette.textLight, fontSize: 13),
-                    prefixIcon: const Icon(Icons.search_rounded, color: InterSyndicPalette.textLight, size: 20),
-                    suffixIcon: searchController.text.isNotEmpty
-                        ? GestureDetector(
-                            onTap: () {
-                              searchController.clear();
-                              _search('');
-                            },
-                            child: const Icon(Icons.close_rounded, color: InterSyndicPalette.textLight, size: 18),
-                          )
-                        : null,
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  ),
-                ),
-              ),
-            ),
-
-            // Statistiques
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-              child: Row(
-                children: [
-                   Expanded(child: _buildStatCard('Total', filteredApartments.length.toString(), Icons.home_rounded, InterSyndicPalette.textMid, InterSyndicPalette.surface)),
-                   const SizedBox(width: 8),
-                   Expanded(child: _buildStatCard('Occupés', occupiedCount.toString(), Icons.check_circle_rounded, InterSyndicPalette.coral, InterSyndicPalette.coralLight)),
-                   const SizedBox(width: 8),
-                   Expanded(child: _buildStatCard('Vacants', vacantCount.toString(), Icons.error_outline_rounded, InterSyndicPalette.textMid, InterSyndicPalette.surface)),
-                ],
-              ),
-            ),
-
-            if (showFilters)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: ApartmentFilters(
-                    onFilterChanged: (tranche, immeuble, status) {
-                      _applyFilters(tranche: tranche, immeuble: immeuble, status: status);
-                    },
-                  ),
-                ),
-              ),
-
-            // Filtres toggle button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () => setState(() => showFilters = !showFilters),
-                  icon: Icon(showFilters ? Icons.filter_list_off : Icons.filter_list, color: InterSyndicPalette.textMid, size: 18),
-                  label: Text(showFilters ? 'Masquer filtres' : 'Afficher filtres', style: const TextStyle(color: InterSyndicPalette.textMid, fontSize: 12)),
-                ),
-              ),
-            ),
-
-            // Liste des appartements
+            // Zone de contenu (Scrollable avec Slivers)
             Expanded(
-              child: loading
-                  ? const Center(child: CircularProgressIndicator(color: InterSyndicPalette.coral))
-                  : filteredApartments.isEmpty
-                      ? Center(
+              child: RefreshIndicator(
+                color: InterSyndicPalette.coral,
+                onRefresh: _loadApartments,
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    // 1. Statistiques (Hero Card)
+                    SliverToBoxAdapter(
+                      child: _buildHeroStatsCard(filteredApartments.length, occupiedCount, vacantCount),
+                    ),
+
+                    // 2. Barre de recherche
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: InterSyndicPalette.bgCard,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                            border: Border.all(color: InterSyndicPalette.divider),
+                          ),
+                          child: TextField(
+                            controller: searchController,
+                            onChanged: _search,
+                            style: const TextStyle(fontSize: 14, color: InterSyndicPalette.dark, fontWeight: FontWeight.w500),
+                            decoration: InputDecoration(
+                              hintText: 'Rechercher un appartement...',
+                              hintStyle: const TextStyle(color: InterSyndicPalette.textLight, fontSize: 13),
+                              prefixIcon: const Icon(Icons.search_rounded, color: InterSyndicPalette.coral, size: 22),
+                              suffixIcon: searchController.text.isNotEmpty
+                                  ? GestureDetector(
+                                      onTap: () {
+                                        searchController.clear();
+                                        _search('');
+                                      },
+                                      child: const Icon(Icons.close_rounded, color: InterSyndicPalette.textLight, size: 18),
+                                    )
+                                  : null,
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // 3. Filtres (Optionnel)
+                    if (showFilters)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: ApartmentFilters(
+                              onFilterChanged: (tranche, immeuble, status) {
+                                _applyFilters(tranche: tranche, immeuble: immeuble, status: status);
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // 4. Bouton Toggle Filtres
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            onPressed: () => setState(() => showFilters = !showFilters),
+                            icon: Icon(showFilters ? Icons.filter_list_off : Icons.filter_list, color: InterSyndicPalette.textMid, size: 18),
+                            label: Text(showFilters ? 'Masquer filtres' : 'Afficher filtres', style: const TextStyle(color: InterSyndicPalette.textMid, fontSize: 12)),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // 5. Liste des appartements
+                    if (loading)
+                      const SliverFillRemaining(
+                        child: Center(child: CircularProgressIndicator(color: InterSyndicPalette.coral)),
+                      )
+                    else if (filteredApartments.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.search_off_rounded, size: 64, color: InterSyndicPalette.divider),
-                              const SizedBox(height: 16),
-                              const Text('Aucun appartement trouvé', style: TextStyle(fontSize: 16, color: InterSyndicPalette.textMid)),
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: InterSyndicPalette.divider.withOpacity(0.3),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(Icons.search_off_rounded, size: 80, color: InterSyndicPalette.textLight.withOpacity(0.5)),
+                              ),
+                              const SizedBox(height: 24),
+                              const Text(
+                                'Aucun appartement trouvé', 
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: InterSyndicPalette.darkMid),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Essayez de modifier vos filtres ou votre recherche', 
+                                style: TextStyle(fontSize: 14, color: InterSyndicPalette.textLight),
+                              ),
+                              const SizedBox(height: 24),
+                              if (searchController.text.isNotEmpty || showFilters)
+                                OutlinedButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      searchController.clear();
+                                      _search('');
+                                      showFilters = false;
+                                      // Note: Reset filters logic here if applicable
+                                    });
+                                  },
+                                  icon: const Icon(Icons.refresh_rounded),
+                                  label: const Text('Réinitialiser tout'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: InterSyndicPalette.coral,
+                                    side: const BorderSide(color: InterSyndicPalette.coral),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                ),
                             ],
                           ),
-                        )
-                      : RefreshIndicator(
-                          color: InterSyndicPalette.coral,
-                          onRefresh: _loadApartments,
-                          child: ListView.builder(
-                            itemCount: filteredApartments.length,
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                            itemBuilder: (context, index) {
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
                               final apartment = filteredApartments[index];
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
@@ -988,12 +1249,19 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                                   onTap: () => _showApartmentDetails(apartment),
                                   onEdit: () => _showEditApartmentDialog(apartment),
                                   onAssign: () => _showAssignResidentDialog(apartment),
+                                  onUnassign: () => _showUnassignResidentConfirm(apartment),
+                                  onCall: () => _callResident(apartment.residentTelephone),
                                   onDelete: () => _showDeleteConfirmation(apartment),
                                 ),
                               );
                             },
+                            childCount: filteredApartments.length,
                           ),
                         ),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -1001,30 +1269,214 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color textColor, Color bgColor) {
+  Widget _buildHeroStatsCard(int total, int occupied, int vacant) {
+    double occupationPercentage = total > 0 ? (occupied / total) : 0;
+    
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: InterSyndicPalette.bgCard,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: InterSyndicPalette.divider),
+        color: InterSyndicPalette.coral,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: InterSyndicPalette.coral.withOpacity(0.25),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: textColor, size: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                   const Text(
+                    'Appartements',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  Text(
+                    '$total appartements',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.vpn_key_rounded, color: Colors.white, size: 12),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'Votre parc',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${(occupationPercentage * 100).toInt()}% occupés',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                '$occupied / $total',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: InterSyndicPalette.dark)),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: occupationPercentage,
+              backgroundColor: Colors.white.withOpacity(0.2),
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+              minHeight: 8,
+            ),
           ),
-          const SizedBox(height: 2),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: InterSyndicPalette.textLight)),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildHeroStatMiniItem(total.toString().padLeft(2, '0'), 'Total'),
+                _buildHeroStatDivider(),
+                _buildHeroStatMiniItem(occupied.toString().padLeft(2, '0'), 'Occupés'),
+                _buildHeroStatDivider(),
+                _buildHeroStatMiniItem(vacant.toString().padLeft(2, '0'), 'Vacants'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroStatMiniItem(String value, String label) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.8),
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeroStatDivider() {
+    return Container(
+      height: 28,
+      width: 1,
+      color: Colors.white.withOpacity(0.15),
+    );
+  }
+
+  Widget _buildStatCard(String label, String value, IconData icon, List<Color> gradientColors, Color bgColor) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: InterSyndicPalette.bgCard,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: gradientColors[0].withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: InterSyndicPalette.divider.withOpacity(0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  gradientColors[0].withOpacity(0.15),
+                  gradientColors[0].withOpacity(0.05),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: gradientColors[0], size: 20),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            value, 
+            style: const TextStyle(
+              fontSize: 22, 
+              fontWeight: FontWeight.w800, 
+              color: InterSyndicPalette.dark,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 1),
+          Text(
+            label, 
+            style: const TextStyle(
+              fontSize: 11, 
+              fontWeight: FontWeight.w600, 
+              color: InterSyndicPalette.textMid,
+              letterSpacing: 0.2,
+            ),
           ),
         ],
       ),
@@ -1036,4 +1488,11 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     searchController.dispose();
     super.dispose();
   }
+}
+
+class _DetailItem {
+  final IconData icon;
+  final String label;
+  final String value;
+  _DetailItem(this.icon, this.label, this.value);
 }

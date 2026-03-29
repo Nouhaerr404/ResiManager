@@ -14,6 +14,7 @@ class AppartementModel {
   // Données jointes optionnelles
   final String? immeubleNom;
   final String? residentNomComplet;
+  final String? residentTelephone;
   final String? residenceNom; // Ajouté
   final String? trancheNom; // Ajouté
 
@@ -34,6 +35,7 @@ class AppartementModel {
     this.updatedAt,
     this.immeubleNom,
     this.residentNomComplet,
+    this.residentTelephone,
     this.residenceNom,
     this.trancheNom,
   });
@@ -95,6 +97,7 @@ class AppartementModel {
       updatedAt: j['updated_at'] != null ? DateTime.tryParse(j['updated_at']) : null,
       immeubleNom: immeuble?['nom'],
       residentNomComplet: resident != null ? '${resident['prenom']} ${resident['nom']}' : null,
+      residentTelephone: resident?['telephone'],
       residenceNom: residence?['nom'],
       trancheNom: tranche?['nom'],
     );
