@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import '../../../services/tranche_service.dart';
+import '../../../widgets/inter_syndic_header.dart';
 
 // ── Palette (identique aux autres écrans inter-syndic)
 class _C {
@@ -132,31 +133,12 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
 
   // ── Header ─────────────────────────────────────────────────
   Widget _buildHeader() {
-    return Container(
-      color: _C.white,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      child: Row(children: [
-        GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Container(
-            width: 38, height: 38,
-            decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10), border: Border.all(color: _C.divider)),
-            child: const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: _C.dark),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Container(
-          width: 38, height: 38,
-          decoration: BoxDecoration(color: _C.coral, borderRadius: BorderRadius.circular(10)),
-          child: const Icon(Icons.campaign_rounded, color: _C.white, size: 20),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            const Text('Annonces', style: TextStyle(color: _C.dark, fontWeight: FontWeight.w800, fontSize: 17, letterSpacing: -0.3)),
-            Text('${_all.length} au total', style: const TextStyle(color: _C.textLight, fontSize: 12)),
-          ]),
-        ),
+    return InterSyndicHeader(
+      title: 'ResiManager',
+      subtitle: 'inter_syndic',
+      gridIcon: Icons.grid_view_rounded,
+      onBack: () => Navigator.pop(context),
+      extraActions: [
         if (_nbUrgente > 0)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -168,7 +150,7 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
                   style: const TextStyle(color: _C.coral, fontSize: 11, fontWeight: FontWeight.w700)),
             ]),
           ),
-      ]),
+      ],
     );
   }
 

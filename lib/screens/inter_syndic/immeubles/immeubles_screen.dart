@@ -4,6 +4,7 @@ import '../../../models/immeuble_model.dart';
 import '../../../models/tranche_model.dart';
 import '../../../services/immeuble_service.dart';
 import '../apartments/apartments_screen.dart';
+import '../../../widgets/inter_syndic_header.dart';
 
 class _C {
   static const coral = Color(0xFFE8603C);
@@ -121,36 +122,12 @@ class _InterSyndicImmeublesScreenState extends State<InterSyndicImmeublesScreen>
   }
 
   Widget _buildSliverHeader() {
-    return SliverAppBar(
-      backgroundColor: Colors.transparent,
-      expandedHeight: 140,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _C.white, size: 18),
-        onPressed: () => Navigator.pop(context),
-      ),
-      flexibleSpace: FlexibleSpaceBar(
-        titlePadding: const EdgeInsets.only(left: 60, bottom: 16),
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Espace Immeubles',
-              style: TextStyle(
-                  color: _C.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18,
-                  letterSpacing: -0.5),
-            ),
-            Text(
-              'Tranche ${widget.tranche.nom}',
-              style: TextStyle(
-                  color: _C.white.withOpacity(0.7),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500),
-            ),
-          ],
-        ),
+    return SliverToBoxAdapter(
+      child: InterSyndicHeader(
+        title: 'ResiManager',
+        subtitle: 'inter_syndic',
+        gridIcon: Icons.grid_view_rounded,
+        onBack: () => Navigator.pop(context),
       ),
     );
   }
