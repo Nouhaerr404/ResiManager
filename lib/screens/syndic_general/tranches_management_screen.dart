@@ -406,11 +406,75 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
   Widget _buildTopSummary(List<TrancheModel> list, bool isWeb) {
     int tImm = list.fold(0, (s, t) => s + t.nombreImmeubles);
     int tApp = list.fold(0, (s, t) => s + t.nombreAppartements);
-    return Row(children: [_kpiS("Tranches", list.length.toString(), Colors.blue), const SizedBox(width: 15), _kpiS("Immeubles", tImm.toString(), Colors.green), const SizedBox(width: 15), _kpiS("Apparts", tApp.toString(), Colors.orange)]);
+    int tPark = list.fold(0, (s, t) => s + t.nombreParkings);
+    int tGar = list.fold(0, (s, t) => s + t.nombreGarages);
+    int tBox = list.fold(0, (s, t) => s + t.nombreBoxes);
+    
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _kpiCardResponsive("Immeubles", tImm.toString(), Icons.apartment, Colors.green, !isWeb),
+          const SizedBox(width: 12),
+          _kpiCardResponsive("Apparts", tApp.toString(), Icons.meeting_room, Colors.blue, !isWeb),
+          const SizedBox(width: 12),
+          _kpiCardResponsive("Parkings", tPark.toString(), Icons.local_parking, Colors.orange, !isWeb),
+          const SizedBox(width: 12),
+          _kpiCardResponsive("Garages", tGar.toString(), Icons.store_mall_directory, Colors.purple, !isWeb),
+          const SizedBox(width: 12),
+          _kpiCardResponsive("Boxes", tBox.toString(), Icons.inventory_2_outlined, Colors.brown, !isWeb),
+        ],
+      ),
+    );
   }
 
-  Widget _kpiS(String t, String v, Color c) {
-    return Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t, style: const TextStyle(fontSize: 10, color: Colors.grey)), Text(v, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c))]));
+  Widget _kpiCardResponsive(String title, String value, IconData icon, Color color, bool isMobile) {
+    return Container(
+      width: isMobile ? 110 : 160,
+      padding: EdgeInsets.all(isMobile ? 12 : 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(icon, color: color.withOpacity(0.7), size: isMobile ? 16 : 24),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: isMobile ? 10 : 12,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: isMobile ? 18 : 24,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildFieldLabel(String label) => Padding(padding: const EdgeInsets.only(bottom: 6.0), child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)));

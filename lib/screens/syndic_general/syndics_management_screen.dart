@@ -69,31 +69,27 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
   }
 
   Widget _buildActionHeader(bool isWeb) {
-    if (!isWeb) {
-      // Sur Mobile, on ne garde que le bouton d'ajout car le titre est déjà dans l'AppBar
-      return _addButton(true);
-    }
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text("Gestion des Inter-Syndics", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: darkGrey)),
-          const Text("Gérez les inter-syndics et leurs affectations", style: TextStyle(color: Colors.grey, fontSize: 16)),
-        ]),
-        _addButton(false),
+        if (isWeb)
+          Text("Gestion des Inter-Syndics", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: darkGrey))
+        else
+          const SizedBox.shrink(),
+        _addButton(!isWeb),
       ],
     );
   }
 
-  Widget _addButton(bool isFullWidth) {
+  Widget _addButton(bool isMobile) {
     return SizedBox(
-      width: isFullWidth ? double.infinity : null,
+      width: isMobile ? MediaQuery.of(context).size.width - 30 : null,
       child: ElevatedButton.icon(
         onPressed: () => _showForm(),
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text("Ajouter un Inter-Syndic", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF2B65EC),
+          backgroundColor: primaryOrange,
           padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
@@ -121,26 +117,57 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
         final list = snapshot.data ?? [];
         int actifs = list.where((s) => s['statut'] == 'actif').length;
 
-        return Wrap(
-          spacing: 15, runSpacing: 15,
+        return Row(
           children: [
-            _kpiCard("Total Syndics", list.length.toString(), darkGrey),
-            _kpiCard("Syndics Actifs", actifs.toString(), Colors.green),
-            _kpiCard("Syndics Inactifs", (list.length - actifs).toString(), Colors.red),
+            Expanded(child: _kpiCard("Total Syndics", list.length.toString(), darkGrey, isMobile)),
+            const SizedBox(width: 10),
+            Expanded(child: _kpiCard("Syndics Actifs", actifs.toString(), Colors.green, isMobile)),
+            const SizedBox(width: 10),
+            Expanded(child: _kpiCard("Syndics Inactifs", (list.length - actifs).toString(), Colors.red, isMobile)),
           ],
         );
       },
     );
   }
 
-  Widget _kpiCard(String t, String v, Color c) {
+  Widget _kpiCard(String t, String v, Color c, bool isMobile) {
     return Container(
-      width: 180, padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(t, style: const TextStyle(color: Colors.grey, fontSize: 11)),
-        Text(v, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: c)),
-      ]),
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 12 : 20, 
+        vertical: isMobile ? 15 : 25
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white, 
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start, 
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            t, 
+            style: TextStyle(color: Colors.grey, fontSize: isMobile ? 10 : 13),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            v, 
+            style: TextStyle(
+              fontSize: isMobile ? 22 : 28,
+              fontWeight: FontWeight.bold, 
+              color: c
+            )
+          ),
+        ],
+      ),
     );
   }
 
@@ -183,7 +210,7 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
   Widget _buildSyndicCell(Map<String, dynamic> s) {
     return Row(children: [
       CircleAvatar(
-          backgroundColor: Colors.blue.shade700,
+          backgroundColor: primaryOrange,
           child: Text(s['nom'][0], style: const TextStyle(color: Colors.white))
       ),
       const SizedBox(width: 12),
@@ -226,7 +253,7 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
 
   Widget _buildActions(Map<String, dynamic> s) {
     return Row(children: [
-      IconButton(icon: const Icon(Icons.edit_outlined, color: Colors.blue, size: 20), onPressed: () => _showForm(syndic: s)),
+      IconButton(icon: Icon(Icons.edit_outlined, color: primaryOrange, size: 20), onPressed: () => _showForm(syndic: s)),
       IconButton(
         icon: Icon(s['statut'] == 'actif' ? Icons.block : Icons.check_circle_outline, color: primaryOrange, size: 20),
         onPressed: () async {

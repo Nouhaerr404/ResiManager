@@ -63,7 +63,8 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text("Gestion des Dépenses", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF2C2C2C))),
+          Text("Gestion des Dépenses",style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: darkGrey)),
+
           const Text("Gérez les factures et sorties d'argent", style: TextStyle(color: Colors.grey, fontSize: 16)),
         ]),
         _addBtn(false),
