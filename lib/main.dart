@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'config/supabase_config.dart';
 import 'screens/role_selector_screen.dart';
@@ -16,6 +17,7 @@ import 'screens/super_admin/super_admin_dashboard_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('fr_FR', null);
   await dotenv.load(fileName: ".env");
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,

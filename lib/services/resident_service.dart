@@ -359,8 +359,6 @@ class ResidentService {
             .where((p) => p['appartement_id'] == r['appartement_id'])
             .toList();
 
-        if (residentPaiements.isEmpty) continue;
-
         double totalM = 0;
         double payeM = 0;
         bool hasImpaye = false;
@@ -376,12 +374,14 @@ class ResidentService {
             mainPaiementId = p['id'] as int;
           }
         }
-        if (residentPaiements.isNotEmpty) {
-          mainPaiementId ??= residentPaiements.first['id'] as int;
+        if (residentPaiements.isNotEmpty && mainPaiementId == null) {
+          mainPaiementId = residentPaiements.first['id'] as int;
         }
 
         String globalStatut = 'complet';
-        if (hasImpaye) {
+        if (residentPaiements.isEmpty) {
+          globalStatut = 'non_defini'; // Ou tout autre statut par défaut
+        } else if (hasImpaye) {
           globalStatut = payeM > 0 ? 'partiel' : 'impaye';
         } else if (hasPartiel) {
           globalStatut = 'partiel';
