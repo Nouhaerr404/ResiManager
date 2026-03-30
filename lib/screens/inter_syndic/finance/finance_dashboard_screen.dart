@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:ui';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../services/finance_service.dart';
@@ -29,6 +31,9 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
   List<Map<String, dynamic>> _mandats = [];
   Map<String, dynamic>? _selectedMandat;
   bool _loadingMandats = true;
+  String _residenceNom = "Chargement...";
+  String _trancheNom = "";
+  bool _isDataLoaded = false;
 
   @override
   void initState() {
@@ -43,16 +48,38 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
   }
 
   Future<void> _loadInitialData() async {
-    final mandats = await _service.getInterSyndicMandates(widget.interSyndicId, widget.residenceId);
-    if (mounted) {
-      setState(() {
-        _mandats = mandats;
-        if (_mandats.isNotEmpty) {
-          _selectedMandat = _mandats.first;
-        }
-        _loadingMandats = false;
-        _refresh();
-      });
+    try {
+      final mandats = await _service.getInterSyndicMandates(widget.interSyndicId, widget.residenceId);
+      
+      // Fetch residence and tranche names
+      final db = Supabase.instance.client;
+      final resData = await db.from('residences').select('nom').eq('id', widget.residenceId).single();
+      String tNom = "";
+      if (widget.trancheId != null) {
+        final tData = await db.from('tranches').select('nom').eq('id', widget.trancheId!).single();
+        tNom = tData['nom'];
+      }
+
+      if (mounted) {
+        setState(() {
+          _mandats = mandats;
+          _residenceNom = resData['nom'];
+          _trancheNom = tNom;
+          if (_mandats.isNotEmpty) {
+            _selectedMandat = _mandats.first;
+          }
+          _loadingMandats = false;
+          _isDataLoaded = true;
+          _refresh();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loadingMandats = false;
+          _isDataLoaded = true;
+        });
+      }
     }
   }
 
@@ -85,12 +112,18 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
             ),
           ),
           // Gradient Overlay
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.black.withOpacity(0.7), Colors.black.withOpacity(0.4)],
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color.fromRGBO(0, 0, 0, 0.20),
+                    Color.fromRGBO(0, 0, 0, 0.90),
+                  ],
+                  stops: [0.0, 1.0],
+                ),
               ),
             ),
           ),
@@ -102,20 +135,19 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
                   child: FutureBuilder<Map<String, dynamic>>(
                     future: _financesFuture,
                     builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
+                      if (snapshot.connectionState == ConnectionState.waiting && !_isDataLoaded) {
                         return const Center(child: CircularProgressIndicator(color: Colors.white));
                       }
                       final data = snapshot.data ?? {};
-                      return SingleChildScrollView(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildKpiGrid(data),
-                            const SizedBox(height: 30),
-                            _buildExpensesTable(data),
-                          ],
-                        ),
+                      return ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
+                        children: [
+                          _buildPageTitle(),
+                          const SizedBox(height: 24),
+                          _buildStatsSection(data),
+                          const SizedBox(height: 30),
+                          _buildExpensesTable(data),
+                        ],
                       );
                     },
                   ),
@@ -128,50 +160,91 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
     );
   }
 
-  Widget _buildHeader() {
-    final bool isSmallScreen = MediaQuery.of(context).size.width < 500;
-    
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+  String _getInitials(String name) {
+    if (name.trim().isEmpty) return 'IS';
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return parts[0].substring(0, parts[0].length >= 2 ? 2 : 1).toUpperCase();
+  }
+
+  Widget _buildPageTitle() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Finance',
+          style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 34,
+              letterSpacing: -1.0),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            const Icon(Icons.location_on_rounded, color: Colors.white70, size: 14),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                _trancheNom.isNotEmpty ? "$_residenceNom - $_trancheNom" : _residenceNom,
+                style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        if (_selectedMandat != null)
           Row(
             children: [
-              IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
-              const Expanded(
-                child: Text("Finance",
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-              ),
-              IconButton(
-                onPressed: () => _generatePDF(context),
-                icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
-                tooltip: "PDF",
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.white.withOpacity(0.2),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
+              const Icon(Icons.history_rounded, color: Colors.white70, size: 14),
+              const SizedBox(width: 6),
+              Text(
+                "Mandat actuel : ${_selectedMandat!['date_debut'].toString().split('-')[0]}/${_selectedMandat!['date_fin']?.toString().split('-')[0] ?? '...'}",
+                style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          isSmallScreen 
+      ],
+    );
+  }
+
+  Widget _buildStatsSection(Map<String, dynamic> data) {
+    final bool isSmallScreen = MediaQuery.of(context).size.width < 500;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text("Résumé Financier", 
+              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+            IconButton(
+              onPressed: () => _refresh(),
+              icon: const Icon(Icons.refresh_rounded, color: Colors.white70, size: 20),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _buildKpiGrid(data),
+        const SizedBox(height: 20),
+        isSmallScreen 
           ? Column(
               children: [
-                SizedBox(width: double.infinity, child: _buildMandatPicker()),
+                _buildMandatPicker(),
                 const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF6F4A),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddTrancheExpenseScreen(residenceId: widget.residenceId, interSyndicId: widget.interSyndicId))).then((_) => _refresh()),
-                    icon: const Icon(Icons.add, color: Colors.white, size: 20),
-                    label: const Text("Nouvelle Dépense", style: TextStyle(color: Colors.white, fontSize: 13)),
-                  ),
+                  child: _buildAddButton(),
                 ),
               ],
             )
@@ -179,17 +252,89 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
               children: [
                 Expanded(child: _buildMandatPicker()),
                 const SizedBox(width: 10),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6F4A),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddTrancheExpenseScreen(residenceId: widget.residenceId, interSyndicId: widget.interSyndicId))).then((_) => _refresh()),
-                  icon: const Icon(Icons.add, color: Colors.white, size: 20),
-                  label: const Text("Nouvelle Dépense", style: TextStyle(color: Colors.white, fontSize: 13)),
-                ),
+                _buildAddButton(),
               ],
             ),
+      ],
+    );
+  }
+
+  Widget _buildAddButton() {
+    return ElevatedButton.icon(
+      style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFFF6F4A),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddTrancheExpenseScreen(residenceId: widget.residenceId, interSyndicId: widget.interSyndicId))).then((_) => _refresh()),
+      icon: const Icon(Icons.add, color: Colors.white, size: 20),
+      label: const Text("Nouvelle Dépense", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      color: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white24)),
+              child: const Icon(Icons.arrow_back_ios_new_rounded,
+                  size: 14, color: Colors.white),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Center(
+              child: Icon(Icons.account_balance_rounded, color: Colors.white, size: 18),
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Gestion Finance",
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    letterSpacing: -0.2),
+              ),
+              Text('Rapports & Dépenses',
+                  style: TextStyle(
+                      color: Colors.white60,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500)),
+            ],
+          ),
+          const Spacer(),
+          GestureDetector(
+            onTap: () => _generatePDF(context),
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white24)),
+              child: const Icon(Icons.picture_as_pdf_rounded, size: 18, color: Colors.white),
+            ),
+          ),
         ],
       ),
     );
@@ -248,24 +393,29 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
     if (_mandats.isEmpty) {
        return Container(
          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-         decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
-         child: const Text("Aucun mandat", style: TextStyle(color: Colors.white, fontSize: 12)),
+         decoration: BoxDecoration(
+           color: Colors.white.withOpacity(0.1), 
+           borderRadius: BorderRadius.circular(12),
+           border: Border.all(color: Colors.white12)
+         ),
+         child: const Text("Aucun mandat", style: TextStyle(color: Colors.white70, fontSize: 12)),
        );
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white30),
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white24),
       ),
       child: DropdownButton<Map<String, dynamic>>(
         value: _selectedMandat,
-        dropdownColor: const Color(0xFF2C2C2C),
+        dropdownColor: const Color(0xFF1A1A1A),
         underline: const SizedBox(),
-        icon: const Icon(Icons.history, color: Colors.white, size: 16),
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 20),
+        isExpanded: true,
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
         items: _mandats.map((m) {
           final start = m['date_debut'].toString().split('-').reversed.join('/');
           final end = m['date_fin']?.toString().split('-').reversed.join('/') ?? 'En cours';
@@ -288,39 +438,83 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
   }
 
   Widget _buildKpiGrid(Map<String, dynamic> data) {
-    return Wrap(
-      spacing: 15,
-      runSpacing: 15,
-      children: [
-        KpiCard(
-          title: 'Solde Tranche',
-          value: '${data['solde']?.toStringAsFixed(0) ?? 0}',
-          icon: Icons.account_balance_wallet,
-          iconColor: Colors.blue,
-          isCurrency: true,
-        ),
-        KpiCard(
-          title: 'Revenus (Paiements)',
-          value: '${data['total_revenus']?.toStringAsFixed(0) ?? 0}',
-          icon: Icons.trending_up,
-          iconColor: Colors.green,
-          isCurrency: true,
-        ),
-        KpiCard(
-          title: 'Dépenses Tranche',
-          value: '${data['total_depenses']?.toStringAsFixed(0) ?? 0}',
-          icon: Icons.trending_down,
-          iconColor: Colors.red,
-          isCurrency: true,
-        ),
-        KpiCard(
-          title: 'Dépenses Globales',
-          value: '${data['total_depenses_globales']?.toStringAsFixed(0) ?? 0}',
-          icon: Icons.public,
-          iconColor: Colors.orange,
-          isCurrency: true,
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double width = (constraints.maxWidth - 12) / 2;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _statCard(
+              title: 'Solde Tranche',
+              value: '${data['solde']?.toStringAsFixed(0) ?? 0}',
+              icon: Icons.account_balance_wallet_rounded,
+              color: Colors.blue,
+              width: width,
+            ),
+            _statCard(
+              title: 'Revenus',
+              value: '${data['total_revenus']?.toStringAsFixed(0) ?? 0}',
+              icon: Icons.trending_up_rounded,
+              color: Colors.green,
+              width: width,
+            ),
+            _statCard(
+              title: 'Dépenses Tranche',
+              value: '${data['total_depenses']?.toStringAsFixed(0) ?? 0}',
+              icon: Icons.trending_down_rounded,
+              color: Colors.red,
+              width: width,
+            ),
+            _statCard(
+              title: 'Dépenses Globales',
+              value: '${data['total_depenses_globales']?.toStringAsFixed(0) ?? 0}',
+              icon: Icons.public_rounded,
+              color: Colors.orange,
+              width: width,
+            ),
+          ],
+        );
+      }
+    );
+  }
+
+  Widget _statCard({required String title, required String value, required IconData icon, required Color color, required double width}) {
+    return GlassCard(
+      width: width,
+      padding: const EdgeInsets.all(16),
+      color: Colors.white.withOpacity(0.9),
+      borderRadius: 16,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              const Icon(Icons.arrow_forward_ios_rounded, size: 10, color: Colors.black26),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(title, style: const TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(value, style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+              const SizedBox(width: 4),
+              const Text("DH", style: TextStyle(color: Colors.black38, fontSize: 10, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -536,6 +730,47 @@ class _FinanceDashboardScreenState extends State<FinanceDashboardScreen> {
               style: IconButton.styleFrom(backgroundColor: Colors.black54),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class GlassCard extends StatelessWidget {
+  final Widget child;
+  final double borderRadius;
+  final EdgeInsets padding;
+  final Color color;
+  final BoxBorder? border;
+  final double? width;
+
+  const GlassCard({
+    super.key,
+    required this.child,
+    this.borderRadius = 16,
+    this.padding = const EdgeInsets.all(16),
+    this.color = const Color.fromRGBO(255, 255, 255, 0.08),
+    this.border,
+    this.width,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(borderRadius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            padding: padding,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(borderRadius),
+              border: border,
+            ),
+            child: child,
+          ),
         ),
       ),
     );
