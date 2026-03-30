@@ -4,6 +4,32 @@ import '../models/parking_model.dart';
 class ParkingService {
   final _db = Supabase.instance.client;
 
+  /// Récupère le mandat actif (le plus récent non terminé, sinon le plus récent) pour une tranche.
+  Future<int?> _getActiveMandatId(int trancheId) async {
+    try {
+      final enCours = await _db
+          .from('historique_affectations')
+          .select('id')
+          .eq('tranche_id', trancheId)
+          .isFilter('date_fin', null)
+          .order('date_debut', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (enCours != null) return enCours['id'] as int?;
+      final recent = await _db
+          .from('historique_affectations')
+          .select('id')
+          .eq('tranche_id', trancheId)
+          .order('date_debut', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      return recent?['id'] as int?;
+    } catch (e) {
+      print('>>> ERREUR _getActiveMandatId Parking: $e');
+      return null;
+    }
+  }
+
   Future<List<ParkingModel>> getParkingsByTranche(int trancheId) async {
     final response = await _db
         .from('parkings')
@@ -65,6 +91,7 @@ class ParkingService {
     required String prenom,
     String? telephone,
     int? residentId,
+    int? mandatId, // mandat explicite
   }) async {
     try {
       final benef = await _db.from('beneficiaires').insert({
@@ -84,7 +111,6 @@ class ParkingService {
         'beneficiaire_id': benef['id'],
       });
 
-      // CRÉATION DU PAIEMENT si c'est un résident
       if (residentId != null) {
         await _createPayment(
           residentId: residentId,
@@ -92,6 +118,7 @@ class ParkingService {
           residenceId: residenceId,
           montant: prixAnnuel,
           type: 'parking',
+          mandatId: mandatId,
         );
       }
 
@@ -108,6 +135,7 @@ class ParkingService {
     required int residenceId,
     required double montant,
     required String type,
+    int? mandatId,
   }) async {
     final resData = await _db.from('residents').select('appartement_id').eq('user_id', residentId).maybeSingle();
     final int? appartId = resData?['appartement_id'];
@@ -115,6 +143,18 @@ class ParkingService {
 
     final trancheData = await _db.from('tranches').select('inter_syndic_id').eq('id', trancheId).maybeSingle();
     final int isId = trancheData?['inter_syndic_id'] ?? 1;
+
+    final int? resolvedMandatId = mandatId ?? await _getActiveMandatId(trancheId);
+
+    var dupQuery = _db.from('paiements')
+        .select('id')
+        .eq('appartement_id', appartId)
+        .eq('type_paiement', type);
+    if (resolvedMandatId != null) {
+      dupQuery = dupQuery.eq('mandat_id', resolvedMandatId);
+    }
+    final existing = await dupQuery.maybeSingle();
+    if (existing != null) return;
 
     await _db.from('paiements').insert({
       'resident_id': residentId,
@@ -127,6 +167,7 @@ class ParkingService {
       'statut': 'impaye',
       'annee': DateTime.now().year,
       'mois': DateTime.now().month,
+      if (resolvedMandatId != null) 'mandat_id': resolvedMandatId,
     });
   }
 
@@ -137,15 +178,14 @@ class ParkingService {
     String? telephone,
     required String type,
     required int trancheId,
-    int? residentId, // AJOUTÉ
+    int? residentId,
+    int? mandatId, // mandat explicite
   }) async {
     try {
-      // Récupérer les infos du parking pour le prix et la résidence
       final pInfo = await _db.from('parkings').select('prix_annuel, residence_id').eq('id', parkingId).single();
       final double prix = double.parse(pInfo['prix_annuel'].toString());
       final int resId = pInfo['residence_id'];
 
-      // Créer bénéficiaire
       final benef = await _db.from('beneficiaires').insert({
         'nom': nom,
         'prenom': prenom,
@@ -154,20 +194,19 @@ class ParkingService {
         if (residentId != null) 'resident_id': residentId,
       }).select('id').single();
 
-      // Assigner parking
       await _db.from('parkings').update({
         'statut': 'occupe',
         'beneficiaire_id': benef['id'],
       }).eq('id', parkingId);
 
-      // CRÉATION DU PAIEMENT si c'est un résident
       if (residentId != null) {
         await _createPayment(
           residentId: residentId,
           trancheId: trancheId,
           residenceId: resId,
-          montant: prix,
+          montant: prix, // ← vrai prix du parking
           type: 'parking',
+          mandatId: mandatId,
         );
       }
 
@@ -225,4 +264,3 @@ class ParkingService {
     }
   }
 }
-
