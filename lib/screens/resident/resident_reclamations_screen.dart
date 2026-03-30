@@ -310,6 +310,17 @@ class _ResidentReclamationsScreenState
         backgroundColor: Colors.white,
         elevation: 0.5,
         iconTheme: const IconThemeData(color: brand),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_rounded, color: brand),
+          onPressed: () => Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ResidentDashboardScreen(
+                userId: _userId is int ? _userId : 3,
+              ),
+            ),
+          ),
+        ),
       ),
       drawer: ResidentMobileDrawer(currentIndex: 5, userId: _userId is int ? _userId : 3),
       body: body,

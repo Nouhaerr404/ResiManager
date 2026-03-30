@@ -43,6 +43,16 @@ class AffectationHistoryModel {
     );
   }
 
+  String get label {
+    String debut = "${dateDebut.day}/${dateDebut.month}/${dateDebut.year}";
+    if (dateFin == null) {
+      return "Du $debut à aujourd'hui (En cours)";
+    } else {
+      String fin = "${dateFin!.day}/${dateFin!.month}/${dateFin!.year}";
+      return "Du $debut au $fin";
+    }
+  }
+
   Map<String, dynamic> toJson() => {
     'tranche_id': trancheId,
     'inter_syndic_id': interSyndicId,

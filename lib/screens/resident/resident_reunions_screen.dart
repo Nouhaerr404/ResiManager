@@ -236,6 +236,15 @@ class _ResidentReunionsScreenState extends State<ResidentReunionsScreen>
             style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: _orange),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_rounded, color: _orange),
+          onPressed: () => Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ResidentDashboardScreen(userId: userId),
+            ),
+          ),
+        ),
       ),
       drawer: ResidentMobileDrawer(currentIndex: 4, userId: userId),
       body: body,
@@ -888,26 +897,29 @@ class _ResidentReunionsScreenState extends State<ResidentReunionsScreen>
 
   Widget _infoBox(String label, String value, IconData icon, Color color) =>
       Expanded(child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: color.withOpacity(0.06),
           borderRadius: BorderRadius.circular(14),
         ),
-        child: Row(children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(width: 10),
-          Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF9CA3AF),
-                    fontWeight: FontWeight.w500)),
-                Text(value, style: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 13),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
-              ])),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(icon, color: color, size: 15),
+              const SizedBox(width: 6),
+              Text(label, style: const TextStyle(
+                  fontSize: 10,
+                  color: Color(0xFF9CA3AF),
+                  fontWeight: FontWeight.w500)),
+            ]),
+            const SizedBox(height: 6),
+            Text(value, style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+                color: Color(0xFF1A1A1A))),
+          ],
+        ),
       ));
 
   Widget _statusBadge(String statut) {

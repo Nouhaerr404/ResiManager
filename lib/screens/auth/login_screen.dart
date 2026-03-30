@@ -199,7 +199,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 40),
                   const Text(
-                    'Bienvenue 👋',
+                    'Bienvenue ',
                     style: TextStyle(
                         fontSize: 28, fontWeight: FontWeight.w900),
                   ),

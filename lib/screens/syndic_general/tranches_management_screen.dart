@@ -217,7 +217,6 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
   // --- FORMULAIRE DE MODIFICATION ---
   void _showEditTrancheDialog(TrancheModel tranche) {
     final nomController = TextEditingController(text: tranche.nom);
-    final descController = TextEditingController(text: tranche.description ?? '');
     final prixController = TextEditingController(text: tranche.prixAnnuel.toString());
     int? selectedSyndicId = tranche.interSyndicId;
     bool isSaving = false;
@@ -236,9 +235,6 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
                 _buildFieldLabel("Nom de la tranche"),
                 TextField(controller: nomController, decoration: _buildInputDecoration("Nom")),
                 const SizedBox(height: 15),
-                _buildFieldLabel("Description (Optionnel)"),
-                TextField(controller: descController, maxLines: 2, decoration: _buildInputDecoration("Ex: Bloc Sud...")),
-                const SizedBox(height: 15),
                 _buildFieldLabel("L'Inter-Syndic Responsable"),
                 _buildSyndicDropdown(selectedSyndicId, (val) => setDialogState(() => selectedSyndicId = val)),
                 const SizedBox(height: 15),
@@ -254,7 +250,7 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
               onPressed: isSaving ? null : () async {
                 setDialogState(() => isSaving = true);
                 try {
-                  await _service.updateTrancheComplet(tranche.id, nomController.text.trim(), descController.text.trim(), selectedSyndicId, double.tryParse(prixController.text));
+                  await _service.updateTrancheComplet(tranche.id, nomController.text.trim(), "", selectedSyndicId, double.tryParse(prixController.text));
                   if (mounted) {
                     Navigator.pop(context);
                     _loadTranches();
@@ -289,6 +285,45 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
           children: [
             _buildResponsiveHeader(isWeb),
             const SizedBox(height: 25),
+
+            // ✅ MESSAGE D'ALERTE TRANCHES NON AFFECTÉES (GÉRÉ AU PLURIEL/SINGULIER)
+            FutureBuilder<List<TrancheModel>>(
+              future: _tranchesFuture,
+              builder: (context, snapshot) {
+                final unassigned = (snapshot.data ?? []).where((t) => t.interSyndicId == null).toList();
+                if (unassigned.isEmpty) return const SizedBox.shrink();
+
+                String msg;
+                if (unassigned.length == 1) {
+                  msg = "Alerte : La tranche '${unassigned.first.nom}' n'est plus affectée à un inter-syndic. Veuillez la réassigner.";
+                } else {
+                  msg = "Alerte : ${unassigned.length} tranches (${unassigned.map((e) => e.nom).join(', ')}) ne sont plus affectées à un inter-syndic. Veuillez les réassigner.";
+                }
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 25),
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          msg,
+                          style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+
             _buildSearchBar(),
             const SizedBox(height: 25),
             FutureBuilder<List<TrancheModel>>(
@@ -406,11 +441,75 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
   Widget _buildTopSummary(List<TrancheModel> list, bool isWeb) {
     int tImm = list.fold(0, (s, t) => s + t.nombreImmeubles);
     int tApp = list.fold(0, (s, t) => s + t.nombreAppartements);
-    return Row(children: [_kpiS("Tranches", list.length.toString(), Colors.blue), const SizedBox(width: 15), _kpiS("Immeubles", tImm.toString(), Colors.green), const SizedBox(width: 15), _kpiS("Apparts", tApp.toString(), Colors.orange)]);
+    int tPark = list.fold(0, (s, t) => s + t.nombreParkings);
+    int tGar = list.fold(0, (s, t) => s + t.nombreGarages);
+    int tBox = list.fold(0, (s, t) => s + t.nombreBoxes);
+    
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _kpiCardResponsive("Immeubles", tImm.toString(), Icons.apartment, Colors.green, !isWeb),
+          const SizedBox(width: 12),
+          _kpiCardResponsive("Apparts", tApp.toString(), Icons.meeting_room, Colors.blue, !isWeb),
+          const SizedBox(width: 12),
+          _kpiCardResponsive("Parkings", tPark.toString(), Icons.local_parking, Colors.orange, !isWeb),
+          const SizedBox(width: 12),
+          _kpiCardResponsive("Garages", tGar.toString(), Icons.store_mall_directory, Colors.purple, !isWeb),
+          const SizedBox(width: 12),
+          _kpiCardResponsive("Boxes", tBox.toString(), Icons.inventory_2_outlined, Colors.brown, !isWeb),
+        ],
+      ),
+    );
   }
 
-  Widget _kpiS(String t, String v, Color c) {
-    return Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t, style: const TextStyle(fontSize: 10, color: Colors.grey)), Text(v, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c))]));
+  Widget _kpiCardResponsive(String title, String value, IconData icon, Color color, bool isMobile) {
+    return Container(
+      width: isMobile ? 110 : 160,
+      padding: EdgeInsets.all(isMobile ? 12 : 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(icon, color: color.withOpacity(0.7), size: isMobile ? 16 : 24),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: isMobile ? 10 : 12,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: isMobile ? 18 : 24,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildFieldLabel(String label) => Padding(padding: const EdgeInsets.only(bottom: 6.0), child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)));

@@ -201,7 +201,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     setState(() => _loading = true);
     try {
       final data = await _service
-          .getResidentsByTranche(widget.trancheId, mandatId: _currentMandatId)
+          .getResidentsByTranche(widget.trancheId)
           .timeout(const Duration(seconds: 15));
       setState(() { _residents = data; _loading = false; });
       _applyFilter();
@@ -1183,9 +1183,10 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                 garageId: selectedGarageId,
               );
               if (!ctx.mounted) return;
-              if (err != null) {
-                setDialog(() { errorMsg = err; saving = false; });
+              if (err.$1 != null) {
+                setDialog(() { errorMsg = err.$1; saving = false; });
               } else {
+
                 Navigator.pop(ctx);
                 _load();
                 // Confirmation succès
@@ -1339,7 +1340,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
       builder: (ctx) => StatefulBuilder(builder: (ctx, setDialog) {
         if (!fetchLaunched) {
           fetchLaunched = true;
-          _service.getHistoriquePaiements(r.userId, mandatId: _currentMandatId).then((data) {
+          _service.getHistoriquePaiements(r.userId).then((data) {
             if (ctx.mounted) {
               setDialog(() {
                 historique = data;

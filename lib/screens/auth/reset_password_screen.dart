@@ -56,8 +56,19 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     if (result['success'] == true) {
       setState(() => _success = true);
     } else {
-      setState(() => _error = result['error'] ?? "Erreur lors de la réinitialisation");
+      String errorMsg = result['error'] ?? "Erreur lors de la réinitialisation";
+
+      // Si même mot de passe → traiter comme succès
+      if (errorMsg.contains('same_password') ||
+          errorMsg.contains('New password should be different')) {
+        setState(() => _success = true); // ← afficher succès quand même
+        return;
+      }
+
+      setState(() => _error = errorMsg);
     }
+
+
   }
 
   @override

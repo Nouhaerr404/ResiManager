@@ -1,494 +1,358 @@
--- ============================================================
--- RESIMANAGER - Script Supabase
--- Sans données de test
--- ============================================================
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
 
--- ============================================================
--- TYPES ENUM
--- ============================================================
-CREATE TYPE role_enum             AS ENUM ('super_admin','syndic_general','inter_syndic','resident');
-CREATE TYPE statut_user_enum      AS ENUM ('actif','inactif');
-CREATE TYPE statut_appart_enum    AS ENUM ('occupe','libre');
-CREATE TYPE statut_espace_enum    AS ENUM ('disponible','occupe');
-CREATE TYPE type_resident_enum    AS ENUM ('proprietaire','locataire');
-CREATE TYPE type_depense_enum     AS ENUM ('globale','individuelle');
-CREATE TYPE type_personnel_enum   AS ENUM ('gardien','jardinier','femme_de_menage','securite','autre');
-CREATE TYPE statut_personnel_enum AS ENUM ('actif','inactif');
-CREATE TYPE type_paiement_enum    AS ENUM ('charges','parking','garage','box');
-CREATE TYPE statut_paiement_enum  AS ENUM ('complet','partiel','impaye');
-CREATE TYPE type_annonce_enum     AS ENUM ('normale','urgente','information');
-CREATE TYPE statut_annonce_enum   AS ENUM ('publiee','archivee');
-CREATE TYPE statut_reunion_enum   AS ENUM ('planifiee','confirmee','terminee','annulee');
-CREATE TYPE confirmation_enum     AS ENUM ('en_attente','confirme','absent');
-CREATE TYPE statut_reclam_enum    AS ENUM ('en_cours','resolue','rejetee');
-CREATE TYPE type_notif_enum       AS ENUM ('annonce','reunion','paiement','reclamation','general');
-
--- ============================================================
--- 1. USERS
--- ============================================================
-CREATE TABLE users (
-    id             BIGSERIAL        PRIMARY KEY,
-    nom            VARCHAR(100)     NOT NULL,
-    prenom         VARCHAR(100)     NOT NULL,
-    email          VARCHAR(191)     NOT NULL UNIQUE,
-    password       VARCHAR(255)     NOT NULL,
-    telephone      VARCHAR(20)      NULL,
-    role           role_enum        NOT NULL,
-    statut         statut_user_enum NOT NULL DEFAULT 'actif',
-    remember_token VARCHAR(100)     NULL,
-    created_at     TIMESTAMP        DEFAULT CURRENT_TIMESTAMP,
-    updated_at     TIMESTAMP        DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE public.annonces (
+  id bigint NOT NULL DEFAULT nextval('annonces_id_seq'::regclass),
+  titre character varying NOT NULL,
+  contenu text NOT NULL,
+  type USER-DEFINED NOT NULL DEFAULT 'normale'::type_annonce_enum,
+  tranche_id bigint,
+  inter_syndic_id bigint NOT NULL,
+  date_expiration date,
+  statut USER-DEFINED NOT NULL DEFAULT 'publiee'::statut_annonce_enum,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT annonces_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_annonce_tranche FOREIGN KEY (tranche_id) REFERENCES public.tranches(id),
+  CONSTRAINT fk_annonce_inter_syndic FOREIGN KEY (inter_syndic_id) REFERENCES public.users(id)
 );
-
--- ============================================================
--- 2. RESIDENCES
--- ============================================================
-CREATE TABLE residences (
-    id                BIGSERIAL    PRIMARY KEY,
-    nom               VARCHAR(150) NOT NULL,
-    adresse           TEXT         NOT NULL,
-    nombre_tranches   INT          NOT NULL DEFAULT 0,
-    syndic_general_id BIGINT       NOT NULL,
-    created_at        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-    updated_at        TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_residence_syndic_general
-        FOREIGN KEY (syndic_general_id) REFERENCES users(id) ON DELETE RESTRICT
+CREATE TABLE public.appartements (
+  id bigint NOT NULL DEFAULT nextval('appartements_id_seq'::regclass),
+  numero character varying NOT NULL,
+  immeuble_id bigint NOT NULL,
+  statut USER-DEFINED NOT NULL DEFAULT 'libre'::statut_appart_enum,
+  resident_id bigint,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT appartements_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_appart_immeuble FOREIGN KEY (immeuble_id) REFERENCES public.immeubles(id),
+  CONSTRAINT fk_appart_resident FOREIGN KEY (resident_id) REFERENCES public.users(id)
 );
-
--- ============================================================
--- 3. TRANCHES
--- ============================================================
-CREATE TABLE tranches (
-    id                  BIGSERIAL    PRIMARY KEY,
-    nom                 VARCHAR(100) NOT NULL,
-    description         TEXT         NULL,
-    residence_id        BIGINT       NOT NULL,
-    inter_syndic_id     BIGINT       NULL,
-    nombre_immeubles    INT          NOT NULL DEFAULT 0,
-    nombre_appartements INT          NOT NULL DEFAULT 0,
-    nombre_parkings     INT          NOT NULL DEFAULT 0,
-    nombre_garages      INT          NOT NULL DEFAULT 0,
-    nombre_boxes        INT          NOT NULL DEFAULT 0,
-    created_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-    prix_annuel         NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-    date_affectation    DATE          NULL,
-
-    CONSTRAINT fk_tranche_residence
-        FOREIGN KEY (residence_id)    REFERENCES residences(id) ON DELETE CASCADE,
-    CONSTRAINT fk_tranche_inter_syndic
-        FOREIGN KEY (inter_syndic_id) REFERENCES users(id)      ON DELETE SET NULL
+CREATE TABLE public.beneficiaires (
+  id bigint NOT NULL DEFAULT nextval('beneficiaires_id_seq'::regclass),
+  nom character varying NOT NULL,
+  prenom character varying NOT NULL,
+  telephone character varying,
+  resident_id bigint,
+  tranche_id bigint,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT beneficiaires_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_benef_resident FOREIGN KEY (resident_id) REFERENCES public.users(id),
+  CONSTRAINT fk_benef_tranche FOREIGN KEY (tranche_id) REFERENCES public.tranches(id)
 );
-
--- ============================================================
--- 4. IMMEUBLES
--- ============================================================
-CREATE TABLE immeubles (
-    id                  BIGSERIAL     PRIMARY KEY,
-    nom                 VARCHAR(100)  NOT NULL,
-    adresse             VARCHAR(255)  NULL,
-    tranche_id          BIGINT        NOT NULL,
-    nombre_appartements INT           NOT NULL DEFAULT 0,
-    created_at          TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_immeuble_tranche
-        FOREIGN KEY (tranche_id) REFERENCES tranches(id) ON DELETE CASCADE
+CREATE TABLE public.boxes (
+  id bigint NOT NULL DEFAULT nextval('boxes_id_seq'::regclass),
+  numero character varying NOT NULL,
+  residence_id bigint NOT NULL,
+  tranche_id bigint,
+  immeuble_id bigint,
+  prix_annuel numeric NOT NULL DEFAULT 0.00,
+  statut USER-DEFINED NOT NULL DEFAULT 'disponible'::statut_espace_enum,
+  beneficiaire_id bigint,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT boxes_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_box_beneficiaire FOREIGN KEY (beneficiaire_id) REFERENCES public.beneficiaires(id),
+  CONSTRAINT fk_box_residence FOREIGN KEY (residence_id) REFERENCES public.residences(id),
+  CONSTRAINT fk_box_tranche FOREIGN KEY (tranche_id) REFERENCES public.tranches(id),
+  CONSTRAINT fk_box_immeuble FOREIGN KEY (immeuble_id) REFERENCES public.immeubles(id)
 );
-
--- ============================================================
--- 5. APPARTEMENTS
--- ============================================================
-CREATE TABLE appartements (
-    id          BIGSERIAL          PRIMARY KEY,
-    numero      VARCHAR(20)        NOT NULL,
-    immeuble_id BIGINT             NOT NULL,
-    statut      statut_appart_enum NOT NULL DEFAULT 'libre',
-    resident_id BIGINT             NULL,
-    created_at  TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_appart_immeuble
-        FOREIGN KEY (immeuble_id) REFERENCES immeubles(id) ON DELETE CASCADE,
-    CONSTRAINT fk_appart_resident
-        FOREIGN KEY (resident_id) REFERENCES users(id)     ON DELETE SET NULL
+CREATE TABLE public.categories (
+  id bigint NOT NULL DEFAULT nextval('categories_id_seq'::regclass),
+  nom character varying NOT NULL,
+  description text,
+  type USER-DEFINED NOT NULL,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT categories_pkey PRIMARY KEY (id)
 );
-
--- ============================================================
--- 6. RESIDENTS
--- ============================================================
-CREATE TABLE residents (
-    id             BIGSERIAL          PRIMARY KEY,
-    user_id        BIGINT             NOT NULL UNIQUE,
-    appartement_id BIGINT             NULL,
-    type           type_resident_enum NOT NULL,
-    date_arrivee   DATE               NULL,
-    statut         statut_user_enum   NOT NULL DEFAULT 'actif',
-    created_at     TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
-    updated_at     TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_resident_user
-        FOREIGN KEY (user_id)        REFERENCES users(id)        ON DELETE CASCADE,
-    CONSTRAINT fk_resident_appartement
-        FOREIGN KEY (appartement_id) REFERENCES appartements(id) ON DELETE SET NULL
+CREATE TABLE public.demandes_inscription (
+  id integer NOT NULL DEFAULT nextval('demandes_inscription_id_seq'::regclass),
+  nom text NOT NULL,
+  prenom text NOT NULL,
+  email text NOT NULL,
+  telephone text,
+  password text NOT NULL,
+  statut text DEFAULT 'en_attente'::text,
+  motif_refus text,
+  created_at timestamp without time zone DEFAULT now(),
+  CONSTRAINT demandes_inscription_pkey PRIMARY KEY (id)
 );
-
--- ============================================================
--- 7. BENEFICIAIRES
--- ============================================================
-CREATE TABLE beneficiaires (
-    id          BIGSERIAL    PRIMARY KEY,
-    nom         VARCHAR(100) NOT NULL,
-    prenom      VARCHAR(100) NOT NULL,
-    telephone   VARCHAR(20)  NULL,
-    resident_id BIGINT       NULL,
-    tranche_id  BIGINT       NULL,
-    created_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_benef_resident
-        FOREIGN KEY (resident_id) REFERENCES users(id)    ON DELETE SET NULL,
-    CONSTRAINT fk_benef_tranche
-        FOREIGN KEY (tranche_id)  REFERENCES tranches(id) ON DELETE SET NULL
+CREATE TABLE public.depenses (
+  id bigint NOT NULL DEFAULT nextval('depenses_id_seq'::regclass),
+  montant numeric NOT NULL,
+  categorie_id bigint,
+  residence_id bigint NOT NULL,
+  syndic_general_id bigint,
+  inter_syndic_id bigint,
+  tranche_id bigint,
+  immeuble_id bigint,
+  personnel_id bigint,
+  date date NOT NULL,
+  annee integer NOT NULL,
+  mois smallint,
+  facture_path character varying,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  description text,
+  CONSTRAINT depenses_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_depense_categorie FOREIGN KEY (categorie_id) REFERENCES public.categories(id),
+  CONSTRAINT fk_depense_residence FOREIGN KEY (residence_id) REFERENCES public.residences(id),
+  CONSTRAINT fk_depense_syndic_general FOREIGN KEY (syndic_general_id) REFERENCES public.users(id),
+  CONSTRAINT fk_depense_inter_syndic FOREIGN KEY (inter_syndic_id) REFERENCES public.users(id),
+  CONSTRAINT fk_depense_tranche FOREIGN KEY (tranche_id) REFERENCES public.tranches(id),
+  CONSTRAINT fk_depense_immeuble FOREIGN KEY (immeuble_id) REFERENCES public.immeubles(id),
+  CONSTRAINT fk_depense_personnel FOREIGN KEY (personnel_id) REFERENCES public.personnel(id)
 );
-
--- ============================================================
--- 8. PARKINGS
--- ============================================================
-CREATE TABLE parkings (
-    id              BIGSERIAL          PRIMARY KEY,
-    numero          VARCHAR(20)        NOT NULL,
-    residence_id    BIGINT             NOT NULL,
-    tranche_id      BIGINT             NULL,
-    prix_annuel     NUMERIC(10,2)      NOT NULL DEFAULT 0.00,
-    statut          statut_espace_enum NOT NULL DEFAULT 'disponible',
-    beneficiaire_id BIGINT             NULL,
-    created_at      TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_parking_residence
-        FOREIGN KEY (residence_id)    REFERENCES residences(id)    ON DELETE CASCADE,
-    CONSTRAINT fk_parking_tranche
-        FOREIGN KEY (tranche_id)      REFERENCES tranches(id)      ON DELETE SET NULL,
-    CONSTRAINT fk_parking_beneficiaire
-        FOREIGN KEY (beneficiaire_id) REFERENCES beneficiaires(id) ON DELETE SET NULL
+CREATE TABLE public.finances_summary (
+  id bigint NOT NULL DEFAULT nextval('finances_summary_id_seq'::regclass),
+  tranche_id bigint NOT NULL UNIQUE,
+  revenus_charges numeric NOT NULL DEFAULT 0.00,
+  revenus_parkings numeric NOT NULL DEFAULT 0.00,
+  revenus_garages numeric NOT NULL DEFAULT 0.00,
+  revenus_boxes numeric NOT NULL DEFAULT 0.00,
+  revenus_total numeric NOT NULL DEFAULT 0.00,
+  depenses_personnel numeric NOT NULL DEFAULT 0.00,
+  depenses_entretien numeric NOT NULL DEFAULT 0.00,
+  depenses_total numeric NOT NULL DEFAULT 0.00,
+  solde numeric NOT NULL DEFAULT 0.00,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT finances_summary_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_finances_tranche FOREIGN KEY (tranche_id) REFERENCES public.tranches(id)
 );
-
--- ============================================================
--- 9. GARAGES
--- ============================================================
-CREATE TABLE garages (
-    id              BIGSERIAL          PRIMARY KEY,
-    numero          VARCHAR(20)        NOT NULL,
-    residence_id    BIGINT             NOT NULL,
-    tranche_id      BIGINT             NOT NULL,
-    prix_annuel     NUMERIC(10,2)      NOT NULL DEFAULT 0.00,
-    surface         NUMERIC(6,2)       NULL,
-    statut          statut_espace_enum NOT NULL DEFAULT 'disponible',
-    beneficiaire_id BIGINT             NULL,
-    created_at      TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_garage_residence
-        FOREIGN KEY (residence_id)    REFERENCES residences(id)    ON DELETE CASCADE,
-    CONSTRAINT fk_garage_tranche
-        FOREIGN KEY (tranche_id)      REFERENCES tranches(id)      ON DELETE CASCADE,
-    CONSTRAINT fk_garage_beneficiaire
-        FOREIGN KEY (beneficiaire_id) REFERENCES beneficiaires(id) ON DELETE SET NULL
+CREATE TABLE public.garages (
+  id bigint NOT NULL DEFAULT nextval('garages_id_seq'::regclass),
+  numero character varying NOT NULL,
+  residence_id bigint NOT NULL,
+  tranche_id bigint NOT NULL,
+  prix_annuel numeric NOT NULL DEFAULT 0.00,
+  surface numeric,
+  statut USER-DEFINED NOT NULL DEFAULT 'disponible'::statut_espace_enum,
+  beneficiaire_id bigint,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT garages_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_garage_residence FOREIGN KEY (residence_id) REFERENCES public.residences(id),
+  CONSTRAINT fk_garage_tranche FOREIGN KEY (tranche_id) REFERENCES public.tranches(id),
+  CONSTRAINT fk_garage_beneficiaire FOREIGN KEY (beneficiaire_id) REFERENCES public.beneficiaires(id)
 );
-
--- ============================================================
--- 10. BOXES
--- ============================================================
-CREATE TABLE boxes (
-    id              BIGSERIAL          PRIMARY KEY,
-    numero          VARCHAR(20)        NOT NULL,
-    residence_id    BIGINT             NOT NULL,
-    tranche_id      BIGINT             NULL,
-    immeuble_id     BIGINT             NULL,
-    prix_annuel     NUMERIC(10,2)      NOT NULL DEFAULT 0.00,
-    statut          statut_espace_enum NOT NULL DEFAULT 'disponible',
-    beneficiaire_id BIGINT             NULL,
-    created_at      TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_box_residence
-        FOREIGN KEY (residence_id)    REFERENCES residences(id)    ON DELETE CASCADE,
-    CONSTRAINT fk_box_tranche
-        FOREIGN KEY (tranche_id)      REFERENCES tranches(id)      ON DELETE SET NULL,
-    CONSTRAINT fk_box_immeuble
-        FOREIGN KEY (immeuble_id)     REFERENCES immeubles(id)     ON DELETE SET NULL,
-    CONSTRAINT fk_box_beneficiaire
-        FOREIGN KEY (beneficiaire_id) REFERENCES beneficiaires(id) ON DELETE SET NULL
+CREATE TABLE public.historique_affectations (
+  id bigint NOT NULL DEFAULT nextval('historique_affectations_id_seq'::regclass),
+  tranche_id bigint NOT NULL,
+  inter_syndic_id bigint NOT NULL,
+  date_debut date NOT NULL DEFAULT CURRENT_DATE,
+  date_fin date,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT historique_affectations_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_hist_tranche FOREIGN KEY (tranche_id) REFERENCES public.tranches(id),
+  CONSTRAINT fk_hist_syndic FOREIGN KEY (inter_syndic_id) REFERENCES public.users(id)
 );
-
--- ============================================================
--- 11. CATEGORIES
--- ============================================================
-CREATE TABLE categories (
-    id          BIGSERIAL         PRIMARY KEY,
-    nom         VARCHAR(100)      NOT NULL,
-    description TEXT              NULL,
-    type        type_depense_enum NOT NULL,
-    created_at  TIMESTAMP         DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMP         DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE public.historique_paiements (
+  id bigint NOT NULL DEFAULT nextval('historique_paiements_id_seq'::regclass),
+  resident_id bigint NOT NULL,
+  paiement_id bigint,
+  montant numeric NOT NULL,
+  date date NOT NULL,
+  type USER-DEFINED NOT NULL,
+  description text,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT historique_paiements_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_historique_resident FOREIGN KEY (resident_id) REFERENCES public.users(id),
+  CONSTRAINT fk_historique_paiement FOREIGN KEY (paiement_id) REFERENCES public.paiements(id)
 );
-
--- ============================================================
--- 12. PERSONNEL
--- ============================================================
-CREATE TABLE personnel (
-    id             BIGSERIAL             PRIMARY KEY,
-    nom            VARCHAR(100)          NOT NULL,
-    prenom         VARCHAR(100)          NOT NULL,
-    telephone      VARCHAR(20)           NULL,
-    type           type_personnel_enum   NOT NULL,
-    residence_id   BIGINT                NOT NULL,
-    tranche_id     BIGINT                NULL,
-    salaire_annuel NUMERIC(10,2)         NOT NULL DEFAULT 0.00,
-    statut         statut_personnel_enum NOT NULL DEFAULT 'actif',
-    date_embauche  DATE                  NULL,
-    created_at     TIMESTAMP             DEFAULT CURRENT_TIMESTAMP,
-    updated_at     TIMESTAMP             DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_personnel_residence
-        FOREIGN KEY (residence_id) REFERENCES residences(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_personnel_tranche
-        FOREIGN KEY (tranche_id)   REFERENCES tranches(id)   ON DELETE SET NULL
+CREATE TABLE public.immeubles (
+  id bigint NOT NULL DEFAULT nextval('immeubles_id_seq'::regclass),
+  nom character varying NOT NULL,
+  adresse character varying,
+  tranche_id bigint NOT NULL,
+  nombre_appartements integer NOT NULL DEFAULT 0,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT immeubles_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_immeuble_tranche FOREIGN KEY (tranche_id) REFERENCES public.tranches(id)
 );
-
--- ============================================================
--- 13. DEPENSES
--- ============================================================
-CREATE TABLE depenses (
-    id                BIGSERIAL     PRIMARY KEY,
-    montant           NUMERIC(10,2) NOT NULL,
-    categorie_id      BIGINT        NULL,
-    residence_id      BIGINT        NOT NULL,
-    syndic_general_id BIGINT        NULL,
-    inter_syndic_id   BIGINT        NULL,
-    tranche_id        BIGINT        NULL,
-    immeuble_id       BIGINT        NULL,
-    personnel_id      BIGINT        NULL,
-    date              DATE          NOT NULL,
-    annee             INT           NOT NULL,
-    mois              SMALLINT      NULL,
-    facture_path      VARCHAR(255)  NULL,
-    created_at        TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
-    updated_at        TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_depense_categorie
-        FOREIGN KEY (categorie_id)      REFERENCES categories(id)  ON DELETE SET NULL,
-    CONSTRAINT fk_depense_residence
-        FOREIGN KEY (residence_id)      REFERENCES residences(id)  ON DELETE RESTRICT,
-    CONSTRAINT fk_depense_syndic_general
-        FOREIGN KEY (syndic_general_id) REFERENCES users(id)       ON DELETE RESTRICT,
-    CONSTRAINT fk_depense_inter_syndic
-        FOREIGN KEY (inter_syndic_id)   REFERENCES users(id)       ON DELETE RESTRICT,
-    CONSTRAINT fk_depense_tranche
-        FOREIGN KEY (tranche_id)        REFERENCES tranches(id)    ON DELETE SET NULL,
-    CONSTRAINT fk_depense_immeuble
-        FOREIGN KEY (immeuble_id)       REFERENCES immeubles(id)   ON DELETE SET NULL,
-    CONSTRAINT fk_depense_personnel
-        FOREIGN KEY (personnel_id)      REFERENCES personnel(id)   ON DELETE SET NULL
+CREATE TABLE public.liens_syndics (
+  id bigint NOT NULL DEFAULT nextval('liens_syndics_id_seq'::regclass),
+  syndic_general_id bigint,
+  inter_syndic_id bigint,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  residence_id bigint,
+  CONSTRAINT liens_syndics_pkey PRIMARY KEY (id),
+  CONSTRAINT liens_syndics_syndic_general_id_fkey FOREIGN KEY (syndic_general_id) REFERENCES public.users(id),
+  CONSTRAINT liens_syndics_inter_syndic_id_fkey FOREIGN KEY (inter_syndic_id) REFERENCES public.users(id),
+  CONSTRAINT liens_syndics_residence_id_fkey FOREIGN KEY (residence_id) REFERENCES public.residences(id)
 );
-
--- ============================================================
--- 14. PAIEMENTS
--- ============================================================
-CREATE TABLE paiements (
-    id              BIGSERIAL            PRIMARY KEY,
-    resident_id     BIGINT               NOT NULL,
-    appartement_id  BIGINT               NOT NULL,
-    inter_syndic_id BIGINT               NOT NULL,
-    residence_id    BIGINT               NOT NULL,
-    montant_total   NUMERIC(10,2)        NOT NULL,
-    montant_paye    NUMERIC(10,2)        NOT NULL DEFAULT 0.00,
-    type_paiement   type_paiement_enum   NOT NULL,
-    date_paiement   DATE                 NULL,
-    statut          statut_paiement_enum NOT NULL DEFAULT 'impaye',
-    annee           INT                  NOT NULL,
-    mois            SMALLINT             NULL,
-    created_at      TIMESTAMP            DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP            DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_paiement_resident
-        FOREIGN KEY (resident_id)     REFERENCES users(id)        ON DELETE RESTRICT,
-    CONSTRAINT fk_paiement_appartement
-        FOREIGN KEY (appartement_id)  REFERENCES appartements(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_paiement_intersyndic
-        FOREIGN KEY (inter_syndic_id) REFERENCES users(id)        ON DELETE RESTRICT,
-    CONSTRAINT fk_paiement_residence
-        FOREIGN KEY (residence_id)    REFERENCES residences(id)   ON DELETE RESTRICT
+CREATE TABLE public.notifications (
+  id bigint NOT NULL DEFAULT nextval('notifications_id_seq'::regclass),
+  user_id bigint NOT NULL,
+  titre character varying NOT NULL,
+  message text NOT NULL,
+  type USER-DEFINED NOT NULL,
+  lu boolean NOT NULL DEFAULT false,
+  annonce_id bigint,
+  reunion_id bigint,
+  paiement_id bigint,
+  reclamation_id bigint,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_notif_user FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT fk_notif_annonce FOREIGN KEY (annonce_id) REFERENCES public.annonces(id),
+  CONSTRAINT fk_notif_reunion FOREIGN KEY (reunion_id) REFERENCES public.reunions(id),
+  CONSTRAINT fk_notif_paiement FOREIGN KEY (paiement_id) REFERENCES public.paiements(id),
+  CONSTRAINT fk_notif_reclamation FOREIGN KEY (reclamation_id) REFERENCES public.reclamations(id)
 );
-
--- ============================================================
--- 15. HISTORIQUE PAIEMENTS
--- ============================================================
-CREATE TABLE historique_paiements (
-    id          BIGSERIAL          PRIMARY KEY,
-    resident_id BIGINT             NOT NULL,
-    paiement_id BIGINT             NULL,
-    montant     NUMERIC(10,2)      NOT NULL,
-    date        DATE               NOT NULL,
-    type        type_paiement_enum NOT NULL,
-    description TEXT               NULL,
-    created_at  TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_historique_resident
-        FOREIGN KEY (resident_id) REFERENCES users(id)     ON DELETE RESTRICT,
-    CONSTRAINT fk_historique_paiement
-        FOREIGN KEY (paiement_id) REFERENCES paiements(id) ON DELETE SET NULL
+CREATE TABLE public.paiements (
+  id bigint NOT NULL DEFAULT nextval('paiements_id_seq'::regclass),
+  appartement_id bigint NOT NULL,
+  inter_syndic_id bigint NOT NULL,
+  montant_total numeric NOT NULL,
+  montant_paye numeric NOT NULL DEFAULT 0.00,
+  type_paiement USER-DEFINED NOT NULL,
+  date_paiement date,
+  statut USER-DEFINED NOT NULL DEFAULT 'impaye'::statut_paiement_enum,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  resident_id bigint,
+  residence_id bigint,
+  annee integer,
+  mois integer,
+  mandat_id bigint,
+  CONSTRAINT paiements_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_paiement_appartement FOREIGN KEY (appartement_id) REFERENCES public.appartements(id),
+  CONSTRAINT fk_paiement_intersyndic FOREIGN KEY (inter_syndic_id) REFERENCES public.users(id),
+  CONSTRAINT paiements_resident_id_fkey FOREIGN KEY (resident_id) REFERENCES public.users(id),
+  CONSTRAINT paiements_residence_id_fkey FOREIGN KEY (residence_id) REFERENCES public.residences(id),
+  CONSTRAINT paiements_mandat_id_fkey FOREIGN KEY (mandat_id) REFERENCES public.historique_affectations(id)
 );
-
--- ============================================================
--- 16. FINANCES SUMMARY
--- ============================================================
-CREATE TABLE finances_summary (
-    id                 BIGSERIAL     PRIMARY KEY,
-    tranche_id         BIGINT        NOT NULL UNIQUE,
-    revenus_charges    NUMERIC(12,2) NOT NULL DEFAULT 0.00,
-    revenus_parkings   NUMERIC(12,2) NOT NULL DEFAULT 0.00,
-    revenus_garages    NUMERIC(12,2) NOT NULL DEFAULT 0.00,
-    revenus_boxes      NUMERIC(12,2) NOT NULL DEFAULT 0.00,
-    revenus_total      NUMERIC(12,2) NOT NULL DEFAULT 0.00,
-    depenses_personnel NUMERIC(12,2) NOT NULL DEFAULT 0.00,
-    depenses_entretien NUMERIC(12,2) NOT NULL DEFAULT 0.00,
-    depenses_total     NUMERIC(12,2) NOT NULL DEFAULT 0.00,
-    solde              NUMERIC(12,2) NOT NULL DEFAULT 0.00,
-    updated_at         TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_finances_tranche
-        FOREIGN KEY (tranche_id) REFERENCES tranches(id) ON DELETE CASCADE
+CREATE TABLE public.parkings (
+  id bigint NOT NULL DEFAULT nextval('parkings_id_seq'::regclass),
+  numero character varying NOT NULL,
+  residence_id bigint NOT NULL,
+  tranche_id bigint,
+  prix_annuel numeric NOT NULL DEFAULT 0.00,
+  statut USER-DEFINED NOT NULL DEFAULT 'disponible'::statut_espace_enum,
+  beneficiaire_id bigint,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT parkings_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_parking_residence FOREIGN KEY (residence_id) REFERENCES public.residences(id),
+  CONSTRAINT fk_parking_tranche FOREIGN KEY (tranche_id) REFERENCES public.tranches(id),
+  CONSTRAINT fk_parking_beneficiaire FOREIGN KEY (beneficiaire_id) REFERENCES public.beneficiaires(id)
 );
-
--- ============================================================
--- 17. ANNONCES
--- ============================================================
-CREATE TABLE annonces (
-    id              BIGSERIAL           PRIMARY KEY,
-    titre           VARCHAR(200)        NOT NULL,
-    contenu         TEXT                NOT NULL,
-    type            type_annonce_enum   NOT NULL DEFAULT 'normale',
-    tranche_id      BIGINT              NULL,
-    inter_syndic_id BIGINT              NOT NULL,
-    date_expiration DATE                NULL,
-    statut          statut_annonce_enum NOT NULL DEFAULT 'publiee',
-    created_at      TIMESTAMP           DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP           DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_annonce_tranche
-        FOREIGN KEY (tranche_id)      REFERENCES tranches(id) ON DELETE SET NULL,
-    CONSTRAINT fk_annonce_inter_syndic
-        FOREIGN KEY (inter_syndic_id) REFERENCES users(id)    ON DELETE RESTRICT
+CREATE TABLE public.personnel (
+  id bigint NOT NULL DEFAULT nextval('personnel_id_seq'::regclass),
+  nom character varying NOT NULL,
+  prenom character varying NOT NULL,
+  telephone character varying,
+  type USER-DEFINED NOT NULL,
+  residence_id bigint NOT NULL,
+  tranche_id bigint,
+  salaire_annuel numeric NOT NULL DEFAULT 0.00,
+  statut USER-DEFINED NOT NULL DEFAULT 'actif'::statut_personnel_enum,
+  date_embauche date,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT personnel_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_personnel_residence FOREIGN KEY (residence_id) REFERENCES public.residences(id),
+  CONSTRAINT fk_personnel_tranche FOREIGN KEY (tranche_id) REFERENCES public.tranches(id)
 );
-
--- ============================================================
--- 18. REUNIONS
--- ============================================================
-CREATE TABLE reunions (
-    id              BIGSERIAL           PRIMARY KEY,
-    titre           VARCHAR(200)        NOT NULL,
-    description     TEXT                NULL,
-    date            DATE                NOT NULL,
-    heure           TIME                NOT NULL,
-    lieu            VARCHAR(255)        NOT NULL,
-    tranche_id      BIGINT              NULL,
-    inter_syndic_id BIGINT              NOT NULL,
-    statut          statut_reunion_enum NOT NULL DEFAULT 'planifiee',
-    created_at      TIMESTAMP           DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP           DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_reunion_tranche
-        FOREIGN KEY (tranche_id)      REFERENCES tranches(id) ON DELETE SET NULL,
-    CONSTRAINT fk_reunion_inter_syndic
-        FOREIGN KEY (inter_syndic_id) REFERENCES users(id)    ON DELETE RESTRICT
+CREATE TABLE public.reclamations (
+  id bigint NOT NULL DEFAULT nextval('reclamations_id_seq'::regclass),
+  titre character varying NOT NULL,
+  description text NOT NULL,
+  resident_id bigint NOT NULL,
+  inter_syndic_id bigint,
+  tranche_id bigint,
+  statut USER-DEFINED NOT NULL DEFAULT 'en_cours'::statut_reclam_enum,
+  document_path character varying,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT reclamations_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_reclam_resident FOREIGN KEY (resident_id) REFERENCES public.users(id),
+  CONSTRAINT fk_reclam_inter_syndic FOREIGN KEY (inter_syndic_id) REFERENCES public.users(id),
+  CONSTRAINT fk_reclam_tranche FOREIGN KEY (tranche_id) REFERENCES public.tranches(id)
 );
-
--- ============================================================
--- 19. REUNION_RESIDENT
--- ============================================================
-CREATE TABLE reunion_resident (
-    id           BIGSERIAL         PRIMARY KEY,
-    reunion_id   BIGINT            NOT NULL,
-    resident_id  BIGINT            NOT NULL,
-    confirmation confirmation_enum NOT NULL DEFAULT 'en_attente',
-    created_at   TIMESTAMP         DEFAULT CURRENT_TIMESTAMP,
-
-    UNIQUE (reunion_id, resident_id),
-    CONSTRAINT fk_rr_reunion
-        FOREIGN KEY (reunion_id)  REFERENCES reunions(id) ON DELETE CASCADE,
-    CONSTRAINT fk_rr_resident
-        FOREIGN KEY (resident_id) REFERENCES users(id)   ON DELETE CASCADE
+CREATE TABLE public.residences (
+  id bigint NOT NULL DEFAULT nextval('residences_id_seq'::regclass),
+  nom character varying NOT NULL,
+  adresse text NOT NULL,
+  nombre_tranches integer NOT NULL DEFAULT 0,
+  syndic_general_id bigint NOT NULL,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT residences_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_residence_syndic_general FOREIGN KEY (syndic_general_id) REFERENCES public.users(id)
 );
-
--- ============================================================
--- 20. RECLAMATIONS
--- ============================================================
-CREATE TABLE reclamations (
-    id              BIGSERIAL          PRIMARY KEY,
-    titre           VARCHAR(200)       NOT NULL,
-    description     TEXT               NOT NULL,
-    resident_id     BIGINT             NOT NULL,
-    inter_syndic_id BIGINT             NULL,
-    tranche_id      BIGINT             NULL,
-    statut          statut_reclam_enum NOT NULL DEFAULT 'en_cours',
-    document_path   VARCHAR(255)       NULL,
-    created_at      TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_reclam_resident
-        FOREIGN KEY (resident_id)     REFERENCES users(id)    ON DELETE RESTRICT,
-    CONSTRAINT fk_reclam_inter_syndic
-        FOREIGN KEY (inter_syndic_id) REFERENCES users(id)    ON DELETE SET NULL,
-    CONSTRAINT fk_reclam_tranche
-        FOREIGN KEY (tranche_id)      REFERENCES tranches(id) ON DELETE SET NULL
+CREATE TABLE public.residents (
+  id bigint NOT NULL DEFAULT nextval('residents_id_seq'::regclass),
+  user_id bigint NOT NULL UNIQUE,
+  appartement_id bigint,
+  type USER-DEFINED NOT NULL,
+  date_arrivee date,
+  statut USER-DEFINED NOT NULL DEFAULT 'actif'::statut_user_enum,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT residents_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_resident_user FOREIGN KEY (user_id) REFERENCES public.users(id),
+  CONSTRAINT fk_resident_appartement FOREIGN KEY (appartement_id) REFERENCES public.appartements(id)
 );
-
--- ============================================================
--- 21. NOTIFICATIONS
--- ============================================================
-CREATE TABLE notifications (
-    id             BIGSERIAL       PRIMARY KEY,
-    user_id        BIGINT          NOT NULL,
-    titre          VARCHAR(200)    NOT NULL,
-    message        TEXT            NOT NULL,
-    type           type_notif_enum NOT NULL,
-    lu             BOOLEAN         NOT NULL DEFAULT FALSE,
-    annonce_id     BIGINT          NULL,
-    reunion_id     BIGINT          NULL,
-    paiement_id    BIGINT          NULL,
-    reclamation_id BIGINT          NULL,
-    created_at     TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_notif_user
-        FOREIGN KEY (user_id)        REFERENCES users(id)        ON DELETE CASCADE,
-    CONSTRAINT fk_notif_annonce
-        FOREIGN KEY (annonce_id)     REFERENCES annonces(id)     ON DELETE SET NULL,
-    CONSTRAINT fk_notif_reunion
-        FOREIGN KEY (reunion_id)     REFERENCES reunions(id)     ON DELETE SET NULL,
-    CONSTRAINT fk_notif_paiement
-        FOREIGN KEY (paiement_id)    REFERENCES paiements(id)    ON DELETE SET NULL,
-    CONSTRAINT fk_notif_reclamation
-        FOREIGN KEY (reclamation_id) REFERENCES reclamations(id) ON DELETE SET NULL
+CREATE TABLE public.reunion_resident (
+  id bigint NOT NULL DEFAULT nextval('reunion_resident_id_seq'::regclass),
+  reunion_id bigint NOT NULL,
+  resident_id bigint NOT NULL,
+  confirmation USER-DEFINED NOT NULL DEFAULT 'en_attente'::confirmation_enum,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT reunion_resident_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_rr_reunion FOREIGN KEY (reunion_id) REFERENCES public.reunions(id),
+  CONSTRAINT fk_rr_resident FOREIGN KEY (resident_id) REFERENCES public.users(id)
 );
-
--- ============================================================
--- 22. STORAGE (BUCKET POUR FACTURES)
--- ============================================================
--- Création du bucket (S'assurer que l'extension pg_cron ou pgsodium ne bloque pas, utiliser l'interface Supabase Storage si la requête échoue)
-INSERT INTO storage.buckets (id, name, public) 
-VALUES ('resimanager_bucket', 'resimanager_bucket', true)
-ON CONFLICT (id) DO NOTHING;
-
--- Autoriser l'accès public en lecture
-CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING (bucket_id = 'resimanager_bucket');
--- Autoriser l'insertion pour tout le monde (ou spécifier des règles plus strictes si authentification)
-CREATE POLICY "Public Insert" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'resimanager_bucket');
--- Autoriser la mise à jour
-CREATE POLICY "Public Update" ON storage.objects FOR UPDATE USING (bucket_id = 'resimanager_bucket');
--- Autoriser la suppression
-CREATE POLICY "Public Delete" ON storage.objects FOR DELETE USING (bucket_id = 'resimanager_bucket');
-
-
+CREATE TABLE public.reunions (
+  id bigint NOT NULL DEFAULT nextval('reunions_id_seq'::regclass),
+  titre character varying NOT NULL,
+  description text,
+  date date NOT NULL,
+  heure time without time zone NOT NULL,
+  lieu character varying NOT NULL,
+  tranche_id bigint,
+  inter_syndic_id bigint NOT NULL,
+  statut USER-DEFINED NOT NULL DEFAULT 'planifiee'::statut_reunion_enum,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT reunions_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_reunion_tranche FOREIGN KEY (tranche_id) REFERENCES public.tranches(id),
+  CONSTRAINT fk_reunion_inter_syndic FOREIGN KEY (inter_syndic_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.tranches (
+  id bigint NOT NULL DEFAULT nextval('tranches_id_seq'::regclass),
+  nom character varying NOT NULL,
+  description text,
+  residence_id bigint NOT NULL,
+  inter_syndic_id bigint,
+  nombre_immeubles integer NOT NULL DEFAULT 0,
+  nombre_appartements integer NOT NULL DEFAULT 0,
+  nombre_parkings integer NOT NULL DEFAULT 0,
+  nombre_garages integer NOT NULL DEFAULT 0,
+  nombre_boxes integer NOT NULL DEFAULT 0,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  prix_annuel double precision CHECK (prix_annuel > 0.0::double precision),
+  statut USER-DEFINED,
+  CONSTRAINT tranches_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_tranche_residence FOREIGN KEY (residence_id) REFERENCES public.residences(id),
+  CONSTRAINT fk_tranche_inter_syndic FOREIGN KEY (inter_syndic_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.users (
+  id bigint NOT NULL DEFAULT nextval('users_id_seq'::regclass),
+  nom character varying NOT NULL,
+  prenom character varying NOT NULL,
+  email character varying NOT NULL UNIQUE,
+  password character varying NOT NULL,
+  telephone character varying,
+  role USER-DEFINED NOT NULL,
+  statut USER-DEFINED NOT NULL DEFAULT 'actif'::statut_user_enum,
+  remember_token character varying,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT users_pkey PRIMARY KEY (id)
+);
