@@ -65,6 +65,67 @@ class _ResidentDashboardScreenState extends State<ResidentDashboardScreen> {
     }
   }
 
+  void _showChangePasswordDialog() {
+    final TextEditingController _passController = TextEditingController();
+    final _formKey = GlobalKey<FormState>();
+    bool _isObscure = true;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateSB) => AlertDialog(
+          title: const Text("Modifier le mot de passe", 
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          content: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text("Entrez votre nouveau mot de passe ci-dessous.", 
+                  style: TextStyle(fontSize: 13, color: Colors.grey)),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _passController,
+                  obscureText: _isObscure,
+                  decoration: InputDecoration(
+                    labelText: "Nouveau mot de passe",
+                    prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                    suffixIcon: IconButton(
+                      icon: Icon(_isObscure ? Icons.visibility_off : Icons.visibility, size: 20),
+                      onPressed: () => setStateSB(() => _isObscure = !_isObscure),
+                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  validator: (v) => (v == null || v.length < 6) ? "Minimum 6 caractères" : null,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: _coral, foregroundColor: Colors.white),
+              onPressed: () async {
+                if (_formKey.currentState!.validate()) {
+                  final res = await _service.updatePassword(currentUserId, _passController.text.trim());
+                  Navigator.pop(context);
+                  if (res == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Mot de passe mis à jour !"), backgroundColor: Colors.green));
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Erreur: $res"), backgroundColor: Colors.red));
+                  }
+                }
+              },
+              child: const Text("Enregistrer"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool inLayout = widget.onNavigate != null;
@@ -107,6 +168,8 @@ class _ResidentDashboardScreenState extends State<ResidentDashboardScreen> {
                 _buildReclamationsSection(),
                 const SizedBox(height: 20),
                 _buildInfoLogement(numAppt, immeuble, tranche, prenom, nom),
+                const SizedBox(height: 20),
+                _buildSecuritySection(),
               ],
             ),
           ),
@@ -411,6 +474,42 @@ class _ResidentDashboardScreenState extends State<ResidentDashboardScreen> {
             style: const TextStyle(
                 fontWeight: FontWeight.w600, fontSize: 13),
             overflow: TextOverflow.ellipsis),
+      ]),
+    );
+  }
+
+  // ── SECURITY SECTION ──
+  Widget _buildSecuritySection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Sécurité',
+            style: TextStyle(
+                fontWeight: FontWeight.bold, fontSize: 15)),
+        const SizedBox(height: 12),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.lock_reset_rounded, color: Colors.redAccent, size: 20),
+          ),
+          title: const Text("Modifier mot de passe", 
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          subtitle: const Text("Protégez l'accès à votre compte", style: TextStyle(fontSize: 11)),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: _showChangePasswordDialog,
+        ),
       ]),
     );
   }
