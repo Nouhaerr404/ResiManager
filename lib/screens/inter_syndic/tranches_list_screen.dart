@@ -455,14 +455,14 @@ class _TranchesListScreenState extends State<TranchesListScreen>
                             color: _C.textLight, fontSize: 12)),
                   ],
                   const SizedBox(height: 12),
-                  Row(
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
                     children: [
                       _chip(Icons.business_rounded,
                           '${t.nombreImmeubles} imm.', _C.iconBg, _C.textMid),
-                      const SizedBox(width: 6),
                       _chip(Icons.home_outlined,
                           '${t.nombreAppartements} appts', _C.coralLight, _C.coral),
-                      const SizedBox(width: 6),
                       _chip(Icons.local_parking_rounded,
                           '${t.nombreParkings} parks', _C.iconBg, _C.textMid),
                     ],
