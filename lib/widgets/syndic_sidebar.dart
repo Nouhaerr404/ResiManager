@@ -6,6 +6,7 @@ import '../screens/syndic_general/syndics_management_screen.dart';
 import '../screens/syndic_general/tranches_management_screen.dart';
 import '../screens/syndic_general/residence_finances_screen.dart';
 import '../screens/syndic_general/residence_selection_screen.dart';
+import '../screens/syndic_general/syndic_general_profile_screen.dart';
 import '../screens/role_selector_screen.dart';
 import '../services/tranche_service.dart';
 import '../models/tranche_model.dart';
@@ -84,6 +85,8 @@ class SyndicSidebar extends StatelessWidget {
                 }
             ),
 
+
+
             const Spacer(),
 
             _buildMenuItem(context, Icons.location_city_outlined, 'Mes Résidences', false, () {
@@ -91,6 +94,17 @@ class SyndicSidebar extends StatelessWidget {
             }),
 
             const Divider(indent: 20, endIndent: 20),
+            _buildMenuItem(
+              context,
+              Icons.person_outline,
+              'Mon Profil',
+              activePage == 'Profil',
+                  () {
+                Navigator.pushReplacement(context, MaterialPageRoute(
+                    builder: (context) => SyndicGeneralProfileScreen(residenceId: residenceId, syndicId: syndicId)
+                ));
+              },
+            ),
 
             _buildMenuItem(
                 context,
