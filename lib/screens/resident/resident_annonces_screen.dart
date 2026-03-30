@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/resident_service.dart';
 import 'resident_dashboard_screen.dart';
@@ -15,218 +16,370 @@ class ResidentAnnoncesScreen extends StatefulWidget {
 class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
   final ResidentService _service = ResidentService();
   final TextEditingController _searchCtrl = TextEditingController();
+  Timer? _debounce;
 
+  List<dynamic> _annonces = [];
+  bool _isLoading = true;
+  bool _hasMore = false;
+  int _page = 0;
+  final int _pageSize = 10;
+
+  // Filtres
   String _searchQuery = '';
-  String _filterType = 'tous'; // 'tous', 'normale', 'urgente'
-
+  String _filterType = 'tous';
+  List<Map<String, dynamic>> _mandats = [];
+  int? _selectedMandatId;
   static const _orange = Color(0xFFFF6B4A);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMandats();
+    _fetchAnnonces();
+  }
+
+  Future<void> _loadMandats() async {
+    final mandats = await _service.getMandatsVecus(widget.userId);
+    if (mounted) {
+      setState(() => _mandats = mandats.cast<Map<String, dynamic>>());
+    }
+  }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _debounce?.cancel();
     super.dispose();
+  }
+
+  Future<void> _fetchAnnonces({bool resetPage = false}) async {
+    if (resetPage) {
+      setState(() => _page = 0);
+    }
+
+    setState(() => _isLoading = true);
+
+    final result = await _service.getAnnoncesPaginated(
+      userId: widget.userId,
+      typeAnnonce: _filterType,
+      searchQuery: _searchQuery,
+      mandatId: _selectedMandatId,
+      page: _page,
+      pageSize: _pageSize,
+    );
+
+    setState(() {
+      _annonces = result['annonces'];
+      _hasMore = result['hasMore'];
+      _isLoading = false;
+    });
+  }
+
+  void _nextPage() {
+    if (_hasMore) {
+      setState(() => _page++);
+      _fetchAnnonces();
+    }
+  }
+
+  void _prevPage() {
+    if (_page > 0) {
+      setState(() => _page--);
+      _fetchAnnonces();
+    }
+  }
+
+  void _onSearchChanged(String value) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 600), () {
+      setState(() => _searchQuery = value);
+      _fetchAnnonces(resetPage: true);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final bool inLayout = widget.onNavigate != null;
 
-    final body = FutureBuilder<Map<String, dynamic>>(
-      future: _service.getAnnoncesAndReunions(widget.userId),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData)
-          return Center(
+    final body = Column(
+      children: [
+        // ── Header + Search + Filtres ──
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Row(children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                              colors: [_orange, Color(0xFFFF9A6C)]),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.campaign_rounded,
+                            color: Colors.white, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text("Annonces",
+                                  style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF1A1A1A),
+                                      letterSpacing: -0.3)),
+                              Text("Toutes vos annonces",
+                                  style: TextStyle(
+                                      color: Colors.grey.shade500,
+                                      fontSize: 12),
+                                  overflow: TextOverflow.ellipsis),
+                            ]),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(width: 8),
+                  // ── Dropdown Mandat ──
+                  if (_mandats.isNotEmpty)
+                    Container(
+                      height: 40,
+                      width: 160,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F4F0),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int?>(
+                          isExpanded: true,
+                          value: _selectedMandatId,
+                          hint: const Text("Mandat",
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: _orange,
+                                  fontWeight: FontWeight.w700)),
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                              size: 16, color: _orange),
+                          style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.black,
+                              fontWeight: FontWeight.w600),
+                          items: [
+                            const DropdownMenuItem(
+                                value: null, child: Text("Tous")),
+                            ..._mandats.map((m) => DropdownMenuItem<int>(
+                              value: m['id'] as int,
+                              child: Text(m['label'],
+                                  style: const TextStyle(fontSize: 11),
+                                  overflow: TextOverflow.ellipsis),
+                            ))
+                          ],
+                          onChanged: (val) {
+                            setState(() => _selectedMandatId = val);
+                            _fetchAnnonces(resetPage: true);
+                          },
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // ── Barre de recherche ──
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F4F0),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: _onSearchChanged,
+                  style: const TextStyle(fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: "Rechercher une annonce...",
+                    hintStyle:
+                    TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                    prefixIcon: Icon(Icons.search_rounded,
+                        color: Colors.grey.shade400, size: 20),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                      icon: Icon(Icons.close_rounded,
+                          color: Colors.grey.shade400, size: 18),
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        setState(() => _searchQuery = '');
+                        _fetchAnnonces(resetPage: true);
+                      },
+                    )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 13),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // ── Filtres par type ──
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(children: [
+                  _filterChip(
+                    label: "Toutes",
+                    value: 'tous',
+                    color: const Color(0xFF2D2D2D),
+                  ),
+                  const SizedBox(width: 8),
+                  _filterChip(
+                    label: "Urgentes",
+                    value: 'urgente',
+                    color: _orange,
+                    icon: Icons.warning_amber_rounded,
+                  ),
+                  const SizedBox(width: 8),
+                  _filterChip(
+                    label: "Normales",
+                    value: 'normale',
+                    color: const Color(0xFF2D2D2D),
+                    icon: Icons.info_outline_rounded,
+                  ),
+                  const SizedBox(width: 8),
+                  _filterChip(
+                    label: "Informations",
+                    value: 'information',
+                    color: const Color(0xFF4A90D9),
+                    icon: Icons.campaign_outlined,
+                  ),
+                ]),
+              ),
+            ],
+          ),
+        ),
+
+        // ── Liste d'annonces ──
+        Expanded(
+          child: _isLoading
+              ? const Center(
+            child: CircularProgressIndicator(
+              color: _orange,
+              strokeWidth: 2.5,
+            ),
+          )
+              : _annonces.isEmpty
+              ? Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const CircularProgressIndicator(
-                  color: _orange,
-                  strokeWidth: 2.5,
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _searchQuery.isNotEmpty
+                        ? Icons.search_off_rounded
+                        : Icons.campaign_outlined,
+                    size: 32,
+                    color: Colors.grey.shade300,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  "Chargement des annonces...",
+                  _searchQuery.isNotEmpty
+                      ? "Aucun résultat pour \"$_searchQuery\""
+                      : "Aucune annonce trouvée.",
                   style: TextStyle(
                     color: Colors.grey.shade400,
-                    fontSize: 13,
-                    letterSpacing: 0.3,
+                    fontSize: 14,
                   ),
                 ),
               ],
             ),
-          );
-
-        final List allAnnonces = snapshot.data!['annonces'];
-
-        // Filtrage
-        final filtered = allAnnonces.where((a) {
-          final matchType = _filterType == 'tous' || a['type'] == _filterType;
-          final matchSearch = _searchQuery.isEmpty ||
-              (a['titre'] ?? '').toString().toLowerCase().contains(_searchQuery.toLowerCase()) ||
-              (a['contenu'] ?? '').toString().toLowerCase().contains(_searchQuery.toLowerCase());
-          return matchType && matchSearch;
-        }).toList();
-
-        final urgentCount = allAnnonces.where((a) => a['type'] == 'urgente').length;
-        final normaleCount = allAnnonces.where((a) => a['type'] == 'normale').length;
-        final infoCount = allAnnonces.where((a) => a['type'] == 'information').length; // ← AJOUTER
-
-
-        return Column(
-          children: [
-            // ── Header + Search + Filtres ──
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Titre + badge total
-                  Row(children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                            colors: [_orange, Color(0xFFFF9A6C)]),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.campaign_rounded,
-                          color: Colors.white, size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Text("Annonces",
-                          style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF1A1A1A),
-                              letterSpacing: -0.3)),
-                      Text("${allAnnonces.length} annonce${allAnnonces.length > 1 ? 's' : ''}",
-                          style: TextStyle(
-                              color: Colors.grey.shade500, fontSize: 12)),
-                    ]),
-                  ]),
-                  const SizedBox(height: 14),
-                  // Barre de recherche
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF5F4F0),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: TextField(
-                      controller: _searchCtrl,
-                      onChanged: (v) => setState(() => _searchQuery = v),
-                      style: const TextStyle(fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: "Rechercher une annonce...",
-                        hintStyle: TextStyle(
-                            color: Colors.grey.shade400, fontSize: 14),
-                        prefixIcon: Icon(Icons.search_rounded,
-                            color: Colors.grey.shade400, size: 20),
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                          icon: Icon(Icons.close_rounded,
-                              color: Colors.grey.shade400, size: 18),
-                          onPressed: () {
-                            _searchCtrl.clear();
-                            setState(() => _searchQuery = '');
-                          },
-                        )
-                            : null,
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 13),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Filtres par type
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(children: [
-                      _filterChip(
-                        label: "Toutes",
-                        count: allAnnonces.length,
-                        value: 'tous',
-                        color: const Color(0xFF2D2D2D),
-                      ),
-                      const SizedBox(width: 8),
-                      _filterChip(
-                        label: "Urgentes",
-                        count: urgentCount,
-                        value: 'urgente',
-                        color: _orange,
-                        icon: Icons.warning_amber_rounded,
-                      ),
-                      const SizedBox(width: 8),
-                      _filterChip(
-                        label: "Normales",
-                        count: normaleCount,
-                        value: 'normale',
-                        color: const Color(0xFF2D2D2D),
-                        icon: Icons.info_outline_rounded,
-                      ),
-                      const SizedBox(width: 8), // ← AJOUTER
-                      _filterChip(              // ← AJOUTER
-                        label: "Informations",
-                        count: infoCount,
-                        value: 'information',
-                        color: const Color(0xFF4A90D9), // bleu
-                        icon: Icons.campaign_outlined,
-                      ),
-                    ]),
-                  ),
-                ],
-              ),
-            ),
-            // ── Liste ──
-            Expanded(
-              child: filtered.isEmpty
-                  ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        _searchQuery.isNotEmpty
-                            ? Icons.search_off_rounded
-                            : Icons.campaign_outlined,
-                        size: 32,
-                        color: Colors.grey.shade300,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      _searchQuery.isNotEmpty
-                          ? "Aucun résultat pour \"$_searchQuery\""
-                          : "Aucune annonce pour le moment",
-                      style: TextStyle(
-                        color: Colors.grey.shade400,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
+          )
+              : Column(
+            children: [
+              Expanded(
+                child: ListView.builder(
+                  padding:
+                  const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  itemCount: _annonces.length,
+                  itemBuilder: (context, index) {
+                    final a = _annonces[index];
+                    bool isUrgent = a['type'] == 'urgente';
+                    return _AnnonceCard(
+                        annonce: a, isUrgent: isUrgent);
+                  },
                 ),
-              )
-                  : ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                itemCount: filtered.length,
-                itemBuilder: (context, index) {
-                  final a = filtered[index];
-                  bool isUrgent = a['type'] == 'urgente';
-                  return _AnnonceCard(annonce: a, isUrgent: isUrgent);
-                },
               ),
-            ),
-          ],
-        );
-      },
+
+              // ── Pagination ──
+              if (_page > 0 || _hasMore)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.01),
+                        blurRadius: 10,
+                        offset: const Offset(0, -5),
+                      )
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment:
+                    MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton.icon(
+                        onPressed:
+                        _page > 0 ? _prevPage : null,
+                        icon: const Icon(
+                            Icons.arrow_back_ios_rounded,
+                            size: 16),
+                        label: const Text("Précédent"),
+                        style: TextButton.styleFrom(
+                          foregroundColor: _orange,
+                          disabledForegroundColor:
+                          Colors.grey.shade400,
+                        ),
+                      ),
+                      Text(
+                        "Page ${_page + 1}",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1A1A1A),
+                          fontSize: 13,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _hasMore ? _nextPage : null,
+                        label: const Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 16),
+                        icon: const Text("Suivant"),
+                        style: TextButton.styleFrom(
+                          foregroundColor: _orange,
+                          disabledForegroundColor:
+                          Colors.grey.shade400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
 
     if (inLayout) return body;
@@ -255,14 +408,16 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
 
   Widget _filterChip({
     required String label,
-    required int count,
     required String value,
     required Color color,
     IconData? icon,
   }) {
     final selected = _filterType == value;
     return GestureDetector(
-      onTap: () => setState(() => _filterType = value),
+      onTap: () {
+        setState(() => _filterType = value);
+        _fetchAnnonces(resetPage: true);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -286,24 +441,6 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               )),
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: selected
-                  ? Colors.white.withOpacity(0.25)
-                  : Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              count.toString(),
-              style: TextStyle(
-                color: selected ? Colors.white : Colors.grey.shade600,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
         ]),
       ),
     );
@@ -318,7 +455,14 @@ class _AnnonceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateStr = annonce['created_at'].toString().split('T')[0];
+    final createdAt = annonce['created_at'].toString();
+    String dateStr = createdAt.split('T')[0];
+    if (createdAt.length >= 10) {
+      final parts = dateStr.split('-');
+      if (parts.length == 3) {
+        dateStr = "${parts[2]}/${parts[1]}/${parts[0]}";
+      }
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -366,7 +510,7 @@ class _AnnonceCard extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              annonce['titre'],
+                              annonce['titre'] ?? 'Sans Titre',
                               style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
@@ -400,7 +544,7 @@ class _AnnonceCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        annonce['contenu'],
+                        annonce['contenu'] ?? '',
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: 13,
@@ -409,7 +553,6 @@ class _AnnonceCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      // Footer sans flèche
                       Row(
                         children: [
                           Icon(
