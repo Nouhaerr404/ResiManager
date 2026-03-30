@@ -25,7 +25,7 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
   Map<String, dynamic>? _history;
   bool _loadingOverview = true;
   bool _loadingHistory = true;
-  
+
   // FILTRES AVANCÉS
   int? _filterYear;
   int? _filterMonth;
@@ -121,6 +121,15 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
         backgroundColor: _orange,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white),
+          onPressed: () => Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ResidentDashboardScreen(userId: widget.userId),
+            ),
+          ),
+        ),
       ),
       drawer: ResidentMobileDrawer(currentIndex: 2, userId: widget.userId),
       body: body,
@@ -694,8 +703,8 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
               value: _filterMonth,
               items: {
                 null: 'Tous',
-                1: 'Janv', 2: 'Févr', 3: 'Mars', 4: 'Avril', 
-                5: 'Mai', 6: 'Juin', 7: 'Juil', 8: 'Août', 
+                1: 'Janv', 2: 'Févr', 3: 'Mars', 4: 'Avril',
+                5: 'Mai', 6: 'Juin', 7: 'Juil', 8: 'Août',
                 9: 'Sept', 10: 'Oct', 11: 'Nov', 12: 'Déc',
               },
               onChanged: (v) => setState(() => _filterMonth = v),
@@ -708,16 +717,16 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
         child: Row(children: [
-          Text('${filtered.length} résultat(s)', 
+          Text('${filtered.length} résultat(s)',
               style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w600)),
           const Spacer(),
           if (_filterYear != null || _filterMonth != null || _filterStatus != 'tous' || _filterType != 'tous')
             GestureDetector(
               onTap: () => setState(() {
-                _filterYear = null; _filterMonth = null; 
+                _filterYear = null; _filterMonth = null;
                 _filterStatus = 'tous'; _filterType = 'tous';
               }),
-              child: const Text('Réinitialiser', 
+              child: const Text('Réinitialiser',
                   style: TextStyle(color: _orange, fontSize: 12, fontWeight: FontWeight.bold)),
             ),
         ]),
@@ -894,7 +903,7 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
           // ── INFOS ──
           Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(targetLabel.isNotEmpty ? targetLabel : dateLabel, 
+            Text(targetLabel.isNotEmpty ? targetLabel : dateLabel,
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             if (targetLabel.isNotEmpty)
               Text("Payé le $dateLabel", style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
