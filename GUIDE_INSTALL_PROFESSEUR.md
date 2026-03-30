@@ -15,8 +15,8 @@ Ce guide vous accompagne pour installer l'application sur Android ou iOS.
 
 *Si vous souhaitez tester l'application sans configurer un environnement de développement.*
 
-1. Rendez-vous sur le dépôt GitHub : [ResiManager](https://github.com/Nouhaerr404/ResiManager)
-2. Téléchargez le fichier `.apk` situé à la racine du projet.
+1. Rendez-vous sur le dépôt GitHub : [ResiManager](https://github.com/Nouhaerr404/ResiManager) 
+2. Téléchargez le fichier `app-release.apk` situé à la racine du projet.
 3. Transférez et installez le fichier sur votre appareil Android.
 
 ---
