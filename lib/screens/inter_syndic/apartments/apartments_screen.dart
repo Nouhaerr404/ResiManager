@@ -6,7 +6,9 @@ import '../../../services/resident_service.dart';
 import '../../../widgets/apartment_card.dart';
 import '../../../widgets/apartment_filters.dart';
 import '../../../services/tranche_service.dart';
-
+import '../../../services/apartment_pdf_service.dart';
+import '../../../widgets/inter_syndic_header.dart';
+import '../../../theme/inter_syndic_palette.dart';
 class ApartmentsListScreen extends StatefulWidget {
   final int? trancheId;
   final int? residenceId;
@@ -298,11 +300,37 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     }
   }
 
-  // -------------------------
-  // Dialogs UI
-  // -------------------------
+  Future<void> _exportPdf() async {
+    if (filteredApartments.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La liste est vide')),
+      );
+      return;
+    }
+
+    try {
+      final pdfBytes = await ApartmentPdfService.generate(
+        apartments: filteredApartments,
+        residenceNom: widget.residenceName ?? widget.residenceId?.toString() ?? 'ResiManager',
+        trancheNom: widget.trancheName ?? widget.trancheId?.toString() ?? '-',
+      );
+
+      await ApartmentPdfService.share(
+        pdfBytes,
+        'Rapport_Appartements_${widget.trancheName ?? "General"}',
+      );
+    } catch (e) {
+      debugPrint('Erreur PDF: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erreur lors de la génération du PDF')),
+        );
+      }
+    }
+  }
 
   void _showAddApartmentDialog() {
+
     final _formKey = GlobalKey<FormState>();
     final residenceController = TextEditingController(text: widget.residenceName ?? widget.residenceId?.toString() ?? '1');
     final trancheController = TextEditingController(text: widget.trancheName ?? widget.trancheId?.toString() ?? '');
@@ -827,231 +855,179 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
     final vacantCount = filteredApartments.where((a) => a.statut == StatutAppartEnum.libre).length;
 
     return Scaffold(
-      body: Stack(
-        children: [
-          // 1. IMAGE DE FOND
-          Container(
-            decoration: const BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/images/residence_bg.png'),
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-
-          // 2. VOILE SOMBRE
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withOpacity(0.3),
-                  Colors.black.withOpacity(0.8),
-                ],
-              ),
-            ),
-          ),
-
-          // 3. CONTENU
-          SafeArea(
-            child: Column(
-              children: [
-                // En-tête personnalisé (Style Syndic Général)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                  child: Row(
-                    children: [
-                      // Bouton RETOUR
-                      GestureDetector(
-                        onTap: widget.onBack ?? () => Navigator.pop(context),
-                        child: Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.white24, width: 1.5),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.15),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(Icons.chevron_left_rounded,
-                              color: Colors.black87, size: 24),
-                        ),
-                      ),
-
-                      const SizedBox(width: 10),
-
-                      // Bouton GRILLE coral
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF6F4A),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.apartment_rounded,
-                            color: Colors.white, size: 20),
-                      ),
-
-                      const SizedBox(width: 16),
-
-                      // Titre
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Gestion des',
-                              style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w400),
-                            ),
-                            Text(
-                              'Appartements',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.5,
-                                height: 1.1,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Bouton AJOUTER (coral, reste inchangé)
-                      GestureDetector(
-                        onTap: _showAddApartmentDialog,
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFF6F4A),
-                            borderRadius: BorderRadius.circular(15),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFFF6F4A).withOpacity(0.4),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(Icons.add, color: Colors.white, size: 26),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Barre de recherche stylisée
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  child: TextField(
-                    controller: searchController,
-                    onChanged: _search,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Rechercher un appartement...',
-                      hintStyle: const TextStyle(color: Colors.white70),
-                      prefixIcon: const Icon(Icons.search, color: Colors.white70),
-                      suffixIcon: searchController.text.isNotEmpty
-                          ? IconButton(
-                        icon: const Icon(Icons.clear, color: Colors.white70),
-                        onPressed: () {
-                          searchController.clear();
-                          _search('');
-                        },
-                      )
-                          : null,
-                      filled: true,
-                      fillColor: Colors.white.withOpacity(0.15),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        borderSide: BorderSide.none,
-                      ),
+      backgroundColor: InterSyndicPalette.bg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // E-tête unifiée
+            InterSyndicHeader(
+              title: 'ResiManager',
+              subtitle: 'inter_syndic',
+              gridIcon: Icons.business_rounded,
+              onBack: widget.onBack ?? () => Navigator.pop(context),
+              onAdd: _showAddApartmentDialog,
+              addLabel: 'Ajouter',
+              extraActions: [
+                GestureDetector(
+                  onTap: _exportPdf,
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: InterSyndicPalette.coralLight,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: InterSyndicPalette.coral.withOpacity(0.3)),
                     ),
-                  ),
-                ),
-
-                // Statistiques stylisées
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildStatCard('Total', filteredApartments.length.toString(), Icons.home, Colors.white),
-                      _buildStatCard('Occupés', occupiedCount.toString(), Icons.check_circle, const Color(0xFFFF6F4A)),
-                      _buildStatCard('Vacants', vacantCount.toString(), Icons.error_outline, Colors.white70),
-                    ],
-                  ),
-                ),
-
-                if (showFilters)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: ApartmentFilters(
-                      onFilterChanged: (tranche, immeuble, status) {
-                        _applyFilters(tranche: tranche, immeuble: immeuble, status: status);
-                      },
-                    ),
-                  ),
-
-                // Liste des appartements
-                Expanded(
-                  child: loading
-                      ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                      : filteredApartments.isEmpty
-                      ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.search_off, size: 64, color: Colors.white.withOpacity(0.4)),
-                        const SizedBox(height: 16),
-                        const Text('Aucun appartement trouvé', style: TextStyle(fontSize: 16, color: Colors.white70)),
-                      ],
-                    ),
-                  )
-                      : RefreshIndicator(
-                    onRefresh: _loadApartments,
-                    child: ListView.builder(
-                      itemCount: filteredApartments.length,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                      itemBuilder: (context, index) {
-                        final apartment = filteredApartments[index];
-                        return ApartmentCard(
-                          apartment: apartment,
-                          onTap: () => _showApartmentDetails(apartment),
-                          onEdit: () => _showEditApartmentDialog(apartment),
-                          onAssign: () => _showAssignResidentDialog(apartment),
-                          onDelete: () => _showDeleteConfirmation(apartment),
-                        );
-                      },
-                    ),
+                    child: const Icon(Icons.picture_as_pdf_rounded,
+                        color: InterSyndicPalette.coral, size: 20),
                   ),
                 ),
               ],
             ),
-          ),
-        ],
+
+            // Barre de recherche
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: InterSyndicPalette.bgCard,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: InterSyndicPalette.divider),
+                ),
+                child: TextField(
+                  controller: searchController,
+                  onChanged: _search,
+                  style: const TextStyle(fontSize: 14, color: InterSyndicPalette.dark),
+                  decoration: InputDecoration(
+                    hintText: 'Rechercher un appartement...',
+                    hintStyle: const TextStyle(color: InterSyndicPalette.textLight, fontSize: 13),
+                    prefixIcon: const Icon(Icons.search_rounded, color: InterSyndicPalette.textLight, size: 20),
+                    suffixIcon: searchController.text.isNotEmpty
+                        ? GestureDetector(
+                            onTap: () {
+                              searchController.clear();
+                              _search('');
+                            },
+                            child: const Icon(Icons.close_rounded, color: InterSyndicPalette.textLight, size: 18),
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                ),
+              ),
+            ),
+
+            // Statistiques
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+              child: Row(
+                children: [
+                   Expanded(child: _buildStatCard('Total', filteredApartments.length.toString(), Icons.home_rounded, InterSyndicPalette.textMid, InterSyndicPalette.surface)),
+                   const SizedBox(width: 8),
+                   Expanded(child: _buildStatCard('Occupés', occupiedCount.toString(), Icons.check_circle_rounded, InterSyndicPalette.coral, InterSyndicPalette.coralLight)),
+                   const SizedBox(width: 8),
+                   Expanded(child: _buildStatCard('Vacants', vacantCount.toString(), Icons.error_outline_rounded, InterSyndicPalette.textMid, InterSyndicPalette.surface)),
+                ],
+              ),
+            ),
+
+            if (showFilters)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: ApartmentFilters(
+                    onFilterChanged: (tranche, immeuble, status) {
+                      _applyFilters(tranche: tranche, immeuble: immeuble, status: status);
+                    },
+                  ),
+                ),
+              ),
+
+            // Filtres toggle button
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => setState(() => showFilters = !showFilters),
+                  icon: Icon(showFilters ? Icons.filter_list_off : Icons.filter_list, color: InterSyndicPalette.textMid, size: 18),
+                  label: Text(showFilters ? 'Masquer filtres' : 'Afficher filtres', style: const TextStyle(color: InterSyndicPalette.textMid, fontSize: 12)),
+                ),
+              ),
+            ),
+
+            // Liste des appartements
+            Expanded(
+              child: loading
+                  ? const Center(child: CircularProgressIndicator(color: InterSyndicPalette.coral))
+                  : filteredApartments.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.search_off_rounded, size: 64, color: InterSyndicPalette.divider),
+                              const SizedBox(height: 16),
+                              const Text('Aucun appartement trouvé', style: TextStyle(fontSize: 16, color: InterSyndicPalette.textMid)),
+                            ],
+                          ),
+                        )
+                      : RefreshIndicator(
+                          color: InterSyndicPalette.coral,
+                          onRefresh: _loadApartments,
+                          child: ListView.builder(
+                            itemCount: filteredApartments.length,
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            itemBuilder: (context, index) {
+                              final apartment = filteredApartments[index];
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: ApartmentCard(
+                                  apartment: apartment,
+                                  onTap: () => _showApartmentDetails(apartment),
+                                  onEdit: () => _showEditApartmentDialog(apartment),
+                                  onAssign: () => _showAssignResidentDialog(apartment),
+                                  onDelete: () => _showDeleteConfirmation(apartment),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 26),
-        const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.white70)),
-      ],
+  Widget _buildStatCard(String label, String value, IconData icon, Color textColor, Color bgColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      decoration: BoxDecoration(
+        color: InterSyndicPalette.bgCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: InterSyndicPalette.divider),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: textColor, size: 18),
+          ),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: InterSyndicPalette.dark)),
+          ),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: InterSyndicPalette.textLight)),
+          ),
+        ],
+      ),
     );
   }
 

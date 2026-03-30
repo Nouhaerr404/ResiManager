@@ -124,6 +124,8 @@ class FinanceService {
           .eq('appartement_id', appartId)
           .eq('annee', date.year)
           .eq('mois', date.month)
+          .eq('inter_syndic_id', interSyndicId)
+          .eq('type_paiement', 'charges')
           .maybeSingle();
 
       if (existingPaiement != null) {
@@ -152,8 +154,22 @@ class FinanceService {
     }
   }
 
-  // 7. Pour le dashboard Inter-Syndic (MIS À JOUR AVEC FILTRE PAR TRANCHE)
-  Future<Map<String, dynamic>> getInterSyndicFinances(int interSyndicId, int residenceId, {int? annee, int? trancheId}) async {
+  // 6.5. Récupérer les mandats historiques pour l'inter-syndic
+  Future<List<Map<String, dynamic>>> getInterSyndicMandates(int interSyndicId, int residenceId) async {
+    try {
+      final response = await _db.from('historique_affectations')
+          .select('id, tranche_id, date_debut, date_fin, tranches(nom)')
+          .eq('inter_syndic_id', interSyndicId)
+          .order('date_debut', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print("Erreur getInterSyndicMandates: $e");
+      return [];
+    }
+  }
+
+  // 7. Pour le dashboard Inter-Syndic (MIS À JOUR AVEC FILTRE PAR TRANCHE ET PERIODE)
+  Future<Map<String, dynamic>> getInterSyndicFinances(int interSyndicId, int residenceId, {int? annee, String? startDate, String? endDate, int? trancheId}) async {
     // 1. Récupérer les tranches gérées par cet inter-syndic (ou la tranche spécifique)
     var queryTranches = _db.from('tranches')
         .select('id, nom')
@@ -175,9 +191,12 @@ class FinanceService {
     }
 
     var depQuery = _db.from('depenses')
-        .select('montant, tranche_id, syndic_general_id, inter_syndic_id')
+        .select('montant, tranche_id, syndic_general_id, inter_syndic_id, date')
         .eq('residence_id', residenceId);
-    if (annee != null) depQuery = depQuery.eq('annee', annee);
+    
+    if (startDate != null) depQuery = depQuery.gte('date', startDate);
+    if (endDate != null) depQuery = depQuery.lte('date', endDate);
+    if (annee != null && startDate == null) depQuery = depQuery.eq('annee', annee);
 
     final allDepenses = await depQuery;
 
@@ -238,7 +257,9 @@ class FinanceService {
        if (appsIds.isNotEmpty) payQuery = payQuery.inFilter('appartement_id', appsIds);
        else payQuery = payQuery.eq('id', -1);
     }
-    if (annee != null) payQuery = payQuery.eq('annee', annee);
+    if (startDate != null) payQuery = payQuery.gte('created_at', startDate);
+    if (endDate != null) payQuery = payQuery.lte('created_at', endDate);
+    if (annee != null && startDate == null) payQuery = payQuery.eq('annee', annee);
     final paiementsRes = await payQuery;
 
     double totalRevenus = 0;
@@ -261,7 +282,14 @@ class FinanceService {
 
     final List<Map<String, dynamic>> recentExpenses = [];
     for (var d in depensesRes as List) {
-      if (annee != null && d['annee'] != annee) continue;
+      // Filtrage manuel pour les dépenses globales/partagées si on a une période
+      if (startDate != null || endDate != null) {
+        DateTime dDate = DateTime.parse(d['date']);
+        if (startDate != null && dDate.isBefore(DateTime.parse(startDate))) continue;
+        if (endDate != null && dDate.isAfter(DateTime.parse(endDate))) continue;
+      } else if (annee != null && d['annee'] != annee) {
+        continue;
+      }
 
       double rawAmount = double.parse(d['montant'].toString());
       bool isGlobal = d['inter_syndic_id'] == null;
@@ -370,6 +398,8 @@ class FinanceService {
           .eq('appartement_id', appartId)
           .eq('annee', date.year)
           .eq('mois', date.month)
+          .eq('inter_syndic_id', isId)
+          .eq('type_paiement', 'charges')
           .maybeSingle();
 
       if (pRes != null) {
@@ -425,6 +455,8 @@ class FinanceService {
                     .eq('appartement_id', appartId)
                     .eq('annee', annee)
                     .eq('mois', mois)
+                    .eq('inter_syndic_id', isId)
+                    .eq('type_paiement', 'charges')
                     .maybeSingle();
 
                 if (pRes != null) {

@@ -1,44 +1,36 @@
 import 'package:flutter/material.dart';
 import '../../widgets/main_layout.dart';
 import '../../services/accounting_service.dart';
+import '../../models/affectation_history_model.dart';
 import '../../widgets/nav_buttons.dart';
 
 class ResidenceAuditScreen extends StatefulWidget {
   final int residenceId;
   final int syndicId;
-  const ResidenceAuditScreen({super.key, required this.residenceId, required this.syndicId});
+  const ResidenceAuditScreen({Key? key, required this.residenceId, required this.syndicId}) : super(key: key);
 
   @override
-  State<ResidenceAuditScreen> createState() => _ResidenceAuditScreenState();
+  _ResidenceAuditScreenState createState() => _ResidenceAuditScreenState();
 }
 
 class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
   final AccountingService _service = AccountingService();
-  int _selectedAnnee = DateTime.now().year;
+  final TextEditingController _searchController = TextEditingController();
+
+  int? _selectedTrancheId;
+  String trancheName = "";
+  AffectationHistoryModel? _selectedMandate;
+  List<AffectationHistoryModel> _availableMandates = [];
+  bool _loadingMandates = false;
   String _searchQuery = "";
 
   final Color primaryOrange = const Color(0xFFFF6F4A);
   final Color darkGrey = const Color(0xFF2C2C2C);
 
-  // Helper pour calculer les totaux de paiement sans doublons (cohérent avec le tableau)
-  Map<String, double> _getPaymentStats(List payments) {
-    double paye = 0;
-    double du = 0;
-    Map<int, List<Map<String, dynamic>>> grouped = {};
-    for (var p in payments) {
-      int appId = p['appartements']?['id'] ?? 0;
-      grouped.putIfAbsent(appId, () => []).add(p);
-    }
-    for (var entry in grouped.values) {
-      for (var type in ['charges', 'parking', 'garage', 'box']) {
-        final match = entry.where((p) => p['type_paiement'] == type).toList();
-        if (match.isNotEmpty) {
-          paye += (match.first['montant_paye'] as num).toDouble();
-          du += (match.first['montant_total'] as num).toDouble();
-        }
-      }
-    }
-    return {'paye': paye, 'du': du};
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -47,87 +39,41 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
     bool isWeb = width > 900;
 
     return MainLayout(
+      title: 'Audit & Bilans',
       activePage: 'Audit',
-      residenceId: widget.residenceId,
-      syndicId: widget.syndicId,
-      title: "Audit et Bilans",
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: _service.getFullResidenceAudit(widget.residenceId, _selectedAnnee),
+      residenceId: widget.residenceId, syndicId: widget.syndicId,
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _service.getTranchesList(widget.residenceId),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+
+          final List<Map<String, dynamic>> tranches = snapshot.data!;
+
+          String currentTrancheName = "Tranche";
+          if (_selectedTrancheId != null) {
+            try {
+              final found = tranches.firstWhere((t) => (t['id'] as num).toInt() == _selectedTrancheId);
+              currentTrancheName = found['nom'] ?? "Tranche";
+            } catch (e) {
+              currentTrancheName = "Tranche";
+            }
           }
-
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.red, size: 60),
-                  const SizedBox(height: 16),
-                  Text("Une erreur est survenue :", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(snapshot.error.toString(), textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[700])),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => setState(() {}),
-                    child: const Text("Réessayer"),
-                  )
-                ],
-              ),
-            );
-          }
-
-          if (!snapshot.hasData || snapshot.data == null) {
-            return const Center(child: Text("Aucune donnée disponible"));
-          }
-
-          final data = snapshot.data!;
-          final List allExpenses = data['expenses'] ?? [];
-          final List allPayments = data['payments'] ?? [];
-          final List tranches = data['tranches'] ?? [];
-
-          final query = _searchQuery.toLowerCase();
-          final globalExpenses = allExpenses.where((e) => e['tranches'] == null && (e['categories']?['nom'] ?? "").toString().toLowerCase().contains(query)).toList();
-
-          // CALCULS GLOBAUX
-          final stats = _getPaymentStats(allPayments);
-          double grandTotalExp = allExpenses.fold(0, (sum, e) => sum + (e['montant'] as num).toDouble());
-          double grandTotalPay = stats['paye']!;
-          double grandTotalDu = stats['du']!;
-          double soldeGlobal = grandTotalPay - grandTotalExp;
 
           return ListView(
-            padding: EdgeInsets.all(isWeb ? 40 : 15),
+            padding: EdgeInsets.symmetric(horizontal: isWeb ? 40 : 15, vertical: 20),
             children: [
-              _buildHeader(),
+              if (isWeb) ...[
+                Text("Audit & Bilans", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF2C2C2C))),
+                const SizedBox(height: 15),
+              ],
+              _buildIntroDescription(),
               const SizedBox(height: 20),
-              _buildSearchBar(),
-              const SizedBox(height: 30),
 
-              // 1. FRAIS GÉNÉRAUX RÉSIDENCE (CONTOUR BLEU)
-              _buildGlobalAuditCard(globalExpenses),
-              const SizedBox(height: 30),
+              _buildSelectors(tranches),
+              const SizedBox(height: 60),
 
-              const Padding(
-                padding: EdgeInsets.only(left: 5, bottom: 15),
-                child: Text("BILAN PAR TRANCHE", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey, letterSpacing: 1.1)),
-              ),
-
-              // 2. LISTE DES TRANCHES (CONTOUR NOIR)
-              ...tranches.where((t) => (t['nom'] ?? "").toString().toLowerCase().contains(query)).map((t) {
-                final tExp = allExpenses.where((e) => e['tranche_id'] == t['id']).toList();
-                final tPay = allPayments.where((p) => p['appartements']?['immeubles']?['tranches']?['nom'] == t['nom']).toList();
-                return _buildTrancheAuditCard(t['nom'] ?? "Sans nom", t['statut'], tExp, tPay);
-              }),
-
-              // 3. BILAN FINAL NOIR
-              const SizedBox(height: 20),
-              _buildGlobalSoldeCard(grandTotalExp, grandTotalPay, grandTotalDu, soldeGlobal),
-              const SizedBox(height: 40),
+              if (_selectedMandate != null)
+                _buildMandateResultView(width, currentTrancheName, isWeb)
             ],
           );
         },
@@ -135,135 +81,193 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
     );
   }
 
-  // --- COMPOSANT : CARTE DE TRANCHE ---
-  Widget _buildTrancheAuditCard(String name, String? status, List expenses, List payments) {
-    double totalExp = expenses.fold(0, (sum, e) => sum + (e['montant'] as num).toDouble());
-    final stats = _getPaymentStats(payments);
-    double totalPay = stats['paye']!;
-    double totalDu = stats['du']!;
-    double solde = totalPay - totalExp;
-
+  Widget _buildSelectors(List tranches) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 25),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: darkGrey.withValues(alpha: 0.2), width: 1.2), // Contour noir fin
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          iconColor: primaryOrange,
-          title: Row(children: [
-            Text(name.toUpperCase(), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: darkGrey)),
-            if (status != null) ...[
-              const SizedBox(width: 8),
-              _buildStatusBadge(status),
-            ],
-            const SizedBox(width: 8),
-            const Icon(Icons.keyboard_arrow_down, size: 18, color: Colors.grey),
-          ]),
-          subtitle: Text("Solde : ${solde.toInt()} DH (${totalPay.toInt()}/${totalDu.toInt()} payé)", style: TextStyle(color: solde >= 0 ? Colors.green : Colors.red, fontSize: 12, fontWeight: FontWeight.bold)),
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(children: [
-                _buildSubTile("Dépenses", "${totalExp.toInt()} DH", Colors.redAccent, _buildExpenseTable(expenses)),
-                const SizedBox(height: 8),
-                _buildSubTile("Paiements Reçus", "${totalPay.toInt()} / ${totalDu.toInt()} DH", Colors.green, _buildImmeubleGrouping(payments)),
-                const Divider(height: 25),
-                _buildSmallSummary(totalExp, totalPay, totalDu, solde),
-              ]),
-            )
-          ],
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: darkGrey.withOpacity(0.1))),
+      child: Column(children: [
+        DropdownButtonFormField<int>(
+          value: _selectedTrancheId,
+          hint: const Text("1. Sélectionner une Tranche"),
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+          items: tranches.map((t) => DropdownMenuItem<int>(value: t['id'], child: Text(t['nom']))).toList(),
+          onChanged: (val) async {
+            setState(() { _selectedTrancheId = val; _selectedMandate = null; _loadingMandates = true; });
+            final m = await _service.getMandates(val!);
+            setState(() { _availableMandates = m; _loadingMandates = false; });
+          },
         ),
-      ),
+        if (_selectedTrancheId != null) ...[
+          const SizedBox(height: 15),
+          _loadingMandates ? const LinearProgressIndicator() : DropdownButtonFormField<AffectationHistoryModel>(
+            value: _selectedMandate,
+            isExpanded: true,
+            hint: const Text("2. Sélectionner le Mandat"),
+            decoration: const InputDecoration(border: OutlineInputBorder()),
+            items: _availableMandates.map((m) => DropdownMenuItem(value: m, child: Text("${m.interSyndicNomComplet} (${m.label})", style: const TextStyle(fontSize: 11)))).toList(),
+            onChanged: (val) => setState(() => _selectedMandate = val),
+          ),
+        ]
+      ]),
     );
   }
 
-  Widget _buildStatusBadge(String status) {
-    Color color = Colors.grey;
-    String label = status.toLowerCase();
-    if (label == 'actif' || label == 'ouverte') color = Colors.green;
-    if (label == 'terminé' || label == 'cloturée') color = Colors.blue;
-    if (label == 'archivé') color = Colors.orange;
+  Widget _buildMandateResultView(double screenWidth, String trancheName, bool isWeb) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _service.getMandateAuditDetails(_selectedMandate!.id, _selectedTrancheId!),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: color),
-      ),
+        final List<Map<String, dynamic>> expenses = List<Map<String, dynamic>>.from(snapshot.data!['expenses']);
+        final List<Map<String, dynamic>> payments = List<Map<String, dynamic>>.from(snapshot.data!['payments']);
+        final List<Map<String, dynamic>> apartments = List<Map<String, dynamic>>.from(snapshot.data!['apartments']);
+
+        final query = _searchQuery.toLowerCase();
+        
+        final filteredApartments = _searchQuery.isEmpty 
+          ? apartments 
+          : apartments.where((a) {
+              // ✅ FIX : On utilise "Extérieur" par défaut pour que la recherche sur "E" fonctionne
+              final immName = (a['immeubles']?['nom'] ?? "Extérieur").toString().toLowerCase();
+              final appNum = (a['numero'] ?? "").toString().toLowerCase();
+              return immName.contains(query) || appNum.contains(query);
+            }).toList();
+
+        double totalExp = expenses.fold(0, (sum, e) => sum + (e['montant'] as num).toDouble());
+        double totalPay = payments.fold(0, (sum, p) => sum + (p['montant_paye'] as num).toDouble());
+        double totalDue = payments.fold(0, (sum, p) => sum + (p['montant_total'] as num).toDouble());
+
+        return Container(
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: darkGrey.withOpacity(0.15))),
+          child: Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              initiallyExpanded: true,
+              title: Row(
+                children: [
+                  Text(
+                      trancheName.toUpperCase(),
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: isWeb ? 16 : 13, color: darkGrey)
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(20)),
+                    child: Text(
+                      "${totalPay.toInt()} / ${totalDue.toInt()} DH REÇUS",
+                      style: TextStyle(fontSize: isWeb ? 12 : 10, fontWeight: FontWeight.bold, color: Colors.green.shade700),
+                    ),
+                  ),
+                ],
+              ),
+              subtitle: Text(
+                "Responsable : ${_selectedMandate!.interSyndicNomComplet}",
+                style: TextStyle(fontSize: isWeb ? 13 : 11, color: Colors.grey),
+              ),
+              children: [
+                Padding(padding: const EdgeInsets.all(12), child: Column(children: [
+                  _buildSubTile("Dépenses", "${totalExp.toInt()} DH", Colors.redAccent, _buildExpenseTable(expenses, isWeb), isWeb),
+                  const SizedBox(height: 25),
+                  
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 15),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (val) => setState(() => _searchQuery = val),
+                      decoration: InputDecoration(
+                        hintText: "Rechercher un immeuble ou un appartement...",
+                        prefixIcon: Icon(Icons.search, color: primaryOrange),
+                        suffixIcon: _searchQuery.isNotEmpty 
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = "");
+                              },
+                            )
+                          : null,
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 15),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: primaryOrange)),
+                      ),
+                    ),
+                  ),
+
+                  Align(alignment: Alignment.centerLeft, child: Text("PAIEMENTS REÇUS PAR IMMEUBLE", style: TextStyle(fontSize: isWeb ? 13 : 10, fontWeight: FontWeight.bold, color: Colors.grey))),
+                  const SizedBox(height: 10),
+                  
+                  _buildImmeubleGrouping(payments, filteredApartments, isWeb),
+                  const Divider(height: 25),
+                  _buildFinalBilanCard(totalExp, totalPay, isWeb),
+                ])),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  // --- TABLEAU DES PAIEMENTS (APPAREMENT + BOX + FRAIS FIXES) ---
-  Widget _buildPaymentTable(List data) {
-    Map<int, List<Map<String, dynamic>>> groupedByApp = {};
-    for (var p in data) {
-      int appId = p['appartements']?['id'] ?? 0;
-      if (!groupedByApp.containsKey(appId)) groupedByApp[appId] = [];
-      groupedByApp[appId]!.add(p);
+  Widget _buildImmeubleGrouping(List<Map<String, dynamic>> payments, List<Map<String, dynamic>> apartments, bool isWeb) {
+    Map<String, List<Map<String, dynamic>>> immApps = {};
+    for (var app in apartments) {
+      String iName = app['immeubles']?['nom'] ?? "Extérieur";
+      immApps.putIfAbsent(iName, () => []).add(app);
     }
 
-    return LayoutBuilder(builder: (context, constraints) {
-      bool isLarge = constraints.maxWidth > 800;
+    if (immApps.isEmpty && _searchQuery.isNotEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(20.0),
+        child: Text("Aucun résultat pour cette recherche.", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+      );
+    }
 
+    return Column(
+      children: immApps.entries.map((e) {
+        double immPaye = payments.where((p) => p['appartements']?['immeuble_id'] == e.value.first['immeuble_id'])
+            .fold(0, (sum, p) => sum + (p['montant_paye'] as num).toDouble());
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(border: Border.all(color: Colors.purple.withOpacity(0.1)), borderRadius: BorderRadius.circular(12)),
+          child: ExpansionTile(
+            initiallyExpanded: _searchQuery.isNotEmpty, 
+            leading: const Icon(Icons.keyboard_arrow_right, size: 20, color: Colors.purple),
+            title: Text(e.key, style: TextStyle(fontSize: isWeb ? 14 : 12, fontWeight: FontWeight.bold, color: Colors.purple)),
+            trailing: Text("${immPaye.toInt()} DH", style: TextStyle(fontSize: isWeb ? 13 : 11, fontWeight: FontWeight.bold, color: Colors.purple)),
+            children: [_buildPaymentTable(payments, e.value, isWeb)],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildPaymentTable(List<Map<String, dynamic>> payments, List<Map<String, dynamic>> apartments, bool isWeb) {
+    return LayoutBuilder(builder: (context, constraints) {
       return SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: ConstrainedBox(
           constraints: BoxConstraints(minWidth: constraints.maxWidth),
           child: DataTable(
-            columnSpacing: isLarge ? 40 : 15,
-            headingRowHeight: 35,
-            dataRowMinHeight: 50,
-            dataRowMaxHeight: 50,
-            columns: const [
-              DataColumn(label: Text('APPART.', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.grey))),
-              DataColumn(label: Text('FRAIS FIXES', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.grey))),
-              DataColumn(label: Text('PARKING', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.grey))),
-              DataColumn(label: Text('GARAGE', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.grey))),
-              DataColumn(label: Text('BOX', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.grey))),
-              DataColumn(label: Text('TOTAL PAYÉ / DÛ', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.grey))),
-            ],
-            rows: groupedByApp.entries.map<DataRow>((entry) {
-              final pays = entry.value;
-              const types = ['charges', 'parking', 'garage', 'box'];
-              double totalLignePaye = 0;
-              double totalLigneDu = 0;
-              for (var type in types) {
-                final match = pays.where((p) => p['type_paiement'] == type).toList();
-                if (match.isNotEmpty) {
-                  totalLignePaye += (match.first['montant_paye'] as num).toDouble();
-                  totalLigneDu += (match.first['montant_total'] as num).toDouble();
-                }
-              }
-              bool isLigneComplete = totalLignePaye >= totalLigneDu && totalLigneDu > 0;
+            columnSpacing: isWeb ? 40 : 12, 
+            headingRowHeight: isWeb ? 50 : 30, 
+            dataRowHeight: isWeb ? 60 : 48,
+            horizontalMargin: 10,
+            columns: [ _h("APP.", isWeb), _h("FIXES", isWeb), _h("PARK.", isWeb), _h("GAR.", isWeb), _h("BOX.", isWeb), _h("TOTAL", isWeb) ],
+            rows: apartments.map((app) {
+              final appPays = payments.where((p) => p['appartement_id'] == app['id']).toList().cast<Map<String, dynamic>>();
+              double p = appPays.fold(0, (s, i) => s + (i['montant_paye'] as num).toDouble());
+              double d = appPays.fold(0, (s, i) => s + (i['montant_total'] as num).toDouble());
 
               return DataRow(cells: [
-                DataCell(Text(pays.first['appartements']?['numero'] ?? "-", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
-                _buildRatioCell(pays, 'charges'),
-                _buildRatioCell(pays, 'parking'),
-                _buildRatioCell(pays, 'garage'),
-                _buildRatioCell(pays, 'box'),
-                DataCell(
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isLigneComplete ? Colors.green.withValues(alpha: 0.1) : primaryOrange.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        "${totalLignePaye.toInt()} / ${totalLigneDu.toInt()} DH",
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isLigneComplete ? Colors.green : primaryOrange),
-                      ),
-                    )
-                ),
+                DataCell(Text(app['numero'] ?? "-", style: TextStyle(fontSize: isWeb ? 13 : 9, fontWeight: FontWeight.bold))),
+                _buildRatioCell(appPays, 'charges', isWeb),
+                _buildRatioCell(appPays, 'parking', isWeb),
+                _buildRatioCell(appPays, 'garage', isWeb),
+                _buildRatioCell(appPays, 'box', isWeb),
+                DataCell(Center(child: Text("${p.toInt()}/${d.toInt()}", style: TextStyle(fontSize: isWeb ? 13 : 9, fontWeight: FontWeight.bold, color: p >= d && d > 0 ? Colors.green : primaryOrange)))),
               ]);
             }).toList(),
           ),
@@ -272,80 +276,105 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
     });
   }
 
-  DataCell _buildRatioCell(List<Map<String, dynamic>> items, String type) {
+  DataCell _buildRatioCell(List<Map<String, dynamic>> items, String type, bool isWeb) {
     final pList = items.where((e) => e['type_paiement'] == type).toList();
-    if (pList.isEmpty) return const DataCell(Center(child: Text("-", style: TextStyle(color: Colors.grey, fontSize: 9))));
-    final p = pList.first;
-    double mP = (p['montant_paye'] as num).toDouble();
-    double mT = (p['montant_total'] as num).toDouble();
-    bool ok = mP >= mT && mT > 0;
-    return DataCell(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-        decoration: BoxDecoration(color: ok ? Colors.green.withValues(alpha: 0.1) : primaryOrange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-        child: Text("${mP.toInt()}/${mT.toInt()}", style: TextStyle(fontSize: 8, color: ok ? Colors.green : primaryOrange, fontWeight: FontWeight.bold))
-    ));
+    if (pList.isEmpty) return DataCell(Center(child: Text("-", style: TextStyle(color: Colors.grey, fontSize: isWeb ? 12 : 9))));
+    double p = pList.fold(0, (s, i) => s + (i['montant_paye'] as num).toDouble());
+    double d = pList.fold(0, (s, i) => s + (i['montant_total'] as num).toDouble());
+    return DataCell(Center(child: Container(padding: EdgeInsets.symmetric(horizontal: isWeb ? 8 : 4, vertical: isWeb ? 4 : 1), decoration: BoxDecoration(color: p >= d ? Colors.green.withOpacity(0.1) : primaryOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(4)), child: Text("${p.toInt()}/${d.toInt()}", style: TextStyle(fontSize: isWeb ? 11 : 8, color: p >= d ? Colors.green : primaryOrange, fontWeight: FontWeight.bold)))));
   }
 
-  Widget _buildSmallSummary(double exp, double pay, double du, double solde) {
-    return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text("BILAN TRANCHE (Dû: ${du.toInt()} DH)", style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey)),
-      Text("${solde.toInt()} DH", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: solde >= 0 ? Colors.green : Colors.red)),
-    ]);
-  }
-
-  Widget _buildGlobalSoldeCard(double totalExp, double totalPay, double totalDu, double solde) {
-    bool pos = solde >= 0;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: darkGrey, borderRadius: BorderRadius.circular(15)),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text("BILAN GÉNÉRAL RÉSIDENCE", style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
-          Text("Payé: ${totalPay.toInt()} / Attendu: ${totalDu.toInt()} | Sorties: -${totalExp.toInt()}", style: const TextStyle(color: Colors.white54, fontSize: 9)),
-        ]),
-        Text("${solde.toInt()} DH", style: TextStyle(color: pos ? Colors.greenAccent : Colors.redAccent, fontSize: 20, fontWeight: FontWeight.w900)),
-      ]),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildIntroDescription() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Audit Financier", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-        DropdownButton<int>(
-          value: _selectedAnnee,
-          underline: const SizedBox(),
-          items: [2024, 2025, 2026].map((a) => DropdownMenuItem(value: a, child: Text("Année $a"))).toList(),
-          onChanged: (v) => setState(() => _selectedAnnee = v!),
+        Text(
+          "Consultez l'historique financier et les performances de collecte de votre résidence.",
+          style: TextStyle(
+            fontSize: 14,
+            color: darkGrey.withOpacity(0.7),
+            fontWeight: FontWeight.w400,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 15),
+        const Text(
+          "Sélectionnez une tranche et un mandat pour voir les détails.",
+          style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey,
+              fontStyle: FontStyle.italic
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildSearchBar() { return TextField(onChanged: (v) => setState(() => _searchQuery = v), decoration: InputDecoration(hintText: "Rechercher...", prefixIcon: const Icon(Icons.search), filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade200)))); }
-  Widget _buildGlobalAuditCard(List expenses) { double total = expenses.fold(0, (sum, e) => sum + (e['montant'] as num).toDouble()); return Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.blue.withValues(alpha: 0.3), width: 1.2)), child: Theme(data: Theme.of(context).copyWith(dividerColor: Colors.transparent), child: ExpansionTile(leading: const Icon(Icons.account_balance, color: Colors.blue, size: 20), title: Row(children: const [Text("Frais Généraux Résidence", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.blue)), SizedBox(width: 8), Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.blue)]), trailing: Text("${total.toInt()} DH", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)), children: [_buildExpenseTable(expenses)]))); }
-  Widget _buildImmeubleGrouping(List payments) { Map<String, List<Map<String, dynamic>>> immGroups = {}; for (var p in payments) { String iName = p['appartements']?['immeubles']?['nom'] ?? "Extérieur"; if (!immGroups.containsKey(iName)) immGroups[iName] = []; immGroups[iName]!.add(p); } return Column(children: immGroups.entries.map((e) => _buildImmeubleLevel(e.key, e.value)).toList()); }
+  DataColumn _h(String l, bool isWeb) => DataColumn(label: Expanded(child: Text(l, textAlign: TextAlign.center, style: TextStyle(fontSize: isWeb ? 12 : 8, fontWeight: FontWeight.bold, color: Colors.grey))));
   
-  Widget _buildImmeubleLevel(String name, List<Map<String, dynamic>> data) { 
-    final stats = _getPaymentStats(data);
-    double immPaye = stats['paye']!;
-    double immDu = stats['du']!;
+  Widget _buildSubTile(String t, String a, Color c, Widget content, bool isWeb) { 
     return ExpansionTile(
-      leading: const Icon(Icons.keyboard_arrow_right, size: 18, color: Colors.purple), 
-      title: Text(name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.purple)), 
-      trailing: Text("${immPaye.toInt()} / ${immDu.toInt()} DH", style: const TextStyle(fontSize: 11, color: Colors.purple, fontWeight: FontWeight.bold)), 
-      children: [_buildPaymentTable(data)]
+      initiallyExpanded: true, 
+      title: Row(children: [Text(t, style: TextStyle(fontSize: isWeb ? 15 : 12, color: c, fontWeight: FontWeight.bold)), const SizedBox(width: 5), Icon(Icons.expand_more, size: isWeb ? 18 : 14, color: c)]), 
+      trailing: Text(a, style: TextStyle(fontSize: isWeb ? 15 : 12, fontWeight: FontWeight.bold, color: c)), 
+      children: [content]
     ); 
   }
-  
-  Widget _buildExpenseTable(List data) { return SizedBox(width: double.infinity, child: DataTable(columnSpacing: 15, headingRowHeight: 35, dataRowMinHeight: 40, dataRowMaxHeight: 40, columns: const [DataColumn(label: Text('CATÉGORIE', style: TextStyle(fontSize: 8))), DataColumn(label: Text('DATE', style: TextStyle(fontSize: 8))), DataColumn(label: Text('MONTANT', style: TextStyle(fontSize: 8)))], rows: data.map((e) => DataRow(cells: [DataCell(Text(e['categories']?['nom'] ?? 'Inconnue', style: const TextStyle(fontSize: 10))), DataCell(Text(e['date'] ?? '-', style: const TextStyle(fontSize: 10))), DataCell(Text("${e['montant']} DH", style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.redAccent)))])).toList())); }
-  
-  Widget _buildSubTile(String title, String amountText, Color color, Widget content) { 
-    return ExpansionTile(
-      title: Row(children: [Text(title, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold)), const SizedBox(width: 5), Icon(Icons.expand_more, size: 14, color: color)]), 
-      trailing: Text(amountText, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)), 
-      children: [content]
+
+  Widget _buildExpenseTable(List<Map<String, dynamic>> data, bool isWeb) { 
+    return SizedBox(
+      width: double.infinity,
+      child: DataTable(
+        columnSpacing: isWeb ? 40 : 10, 
+        headingRowHeight: isWeb ? 50 : 30,
+        dataRowHeight: isWeb ? 65 : 55, 
+        columns: [
+          DataColumn(label: Text('CATÉGORIE', style: TextStyle(fontSize: isWeb ? 12 : 8, fontWeight: FontWeight.bold))), 
+          DataColumn(label: Text('DATE', style: TextStyle(fontSize: isWeb ? 12 : 8, fontWeight: FontWeight.bold))), 
+          DataColumn(label: Text('MONTANT', style: TextStyle(fontSize: isWeb ? 12 : 8, fontWeight: FontWeight.bold)))
+        ], 
+        rows: data.map((e) {
+          bool isGlobal = e['is_global'] == true;
+          return DataRow(cells: [
+            DataCell(Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(e['categories']?['nom'] ?? '-', style: TextStyle(fontSize: isWeb ? 14 : 10)),
+                if (isGlobal) ...[
+                  const SizedBox(height: 2),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.blue.shade100)
+                    ),
+                    child: const Text("GLOBALE", style: TextStyle(fontSize: 7, fontWeight: FontWeight.bold, color: Colors.blue)),
+                  ),
+                ]
+              ],
+            )), 
+            DataCell(Text(e['date'] ?? '-', style: TextStyle(fontSize: isWeb ? 14 : 10))), 
+            DataCell(Text("${(e['montant'] as num).toInt()} DH", style: TextStyle(fontSize: isWeb ? 14 : 10, fontWeight: FontWeight.bold, color: Colors.redAccent)))
+          ]);
+        }).toList()
+      ),
+    ); 
+  }
+
+  Widget _buildFinalBilanCard(double exp, double pay, bool isWeb) { 
+    double solde = pay - exp; 
+    return Container(
+      padding: const EdgeInsets.all(20), 
+      decoration: BoxDecoration(color: darkGrey, borderRadius: BorderRadius.circular(15)), 
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+        children: [
+          Text("SOLDE DU MANDAT", style: TextStyle(color: Colors.white70, fontSize: isWeb ? 13 : 10, fontWeight: FontWeight.bold)), 
+          Text("${solde.toInt()} DH", style: TextStyle(color: solde >= 0 ? Colors.greenAccent : Colors.redAccent, fontSize: isWeb ? 24 : 18, fontWeight: FontWeight.w900))
+        ]
+      )
     ); 
   }
 }

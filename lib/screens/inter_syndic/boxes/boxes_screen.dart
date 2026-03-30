@@ -5,7 +5,7 @@ import '../../../models/immeuble_model.dart';
 import '../../../services/box_service.dart';
 import '../../../services/resident_service.dart';
 import '../../../services/tranche_service.dart';
-
+import '../../../widgets/inter_syndic_header.dart';
 // ── Brand palette — aligned with ResiManager desktop app
 class _C {
   static const coral       = Color(0xFFE8603C);
@@ -203,75 +203,13 @@ class _BoxesScreenState extends State<BoxesScreen>
   );
 
   Widget _buildHeader() {
-    return Container(
-      color: _C.white,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                  color: _C.bg,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _C.divider)),
-              child: const Icon(Icons.arrow_back_ios_new_rounded,
-                  size: 14, color: _C.dark),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-                color: _C.coral, borderRadius: BorderRadius.circular(10)),
-            child:
-            const Icon(Icons.inventory_2_outlined, color: _C.white, size: 20),
-          ),
-          const SizedBox(width: 10),
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('ResiManager',
-                  style: TextStyle(
-                      color: _C.dark,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      letterSpacing: -0.2)),
-              Text('inter_syndic',
-                  style: TextStyle(
-                      color: _C.textLight,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500)),
-            ],
-          ),
-          const Spacer(),
-          GestureDetector(
-            onTap: _showAddBoxDialog,
-            child: Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-              decoration: BoxDecoration(
-                  color: _C.coral, borderRadius: BorderRadius.circular(22)),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.add_rounded, size: 16, color: _C.white),
-                  SizedBox(width: 6),
-                  Text('Ajouter',
-                      style: TextStyle(
-                          color: _C.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700)),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+    return InterSyndicHeader(
+      title: 'ResiManager',
+      subtitle: 'inter_syndic',
+      gridIcon: Icons.business_rounded,
+      onBack: () => Navigator.pop(context),
+      onAdd: _showAddBoxDialog,
+      addLabel: 'Ajouter',
     );
   }
 
@@ -340,13 +278,11 @@ class _BoxesScreenState extends State<BoxesScreen>
           const SizedBox(height: 16),
           Row(
             children: [
-              _bannerStat('$_disponibles', 'Disponibles', _C.green,
-                  _C.greenLight),
-              const SizedBox(width: 10),
-              _bannerStat('$_occupes', 'Occupes', _C.coral, _C.coralLight),
-              const SizedBox(width: 10),
-              _bannerStat('${_revenusXan.toInt()} DH', 'Revenus/an', _C.amber,
-                  _C.amberLight),
+              _bannerStat('$_disponibles', 'Disponibles', _C.green, _C.greenLight),
+              const SizedBox(width: 6),
+              _bannerStat('$_occupes', 'Occupés', _C.coral, _C.coralLight),
+              const SizedBox(width: 6),
+              _bannerStat('${_revenusXan.toInt()} DH', 'Revenus/an', _C.amber, _C.amberLight),
             ],
           ),
         ],
@@ -354,27 +290,23 @@ class _BoxesScreenState extends State<BoxesScreen>
     );
   }
 
-  Widget _bannerStat(
-      String val, String label, Color color, Color bg) {
+  Widget _bannerStat(String val, String label, Color color, Color bg) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-        decoration: BoxDecoration(
-            color: bg, borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center, // Centré pour gagner de la place
           children: [
-            Text(val,
-                style: TextStyle(
-                    color: color,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800)),
+            FittedBox( // Empêche le texte de déborder
+              fit: BoxFit.scaleDown,
+              child: Text(val, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
+            ),
             const SizedBox(height: 2),
-            Text(label,
-                style: TextStyle(
-                    color: color.withOpacity(0.7),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(label, style: TextStyle(color: color.withOpacity(0.8), fontSize: 9, fontWeight: FontWeight.w600)),
+            ),
           ],
         ),
       ),

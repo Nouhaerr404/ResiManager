@@ -73,6 +73,7 @@ CREATE TABLE tranches (
     created_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     prix_annuel         NUMERIC(10,2) NOT NULL DEFAULT 0.00,
+    date_affectation    DATE          NULL,
 
     CONSTRAINT fk_tranche_residence
         FOREIGN KEY (residence_id)    REFERENCES residences(id) ON DELETE CASCADE,

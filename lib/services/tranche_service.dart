@@ -16,7 +16,10 @@ class TrancheService {
             residences(*), 
             users(nom, prenom),
             immeubles(count),
-            appartements_count:immeubles(appartements(count))
+            appartements_count:immeubles(appartements(count)),
+            parkings(count),
+            garages(count),
+            boxes(count)
           ''')
           .eq('inter_syndic_id', interSyndicId)
           .timeout(const Duration(seconds: 10));
@@ -41,6 +44,11 @@ class TrancheService {
           }
         }
 
+        // Comptes réels pour espaces
+        int pkCount = (e['parkings'] != null && (e['parkings'] as List).isNotEmpty) ? e['parkings'][0]['count'] : 0;
+        int grCount = (e['garages'] != null && (e['garages'] as List).isNotEmpty) ? e['garages'][0]['count'] : 0;
+        int bxCount = (e['boxes'] != null && (e['boxes'] as List).isNotEmpty) ? e['boxes'][0]['count'] : 0;
+
         return TrancheModel(
           id: e['id'],
           nom: e['nom'] ?? '',
@@ -49,9 +57,9 @@ class TrancheService {
           interSyndicId: e['inter_syndic_id'],
           nombreImmeubles: realImmCount,
           nombreAppartements: totalApparts,
-          nombreParkings: e['nombre_parkings'] ?? 0,
-          nombreGarages: e['nombre_garages'] ?? 0,
-          nombreBoxes: e['nombre_boxes'] ?? 0,
+          nombreParkings: pkCount,
+          nombreGarages: grCount,
+          nombreBoxes: bxCount,
           prixAnnuel: e['prix_annuel'] != null ? (e['prix_annuel'] as num).toDouble() : 0.0,
           statut: e['statut'] ?? 'Actif',
           residenceNom: e['residences'] != null ? e['residences']['nom'] : null,
@@ -140,7 +148,7 @@ class TrancheService {
       // 2. Récupérer les effectifs pour les divisions
       final allResTranches = await _db.from('tranches').select('id').eq('residence_id', resId);
       final int totalTranches = (allResTranches as List).isEmpty ? 1 : allResTranches.length;
-      
+
       int tranchesSameIS = 1;
       if (isId != null) {
         final sameISTranches = await _db.from('tranches').select('id').eq('inter_syndic_id', isId).eq('residence_id', resId);
@@ -162,10 +170,10 @@ class TrancheService {
 
       // 4. Calcul des Dépenses (avec quote-part)
       final allExpenses = await _db.from('depenses').select('montant, tranche_id, inter_syndic_id, syndic_general_id').eq('residence_id', resId).eq('annee', anneeEnCours);
-      
+
       for (var ex in allExpenses as List) {
         double amount = (ex['montant'] as num).toDouble();
-        
+
         if (ex['tranche_id'] == trancheId) {
           // Dépense 100% spécifique à cette tranche
           depenses += amount;
@@ -246,7 +254,10 @@ class TrancheService {
           *, 
           users(nom, prenom),
           immeubles(count),
-          appartements_count:immeubles(appartements(count))
+          appartements_count:immeubles(appartements(count)),
+          parkings(count),
+          garages(count),
+          boxes(count)
         ''')
         .eq('residence_id', residenceId);
 
@@ -267,6 +278,11 @@ class TrancheService {
         }
       }
 
+      // Comptes réels
+      int pkCount = (e['parkings'] != null && (e['parkings'] as List).isNotEmpty) ? e['parkings'][0]['count'] : 0;
+      int grCount = (e['garages'] != null && (e['garages'] as List).isNotEmpty) ? e['garages'][0]['count'] : 0;
+      int bxCount = (e['boxes'] != null && (e['boxes'] as List).isNotEmpty) ? e['boxes'][0]['count'] : 0;
+
       return TrancheModel(
         id: e['id'],
         nom: e['nom'] ?? '',
@@ -275,9 +291,9 @@ class TrancheService {
         interSyndicId: e['inter_syndic_id'],
         nombreImmeubles: realImmCount,
         nombreAppartements: totalApparts,
-        nombreParkings: e['nombre_parkings'] ?? 0,
-        nombreGarages: e['nombre_garages'] ?? 0,
-        nombreBoxes: e['nombre_boxes'] ?? 0,
+        nombreParkings: pkCount,
+        nombreGarages: grCount,
+        nombreBoxes: bxCount,
         prixAnnuel: e['prix_annuel'] != null ? (e['prix_annuel'] as num).toDouble() : 0.0,
         statut: e['statut'] ?? 'Actif',
         interSyndicNom: e['users'] != null
@@ -294,12 +310,29 @@ class TrancheService {
       int? interSyndicId,
       double? prixAnnuel) async {
 
-    await _db.from('tranches').insert({
+    // 1. Créer la tranche
+    final newTranche = await _db.from('tranches').insert({
       'residence_id':    residenceId,
       'nom':             nom,
+      'description':     description,
       'inter_syndic_id': interSyndicId,
       'prix_annuel':     (prixAnnuel != null && prixAnnuel > 0) ? prixAnnuel : null,
-    });
+    }).select('id').single();
+
+    final int trancheId = newTranche['id'];
+
+    // 2. Si un inter-syndic est assigné, créer l'entrée dans l'historique (1 an par défaut)
+    if (interSyndicId != null) {
+      final now = DateTime.now();
+      final oneYearLater = DateTime(now.year + 1, now.month, now.day - 1);
+
+      await _db.from('historique_affectations').insert({
+        'tranche_id': trancheId,
+        'inter_syndic_id': interSyndicId,
+        'date_debut': now.toIso8601String().split('T')[0],
+        'date_fin': oneYearLater.toIso8601String().split('T')[0],
+      });
+    }
   }
 
   Future<List<Map<String, dynamic>>> getAvailableInterSyndics() async {
@@ -312,10 +345,40 @@ class TrancheService {
   }
 
   Future<void> assignInterSyndic(int trancheId, int? interSyndicId) async {
-    await _db
-        .from('tranches')
-        .update({'inter_syndic_id': interSyndicId})
-        .eq('id', trancheId);
+    // 1. Récupérer l'ancien syndic pour clore son mandat
+    final currentTranche = await _db.from('tranches').select('inter_syndic_id').eq('id', trancheId).single();
+    final int? oldSyndicId = currentTranche['inter_syndic_id'];
+
+    if (oldSyndicId == interSyndicId) return; // Pas de changement
+
+    // 2. Mettre à jour la table tranches
+    await _db.from('tranches').update({
+      'inter_syndic_id': interSyndicId,
+    }).eq('id', trancheId);
+
+    // 3. Gérer l'historique
+    final now = DateTime.now();
+    final String today = now.toIso8601String().split('T')[0];
+
+    // Clôturer l'ancien mandat (On cible celui dont la date de fin est dans le futur)
+    if (oldSyndicId != null) {
+      await _db.from('historique_affectations')
+          .update({'date_fin': today})
+          .eq('tranche_id', trancheId)
+          .eq('inter_syndic_id', oldSyndicId)
+          .gt('date_fin', today);
+    }
+
+    // Ouvrir le nouveau mandat (1 an par défaut)
+    if (interSyndicId != null) {
+      final oneYearLater = DateTime(now.year + 1, now.month, now.day - 1);
+      await _db.from('historique_affectations').insert({
+        'tranche_id': trancheId,
+        'inter_syndic_id': interSyndicId,
+        'date_debut': today,
+        'date_fin': oneYearLater.toIso8601String().split('T')[0],
+      });
+    }
   }
 
   Future<List<Map<String, dynamic>>> getImmeublesByTranche(int trancheId) async {
@@ -343,10 +406,13 @@ class TrancheService {
       int? interSyndicId,
       double? prixAnnuel) async {
 
+    // On utilise assignInterSyndic pour gérer la logique complexe de l'historique
+    await assignInterSyndic(trancheId, interSyndicId);
+
+    // On met à jour le reste
     await _db.from('tranches').update({
       'nom':             nom,
       'description':     description,
-      'inter_syndic_id': interSyndicId,
       'prix_annuel':     (prixAnnuel != null && prixAnnuel > 0) ? prixAnnuel : null,
     }).eq('id', trancheId);
   }
@@ -357,6 +423,41 @@ class TrancheService {
 
   Future<void> deleteTranche(int trancheId) async {
     await _db.from('tranches').delete().eq('id', trancheId);
+  }
+
+  Future<Map<String, int>> checkTrancheUsage(int trancheId) async {
+    try {
+      // 1. Gardien Physique : Immeubles, Parkings, Garages, Boxes
+      final List immRes = await _db.from('immeubles').select('id').eq('tranche_id', trancheId);
+      final List pkRes = await _db.from('parkings').select('id').eq('tranche_id', trancheId);
+      final List grRes = await _db.from('garages').select('id').eq('tranche_id', trancheId);
+      final List bxRes = await _db.from('boxes').select('id').eq('tranche_id', trancheId);
+
+      // 2. Gardien Financier : Dépenses, Paiements (via appartements)
+      final List depRes = await _db.from('depenses').select('id').eq('tranche_id', trancheId);
+
+      // Paiements via appartements des immeubles de la tranche
+      int paiementsCount = 0;
+      if (immRes.isNotEmpty) {
+        final List<int> immIds = immRes.map((i) => i['id'] as int).toList();
+        final List apparts = await _db.from('appartements').select('id').inFilter('immeuble_id', immIds);
+        if (apparts.isNotEmpty) {
+          final List<int> appIds = apparts.map((a) => a['id'] as int).toList();
+          final List payRes = await _db.from('paiements').select('id').inFilter('appartement_id', appIds);
+          paiementsCount = payRes.length;
+        }
+      }
+
+      return {
+        'immeubles': immRes.length,
+        'espaces': pkRes.length + grRes.length + bxRes.length,
+        'depenses': depRes.length,
+        'paiements': paiementsCount,
+      };
+    } catch (e) {
+      print('Erreur checkTrancheUsage: $e');
+      return {'error': 1};
+    }
   }
 
   Future<List<String>> getAppartementNumeros(int trancheId) async {
@@ -374,6 +475,11 @@ class TrancheService {
   Future<List<String>> getGarageNumeros(int trancheId) async {
     final res = await _db.from('garages').select('numero').eq('tranche_id', trancheId);
     return (res as List).map((g) => g['numero'] as String).toList();
+  }
+
+  Future<List<String>> getBoxNumeros(int trancheId) async {
+    final res = await _db.from('boxes').select('numero').eq('tranche_id', trancheId);
+    return (res as List).map((b) => b['numero'] as String).toList();
   }
 
   Future<List<Map<String, dynamic>>> getMyAvailableInterSyndics(int myId, int residenceId) async {

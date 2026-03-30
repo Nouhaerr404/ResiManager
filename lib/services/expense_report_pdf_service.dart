@@ -21,7 +21,7 @@ class ExpenseReportPdfService {
   static Future<Uint8List> generate({
     required String residenceNom,
     required String trancheNom,
-    required int annee,
+    required String mandatLabel,
     required Map<String, dynamic> financeData,
     String generatorName = "L'Inter-Syndic",
   }) async {
@@ -53,12 +53,12 @@ class ExpenseReportPdfService {
                 pw.SizedBox(width: 10),
                 pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, mainAxisAlignment: pw.MainAxisAlignment.center, children: [
                   pw.Text('ResiManager', style: pw.TextStyle(color: _dark, fontWeight: pw.FontWeight.bold, fontSize: 14)),
-                  pw.Text('Rapport Financier Annuel', style: pw.TextStyle(color: _mid, fontSize: 8)),
+                  pw.Text('Rapport de Mandat Inter-Syndic', style: pw.TextStyle(color: _mid, fontSize: 8)),
                 ]),
               ]),
               pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, mainAxisAlignment: pw.MainAxisAlignment.center, children: [
                 pw.Text(residenceNom, style: pw.TextStyle(color: _dark, fontWeight: pw.FontWeight.bold, fontSize: 10)),
-                pw.Text('Tranche : $trancheNom | Année : $annee', style: pw.TextStyle(color: _mid, fontSize: 8)),
+                pw.Text('Tranche : $trancheNom | Période : $mandatLabel', style: pw.TextStyle(color: _mid, fontSize: 8)),
               ]),
             ],
           ),
@@ -84,7 +84,7 @@ class ExpenseReportPdfService {
                   style: pw.TextStyle(color: _coral, fontWeight: pw.FontWeight.bold, fontSize: 16),
                   textAlign: pw.TextAlign.center),
               pw.SizedBox(height: 4),
-              pw.Text('Exercice $annee - Tranche $trancheNom',
+              pw.Text('Mandat $mandatLabel - Tranche $trancheNom',
                   style: pw.TextStyle(color: _mid, fontSize: 11),
                   textAlign: pw.TextAlign.center),
             ]),

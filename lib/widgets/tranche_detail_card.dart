@@ -6,10 +6,10 @@ class TrancheDetailCard extends StatefulWidget {
   final TrancheModel tranche;
   final TrancheService service;
   final VoidCallback onEditTap;
-  final VoidCallback onDeleteTap;
+  final VoidCallback? onDeleteTap;
   final VoidCallback onAssignTap;
 
-  const TrancheDetailCard({Key? key, required this.tranche, required this.service, required this.onEditTap, required this.onDeleteTap, required this.onAssignTap}) : super(key: key);
+  const TrancheDetailCard({Key? key, required this.tranche, required this.service, required this.onEditTap, this.onDeleteTap, required this.onAssignTap}) : super(key: key);
 
   @override
   State<TrancheDetailCard> createState() => _TrancheDetailCardState();
@@ -35,7 +35,8 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
 
   @override
   Widget build(BuildContext context) {
-    bool isActif = widget.tranche.statut == 'Actif';
+    // ✅ VERIFICATION SI LA TRANCHE N'EST PAS AFFECTÉE
+    final bool isUnassigned = widget.tranche.interSyndicId == null;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -43,7 +44,13 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 15, offset: const Offset(0, 8))],
+        // ✅ CONTOUR ROUGE SI NON AFFECTÉ
+        border: isUnassigned ? Border.all(color: Colors.red.shade400, width: 2) : null,
+        boxShadow: [
+          isUnassigned 
+            ? BoxShadow(color: Colors.red.withOpacity(0.1), blurRadius: 10, spreadRadius: 2)
+            : BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 15, offset: const Offset(0, 8))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -56,18 +63,21 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
                 child: Row(
                   children: [
                     Flexible(child: Text(widget.tranche.nom, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkGrey), overflow: TextOverflow.ellipsis)),
-                    const SizedBox(width: 8),
-                    _buildStatusBadge(widget.tranche.statut),
+                    if (isUnassigned) ...[
+                      const SizedBox(width: 8),
+                      const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                    ]
                   ],
                 ),
               ),
               Row(
                 children: [
                   IconButton(onPressed: widget.onEditTap, icon: const Icon(Icons.edit_outlined, color: Colors.blue, size: 20)),
-                  IconButton(
-                    onPressed: widget.onDeleteTap, 
-                    icon: Icon(isActif ? Icons.block_flipped : Icons.check_circle_outline, color: isActif ? Colors.red : Colors.green, size: 20)
-                  ),
+                  if (widget.onDeleteTap != null)
+                    IconButton(
+                      onPressed: widget.onDeleteTap, 
+                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20)
+                    ),
                 ],
               )
             ],
@@ -83,11 +93,25 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
 
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: const Color(0xFFF8F9FA), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(
+              color: isUnassigned ? Colors.red.shade50 : const Color(0xFFF8F9FA), 
+              borderRadius: BorderRadius.circular(10)
+            ),
             child: Row(children: [
-              Icon(Icons.person_outline, size: 16, color: primaryOrange),
+              Icon(isUnassigned ? Icons.warning_amber_rounded : Icons.person_outline, 
+                   size: 16, 
+                   color: isUnassigned ? Colors.red : primaryOrange),
               const SizedBox(width: 8),
-              Expanded(child: Text(widget.tranche.interSyndicNom ?? "Non assigné", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+              Expanded(
+                child: Text(
+                  widget.tranche.interSyndicNom ?? "NON ASSIGNÉ (ALERTE)", 
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold, 
+                    fontSize: 13,
+                    color: isUnassigned ? Colors.red : Colors.black87
+                  )
+                )
+              ),
             ]),
           ),
 
@@ -99,7 +123,8 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
               _buildStatIcon(Icons.apartment, widget.tranche.nombreImmeubles, "Imm.", "imm"),
               _buildStatIcon(Icons.home_work_outlined, widget.tranche.nombreAppartements, "App.", "app"),
               _buildStatIcon(Icons.local_parking, widget.tranche.nombreParkings, "Park.", "park"),
-              _buildStatIcon(Icons.garage, widget.tranche.nombreGarages, "Gar.", "gar"),
+              _buildStatIcon(Icons.storefront_outlined, widget.tranche.nombreGarages, "Gar.", "gar"), 
+              _buildStatIcon(Icons.inventory_2, widget.tranche.nombreBoxes, "Box", "box"),
             ],
           ),
 
@@ -117,7 +142,7 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
               ))
             else 
               ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 120), // Empêche le dépassement vertical
+                constraints: const BoxConstraints(maxHeight: 120),
                 child: SingleChildScrollView(
                   child: Wrap(
                     spacing: 6, 
@@ -132,22 +157,6 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
     );
   }
 
-  Widget _buildStatusBadge(String status) {
-    bool isActif = status == 'Actif';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: (isActif ? Colors.green : Colors.grey).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: (isActif ? Colors.green : Colors.grey).withOpacity(0.3)),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: isActif ? Colors.green : Colors.grey),
-      ),
-    );
-  }
-
   Widget _buildStatIcon(IconData icon, int count, String label, String type) {
     bool isSelected = _selectedType == type;
     bool hasData = count > 0;
@@ -157,6 +166,7 @@ class _TrancheDetailCardState extends State<TrancheDetailCard> {
         if (type == "app") _toggleDetail(type, widget.service.getAppartementNumeros(widget.tranche.id));
         if (type == "park") _toggleDetail(type, widget.service.getParkingNumeros(widget.tranche.id));
         if (type == "gar") _toggleDetail(type, widget.service.getGarageNumeros(widget.tranche.id));
+        if (type == "box") _toggleDetail(type, widget.service.getBoxNumeros(widget.tranche.id));
       },
       child: Column(
         children: [

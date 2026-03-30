@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../services/reclamation_service.dart';
+import '../../../widgets/inter_syndic_header.dart';
 
 class _C {
   static const coral       = Color(0xFFE8603C);
@@ -341,51 +342,15 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
 
   // ── Header
   Widget _buildHeader() {
-    return Container(
-      color: _C.white,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      child: Row(children: [
-        GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Container(
-            width: 38, height: 38,
-            decoration: BoxDecoration(
-                color: _C.bg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _C.divider)),
-            child: const Icon(Icons.arrow_back_ios_new_rounded,
-                size: 14, color: _C.dark),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Container(
-          width: 38, height: 38,
-          decoration: BoxDecoration(
-              color: _C.coral, borderRadius: BorderRadius.circular(10)),
-          child: const Icon(Icons.report_problem_rounded,
-              color: _C.white, size: 20),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Reclamations',
-                    style: TextStyle(
-                        color: _C.dark,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 17,
-                        letterSpacing: -0.3)),
-                Text('${_all.length} au total',
-                    style: const TextStyle(
-                        color: _C.textLight, fontSize: 12)),
-              ]),
-        ),
+    return InterSyndicHeader(
+      title: 'ResiManager',
+      subtitle: 'inter_syndic',
+      gridIcon: Icons.business_rounded,
+      onBack: () => Navigator.pop(context),
+      extraActions: [
         if (_nbEnCours > 0)
           Container(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
                 color: _C.amberLight,
                 borderRadius: BorderRadius.circular(20)),
@@ -399,7 +364,7 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
                       fontWeight: FontWeight.w700)),
             ]),
           ),
-      ]),
+      ],
     );
   }
 
