@@ -1120,9 +1120,9 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Expanded(child: _field(resIdCtrl, 'Résidence', prefix: 'R', readOnly: true)),
+                    Expanded(child: _field(resIdCtrl, 'Résidence', prefix: 'R')),
                     const SizedBox(width: 8),
-                    Expanded(child: _field(trancheIdCtrl, 'Tranche', prefix: '-T', readOnly: true)),
+                    Expanded(child: _field(trancheIdCtrl, 'Tranche', prefix: '-T')),
                     const SizedBox(width: 8),
                     Expanded(child: _field(parkingIdCtrl, 'Num (ex: 01)', prefix: '-P')),
                   ],
@@ -1248,9 +1248,7 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                       errorMsg = null;
                     });
                     
-                    final String resPart = widget.residenceId?.toString() ?? resIdCtrl.text.trim();
-                    final String traPart = widget.trancheId.toString();
-                    final String theGeneratedNumber = 'R$resPart-T$traPart-P${parkingIdCtrl.text.trim()}';
+                    final String theGeneratedNumber = 'R${resIdCtrl.text.trim()}-T${trancheIdCtrl.text.trim()}-P${parkingIdCtrl.text.trim()}';
 
                     String? err;
                     if (estOccupe && selectedResident != null) {
@@ -1294,20 +1292,19 @@ class _ParkingsScreenState extends State<ParkingsScreen>
   }
 
   void _showEditParkingDialog(ParkingModel p) {
-    // Try to parse R[res]-T[tra]-P[num]
-    String res = '';
-    String tra = '';
+    String res = widget.residenceName ?? '';
+    String tra = widget.trancheName ?? '';
     String num = p.numero;
 
     final match = RegExp(r'^R(.*?)-T(.*?)-P(.*)$').firstMatch(p.numero);
     if (match != null) {
-      res = match.group(1) ?? '';
-      tra = match.group(2) ?? '';
-      num = match.group(3) ?? '';
+      res = match.group(1) ?? res;
+      tra = match.group(2) ?? tra;
+      num = match.group(3) ?? num;
     }
 
-    final resIdCtrl = TextEditingController(text: res.isEmpty ? (widget.residenceName ?? '') : res);
-    final trancheIdCtrl = TextEditingController(text: tra.isEmpty ? (widget.trancheName ?? '') : tra);
+    final resIdCtrl = TextEditingController(text: res);
+    final trancheIdCtrl = TextEditingController(text: tra);
     final parkingIdCtrl = TextEditingController(text: num);
     final prixCtrl = TextEditingController(text: p.prixAnnuel.toInt().toString());
     
@@ -1336,9 +1333,9 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Expanded(child: _field(resIdCtrl, 'Résidence', prefix: 'R', readOnly: true)),
+                    Expanded(child: _field(resIdCtrl, 'Résidence', prefix: 'R')),
                     const SizedBox(width: 8),
-                    Expanded(child: _field(trancheIdCtrl, 'Tranche', prefix: '-T', readOnly: true)),
+                    Expanded(child: _field(trancheIdCtrl, 'Tranche', prefix: '-T')),
                     const SizedBox(width: 8),
                     Expanded(child: _field(parkingIdCtrl, 'Num (ex: 01)', prefix: '-P')),
                   ],
@@ -1364,9 +1361,7 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                       errorMsg = null;
                     });
                     
-                    final String resPart = widget.residenceId?.toString() ?? resIdCtrl.text.trim();
-                    final String traPart = widget.trancheId.toString();
-                    final String theGeneratedNumber = 'R$resPart-T$traPart-P${parkingIdCtrl.text.trim()}';
+                    final String theGeneratedNumber = 'R${resIdCtrl.text.trim()}-T${trancheIdCtrl.text.trim()}-P${parkingIdCtrl.text.trim()}';
 
                     final err = await _service.updateParking(
                       parkingId: p.id,
@@ -1473,9 +1468,9 @@ class _ParkingsScreenState extends State<ParkingsScreen>
                     
                     final err = await _service.assignerParking(
                       parkingId: p.id,
-                      nom: nomCtrl.text.trim(),
-                      prenom: prenomCtrl.text.trim(),
-                      telephone: telCtrl.text.isEmpty ? null : telCtrl.text.trim(),
+                      nom: selectedResident!.nom,
+                      prenom: selectedResident!.prenom,
+                      telephone: selectedResident!.telephone,
                       type: 'resident',
                       trancheId: widget.trancheId,
                       residentId: selectedResident?.userId,

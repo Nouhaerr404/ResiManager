@@ -94,8 +94,18 @@ class ReunionService {
     required String heure,
     required String lieu,
     required int trancheId,
+    int? annonceId,
   }) async {
     try {
+      // On récupère le vrai inter_syndic_id pour éviter les erreurs FK si ID 1 n'existe pas
+      final trancheInfo = await _db
+          .from('tranches')
+          .select('inter_syndic_id')
+          .eq('id', trancheId)
+          .maybeSingle();
+
+      final interSyndicId = trancheInfo?['inter_syndic_id'] ?? TempSession.interSyndicId;
+
       await _db.from('reunions').insert({
         'titre':           titre.trim(),
         'description':     description?.trim(),
@@ -103,7 +113,8 @@ class ReunionService {
         'heure':           heure,
         'lieu':            lieu.trim(),
         'tranche_id':      trancheId,
-        'inter_syndic_id': TempSession.interSyndicId,
+        'inter_syndic_id': interSyndicId,
+        'annonce_id':      annonceId,
         'statut':          'planifiee',
       });
       return null;

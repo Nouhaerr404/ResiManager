@@ -18,6 +18,7 @@ class BoxModel {
   final String? immeubleNom;
   final String? beneficiaireNom;
   final String? beneficiairePrenom;
+  final String? beneficiaireTelephone;
   final bool? beneficiaireEstResident;
 
   BoxModel({
@@ -34,6 +35,7 @@ class BoxModel {
     this.immeubleNom,
     this.beneficiaireNom,
     this.beneficiairePrenom,
+    this.beneficiaireTelephone,
     this.beneficiaireEstResident,
   });
 
@@ -75,6 +77,7 @@ class BoxModel {
       immeubleNom: immeuble?['nom'],
       beneficiaireNom: benef?['nom'],
       beneficiairePrenom: benef?['prenom'],
+      beneficiaireTelephone: benef?['telephone'],
       beneficiaireEstResident: benef?['resident_id'] != null,
     );
   }

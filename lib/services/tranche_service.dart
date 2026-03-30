@@ -528,7 +528,7 @@ class TrancheService {
     }
   }
 
-  Future<String?> addAnnonce({
+  Future<Map<String, dynamic>> addAnnonce({
     required int trancheId,
     required String titre,
     required String contenu,
@@ -544,17 +544,18 @@ class TrancheService {
 
       final interSyndicId = trancheInfo?['inter_syndic_id'] ?? 1;
 
-      await _db.from('annonces').insert({
-        'tranche_id': trancheId,
+      final res = await _db.from('annonces').insert({
+        'tranche_id':      trancheId,
         'inter_syndic_id': interSyndicId,
-        'titre':      titre.trim(),
-        'contenu':    contenu.trim(),
-        'type':       type,
-        'statut':     'archivee',
-      });
-      return null;
+        'titre':           titre.trim(),
+        'contenu':         contenu.trim(),
+        'type':            type,
+        'statut':          'publiee',
+      }).select().single();
+      
+      return {'id': res['id'], 'error': null};
     } catch (e) {
-      return e.toString();
+      return {'id': null, 'error': e.toString()};
     }
   }
 
