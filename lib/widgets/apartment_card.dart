@@ -64,7 +64,7 @@ class ApartmentCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Appartement ${apartment.numeroAppartement}',
+                          apartment.numero,
                           style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 14,
