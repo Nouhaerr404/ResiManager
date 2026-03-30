@@ -7,7 +7,6 @@ import 'parking_service.dart';
 import 'box_service.dart';
 import 'garage_service.dart';
 import 'dart:typed_data';
-import 'email_service.dart';
 import 'dart:typed_data';
 import 'dart:math';
 
@@ -491,11 +490,7 @@ class ResidentService {
 
         // Email de bienvenue via Resend API (direct HTTP — fiable)
         try {
-          emailSent = await EmailService.sendWelcomeEmail(
-            toEmail:     email.trim(),
-            nomComplet:  '$prenom $nom',
-            password:    generatedPassword,
-          );
+
           debugPrint(emailSent
               ? '>>> Email envoyé avec succès à ${email.trim()}'
               : '>>> AVERTISSEMENT : Email non envoyé à ${email.trim()}');
@@ -965,6 +960,7 @@ class ResidentService {
     DateTime? startDate,
     DateTime? endDate,
     String? typeAnnonce,
+    int? mandatId,
     String? searchQuery,
     int page = 0,
     int pageSize = 10,
@@ -1016,6 +1012,9 @@ class ResidentService {
           .eq('statut', 'publiee')
           .gte('created_at', effectiveStart.toIso8601String())
           .lte('created_at', effectiveEnd.toIso8601String());
+      if (mandatId != null) {
+        query = query.eq('mandat_id', mandatId);
+      }
 
       // Filtre de type (urgente, normale, information)
       if (typeAnnonce != null && typeAnnonce != 'tous') {
@@ -1438,6 +1437,16 @@ class ResidentService {
             '${finMandat.month.toString().padLeft(2,'0')}/'
             '${finMandat.year}'
             : 'En cours';
+        final String debutCourt = debutMandat != null
+            ? '${debutMandat.day.toString().padLeft(2,'0')}/'
+            '${debutMandat.month.toString().padLeft(2,'0')}/'
+            '${debutMandat.year.toString().substring(2)}' // AA au lieu de AAAA
+            : '?';
+        final String finCourt = finMandat != null
+            ? '${finMandat.day.toString().padLeft(2,'0')}/'
+            '${finMandat.month.toString().padLeft(2,'0')}/'
+            '${finMandat.year.toString().substring(2)}'
+            : 'En cours';
 
         final syndic = m['users'];
         final String nomSyndic = syndic != null
@@ -1447,8 +1456,7 @@ class ResidentService {
         mandatsVecus.add({
           'id': m['id'],
           'date_debut': m['date_debut'],
-          'date_fin': m['date_fin'],
-          'label': '$debut → $fin',
+          'label': '$debutCourt → $finCourt',
           'syndic_nom': nomSyndic,
           'est_en_cours': finMandat == null,
         });
