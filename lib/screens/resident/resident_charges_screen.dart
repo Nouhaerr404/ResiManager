@@ -42,7 +42,6 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
     final mandats = await _service.getMandatsVecus(widget.userId);
     setState(() {
       _mandats = mandats;
-      // Mandat en cours par défaut
       _mandatSelectionne = mandats.isNotEmpty
           ? mandats.firstWhere(
               (m) => m['est_en_cours'] == true,
@@ -74,7 +73,6 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
         final data    = snapshot.data ?? {};
         final List allDeps = data['depenses'] ?? [];
 
-        // ── Filtres combinés
         final filteredDeps = allDeps.where((d) {
           final desc = (d['description']?.toString() ??
               d['categories']?['nom'] ?? '').toLowerCase();
@@ -98,24 +96,27 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── HEADER
+                // ── HEADER CORRIGÉ (Expanded pour éviter overflow)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('Dépenses',
-                          style: TextStyle(fontSize: 22,
-                              fontWeight: FontWeight.bold, color: _dark)),
-                      Text(data['tranche_nom'] ?? '',
-                          style: TextStyle(fontSize: 13,
-                              color: Colors.grey.shade500)),
-                    ]),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('Dépenses',
+                            style: TextStyle(fontSize: 22,
+                                fontWeight: FontWeight.bold, color: _dark)),
+                        Text(data['tranche_nom'] ?? '',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 13,
+                                color: Colors.grey.shade500)),
+                      ]),
+                    ),
+                    const SizedBox(width: 8),
                     _buildMandatSelector(),
                   ],
                 ),
                 const SizedBox(height: 16),
 
-                // ── BANNIÈRE MANDAT
                 if (_mandatSelectionne != null)
                   _buildMandatBanner(),
                 const SizedBox(height: 16),
@@ -168,22 +169,31 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
 
     if (inLayout) return body;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9F8F6),
-      appBar: AppBar(
-        title: const Text('Dépenses de la Tranche',
-            style: TextStyle(color: Colors.black,
-                fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        iconTheme: const IconThemeData(color: _coral),
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ResidentDashboardScreen(userId: widget.userId)));
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF9F8F6),
+        appBar: AppBar(
+          title: const Text('Dépenses de la Tranche',
+              style: TextStyle(color: Colors.black,
+                  fontWeight: FontWeight.bold, fontSize: 18)),
+          backgroundColor: Colors.white,
+          elevation: 0.5,
+          iconTheme: const IconThemeData(color: _coral),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_rounded),
+            onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ResidentDashboardScreen(userId: widget.userId))),
+          ),
+        ),
+        drawer: ResidentMobileDrawer(currentIndex: 1, userId: widget.userId),
+        body: body,
       ),
-      drawer: ResidentMobileDrawer(currentIndex: 1, userId: widget.userId),
-      body: body,
     );
   }
 
-  // ── SÉLECTEUR DE MANDAT (bouton header)
   Widget _buildMandatSelector() {
     if (_mandats.isEmpty) return const SizedBox();
     final bool enCours = _mandatSelectionne?['est_en_cours'] == true;
@@ -202,11 +212,14 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
           Icon(enCours ? Icons.radio_button_checked : Icons.history_rounded,
               size: 14, color: enCours ? Colors.green : _coral),
           const SizedBox(width: 6),
-          Text(
-            _mandatSelectionne?['label'] ?? 'Choisir mandat',
-            style: TextStyle(
-              fontWeight: FontWeight.bold, fontSize: 12,
-              color: enCours ? Colors.green : _dark,
+          Flexible(
+            child: Text(
+              _mandatSelectionne?['label'] ?? 'Mandat',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.bold, fontSize: 12,
+                color: enCours ? Colors.green : _dark,
+              ),
             ),
           ),
           const SizedBox(width: 4),
@@ -216,7 +229,6 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
     );
   }
 
-  // ── BOTTOM SHEET LISTE DES MANDATS
   void _showMandatPicker() {
     showModalBottomSheet(
       context: context,
@@ -277,7 +289,6 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
     );
   }
 
-  // ── BANNIÈRE PÉRIODE MANDAT
   Widget _buildMandatBanner() {
     final bool enCours = _mandatSelectionne?['est_en_cours'] == true;
     return Container(
@@ -335,7 +346,7 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
   Widget _kpiCard(String label, String value, IconData icon,
       Color color, Color bg) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -350,8 +361,11 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
           child: Icon(icon, color: color, size: 18),
         ),
         const SizedBox(height: 12),
-        Text(value, style: TextStyle(fontSize: 18,
-            fontWeight: FontWeight.bold, color: color)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(value, style: TextStyle(fontSize: 18,
+              fontWeight: FontWeight.bold, color: color)),
+        ),
         const SizedBox(height: 2),
         Text(label, style: TextStyle(fontSize: 11,
             color: Colors.grey.shade500)),
@@ -361,7 +375,6 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
 
   Widget _buildSearchAndFilters(List all) {
     return Column(children: [
-      // Recherche
       Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -384,7 +397,6 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
       ),
       const SizedBox(height: 12),
 
-      // Filtre Statut
       SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(children: [
@@ -397,7 +409,6 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
       ),
       const SizedBox(height: 8),
 
-      // Filtre Portée
       SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(children: [

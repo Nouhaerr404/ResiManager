@@ -74,15 +74,15 @@ class _ResidentDashboardScreenState extends State<ResidentDashboardScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setStateSB) => AlertDialog(
-          title: const Text("Modifier le mot de passe", 
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          title: const Text("Modifier le mot de passe",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           content: Form(
             key: _formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text("Entrez votre nouveau mot de passe ci-dessous.", 
-                  style: TextStyle(fontSize: 13, color: Colors.grey)),
+                const Text("Entrez votre nouveau mot de passe ci-dessous.",
+                    style: TextStyle(fontSize: 13, color: Colors.grey)),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _passController,
@@ -111,10 +111,10 @@ class _ResidentDashboardScreenState extends State<ResidentDashboardScreen> {
                   Navigator.pop(context);
                   if (res == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Mot de passe mis à jour !"), backgroundColor: Colors.green));
+                        const SnackBar(content: Text("Mot de passe mis à jour !"), backgroundColor: Colors.green));
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text("Erreur: $res"), backgroundColor: Colors.red));
+                        SnackBar(content: Text("Erreur: $res"), backgroundColor: Colors.red));
                   }
                 }
               },
@@ -245,31 +245,35 @@ class _ResidentDashboardScreenState extends State<ResidentDashboardScreen> {
 
   // ── GRID 2x2 ──
   Widget _buildGrid(int nbAnn, int nbReu) {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.6,
-      children: [
-        _card('Dépenses', 'Consulter',
-            Icons.receipt_long_rounded,
-            const Color(0xFFEEF1FF), const Color(0xFF4B6BFB),
-                () => _goTo(1)),
-        _card('Annonces', '$nbAnn actives',
-            Icons.campaign_rounded,
-            const Color(0xFFFFF0EB), _coral,
-                () => _goTo(3)),
-        _card('Réunions', '$nbReu à venir',
-            Icons.event_rounded,
-            const Color(0xFFEBFAF4), const Color(0xFF34C98B),
-                () => _goTo(4)),
-        _card('Paiements', 'Consulter',
-            Icons.account_balance_wallet_rounded,
-            const Color(0xFFFFF8EC), const Color(0xFFFF9500),
-                () => _goTo(2)),
-      ],
+    return LayoutBuilder(
+        builder: (context, constraints) {
+          return GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: (constraints.maxWidth / 2) / 110, // Ajustement dynamique pour éviter l'overflow
+            children: [
+              _card('Dépenses', 'Consulter',
+                  Icons.receipt_long_rounded,
+                  const Color(0xFFEEF1FF), const Color(0xFF4B6BFB),
+                      () => _goTo(1)),
+              _card('Annonces', '$nbAnn actives',
+                  Icons.campaign_rounded,
+                  const Color(0xFFFFF0EB), _coral,
+                      () => _goTo(3)),
+              _card('Réunions', '$nbReu à venir',
+                  Icons.event_rounded,
+                  const Color(0xFFEBFAF4), const Color(0xFF34C98B),
+                      () => _goTo(4)),
+              _card('Paiements', 'Consulter',
+                  Icons.account_balance_wallet_rounded,
+                  const Color(0xFFFFF8EC), const Color(0xFFFF9500),
+                      () => _goTo(2)),
+            ],
+          );
+        }
     );
   }
 
@@ -278,7 +282,7 @@ class _ResidentDashboardScreenState extends State<ResidentDashboardScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -288,7 +292,7 @@ class _ResidentDashboardScreenState extends State<ResidentDashboardScreen> {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
               padding: const EdgeInsets.all(8),
@@ -297,14 +301,17 @@ class _ResidentDashboardScreenState extends State<ResidentDashboardScreen> {
                   borderRadius: BorderRadius.circular(10)),
               child: Icon(icon, color: iconColor, size: 18),
             ),
-            const SizedBox(height: 8), // ← AJOUTE
+            const SizedBox(height: 8),
 
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(value,
-                  style: TextStyle(
-                      color: iconColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14)),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(value,
+                    style: TextStyle(
+                        color: iconColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14)),
+              ),
               Text(title,
                   style: TextStyle(
                       color: Colors.grey.shade500,
@@ -470,10 +477,13 @@ class _ResidentDashboardScreenState extends State<ResidentDashboardScreen> {
             style: TextStyle(
                 color: Colors.grey.shade500, fontSize: 12)),
         const Spacer(),
-        Text(value,
-            style: const TextStyle(
-                fontWeight: FontWeight.w600, fontSize: 13),
-            overflow: TextOverflow.ellipsis),
+        Expanded(
+          child: Text(value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600, fontSize: 13),
+              overflow: TextOverflow.ellipsis),
+        ),
       ]),
     );
   }
@@ -504,8 +514,8 @@ class _ResidentDashboardScreenState extends State<ResidentDashboardScreen> {
             ),
             child: const Icon(Icons.lock_reset_rounded, color: Colors.redAccent, size: 20),
           ),
-          title: const Text("Modifier mot de passe", 
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          title: const Text("Modifier mot de passe",
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
           subtitle: const Text("Protégez l'accès à votre compte", style: TextStyle(fontSize: 11)),
           trailing: const Icon(Icons.chevron_right_rounded),
           onTap: _showChangePasswordDialog,

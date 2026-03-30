@@ -149,23 +149,25 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
         builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text("Nouvelle Tranche", style: TextStyle(fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildFieldLabel("Nom de la tranche *"),
-              TextField(controller: nomController, decoration: _buildInputDecoration("Ex: Tranche Est")),
-              const SizedBox(height: 20),
-              _buildFieldLabel("L'Inter-Syndic Responsable"),
-              _buildSyndicDropdown(selectedSyndicId, (val) => setDialogState(() => selectedSyndicId = val)),
-              const SizedBox(height: 20),
-              _buildFieldLabel("Objectif de collecte annuel (Optionnel)"),
-              TextField(
-                controller: prixController,
-                keyboardType: TextInputType.number,
-                decoration: _buildInputDecoration("Ex: 50000 DH"),
-              ),
-            ],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildFieldLabel("Nom de la tranche *"),
+                TextField(controller: nomController, decoration: _buildInputDecoration("Ex: Tranche Est")),
+                const SizedBox(height: 20),
+                _buildFieldLabel("L'Inter-Syndic Responsable"),
+                _buildSyndicDropdown(selectedSyndicId, (val) => setDialogState(() => selectedSyndicId = val)),
+                const SizedBox(height: 20),
+                _buildFieldLabel("Objectif de collecte annuel (Optionnel)"),
+                TextField(
+                  controller: prixController,
+                  keyboardType: TextInputType.number,
+                  decoration: _buildInputDecoration("Ex: 50000 DH"),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(

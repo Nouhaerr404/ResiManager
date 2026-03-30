@@ -40,7 +40,7 @@ class _ResidentLayoutState extends State<ResidentLayout> {
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
+          (route) => false,
     );
   }
 
@@ -71,33 +71,42 @@ class _ResidentLayoutState extends State<ResidentLayout> {
     final size = MediaQuery.of(context).size;
     final bool isMobile = size.width < 600;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9F8F6),
-      // AppBar pour mobile uniquement
-      appBar: isMobile ? AppBar(
-        title: const Text('ResiManager',
-            style: TextStyle(
-                color: Colors.black, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        iconTheme: const IconThemeData(color: _coral),
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+    return WillPopScope(
+      onWillPop: () async {
+        if (_currentIndex != 0) {
+          setState(() => _currentIndex = 0);
+          return false;
+        }
+        return true;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF9F8F6),
+        // AppBar pour mobile uniquement
+        appBar: isMobile ? AppBar(
+          title: const Text('ResiManager',
+              style: TextStyle(
+                  color: Colors.black, fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.white,
+          elevation: 0.5,
+          iconTheme: const IconThemeData(color: _coral),
+          leading: Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
           ),
+        ) : null,
+        // Drawer pour mobile
+        drawer: isMobile ? _buildMobileDrawer() : null,
+        // Corps principal avec sidebar TOUJOURS présente sur desktop
+        body: Row(
+          children: [
+            // Sidebar visible seulement sur desktop
+            if (!isMobile) _buildSideNav(),
+            // Contenu principal (prend toute la largeur sur mobile)
+            Expanded(child: _buildPage()),
+          ],
         ),
-      ) : null,
-      // Drawer pour mobile
-      drawer: isMobile ? _buildMobileDrawer() : null,
-      // Corps principal avec sidebar TOUJOURS présente sur desktop
-      body: Row(
-        children: [
-          // Sidebar visible seulement sur desktop
-          if (!isMobile) _buildSideNav(),
-          // Contenu principal (prend toute la largeur sur mobile)
-          Expanded(child: _buildPage()),
-        ],
       ),
     );
   }
