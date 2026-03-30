@@ -24,7 +24,6 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
   bool _loadingMandates = false;
   String _searchQuery = "";
 
-  // ✅ REDÉFINITION DES COULEURS (MANQUANTES DANS LA DERNIÈRE VERSION)
   final Color primaryOrange = const Color(0xFFFF6F4A);
   final Color darkGrey = const Color(0xFF2C2C2C);
 
@@ -128,7 +127,8 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
         final filteredApartments = _searchQuery.isEmpty 
           ? apartments 
           : apartments.where((a) {
-              final immName = (a['immeubles']?['nom'] ?? "").toString().toLowerCase();
+              // ✅ FIX : On utilise "Extérieur" par défaut pour que la recherche sur "E" fonctionne
+              final immName = (a['immeubles']?['nom'] ?? "Extérieur").toString().toLowerCase();
               final appNum = (a['numero'] ?? "").toString().toLowerCase();
               return immName.contains(query) || appNum.contains(query);
             }).toList();
@@ -327,17 +327,38 @@ class _ResidenceAuditScreenState extends State<ResidenceAuditScreen> {
       child: DataTable(
         columnSpacing: isWeb ? 40 : 10, 
         headingRowHeight: isWeb ? 50 : 30,
-        dataRowHeight: isWeb ? 60 : 48,
+        dataRowHeight: isWeb ? 65 : 55, 
         columns: [
           DataColumn(label: Text('CATÉGORIE', style: TextStyle(fontSize: isWeb ? 12 : 8, fontWeight: FontWeight.bold))), 
           DataColumn(label: Text('DATE', style: TextStyle(fontSize: isWeb ? 12 : 8, fontWeight: FontWeight.bold))), 
           DataColumn(label: Text('MONTANT', style: TextStyle(fontSize: isWeb ? 12 : 8, fontWeight: FontWeight.bold)))
         ], 
-        rows: data.map((e) => DataRow(cells: [
-          DataCell(Text(e['categories']?['nom'] ?? '-', style: TextStyle(fontSize: isWeb ? 14 : 10))), 
-          DataCell(Text(e['date'] ?? '-', style: TextStyle(fontSize: isWeb ? 14 : 10))), 
-          DataCell(Text("${e['montant']} DH", style: TextStyle(fontSize: isWeb ? 14 : 10, fontWeight: FontWeight.bold, color: Colors.redAccent)))
-        ])).toList()
+        rows: data.map((e) {
+          bool isGlobal = e['is_global'] == true;
+          return DataRow(cells: [
+            DataCell(Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(e['categories']?['nom'] ?? '-', style: TextStyle(fontSize: isWeb ? 14 : 10)),
+                if (isGlobal) ...[
+                  const SizedBox(height: 2),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.blue.shade100)
+                    ),
+                    child: const Text("GLOBALE", style: TextStyle(fontSize: 7, fontWeight: FontWeight.bold, color: Colors.blue)),
+                  ),
+                ]
+              ],
+            )), 
+            DataCell(Text(e['date'] ?? '-', style: TextStyle(fontSize: isWeb ? 14 : 10))), 
+            DataCell(Text("${(e['montant'] as num).toInt()} DH", style: TextStyle(fontSize: isWeb ? 14 : 10, fontWeight: FontWeight.bold, color: Colors.redAccent)))
+          ]);
+        }).toList()
       ),
     ); 
   }

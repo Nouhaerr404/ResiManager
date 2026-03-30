@@ -25,6 +25,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     double width = MediaQuery.of(context).size.width;
     bool isWeb = width > 900;
+    final int currentYear = DateTime.now().year;
 
     return WillPopScope(
       onWillPop: () async {
@@ -36,20 +37,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return false;
       },
       child: MainLayout(
-        title: 'Statistiques Globales',
+        title: 'Tableau de bord',
         activePage: 'Dashboard',
         residenceId: widget.residenceId,
         syndicId: widget.syndicId,
         body: Stack(
           children: [
-            // 1. IMAGE D'ARRIÈRE-PLAN
             Positioned.fill(
               child: Image.asset(
                 'assets/images/residence_bg.png',
                 fit: BoxFit.cover,
               ),
             ),
-            // 2. VOILE SOMBRE POUR LA LISIBILITÉ
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -64,7 +63,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
             ),
-            // 3. CONTENU DU DASHBOARD
             FutureBuilder<List<dynamic>>(
               future: Future.wait([
                 _service.fetchDashboardStats(widget.residenceId),
@@ -87,25 +85,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // N'affiche le titre que sur WEB pour éviter la répétition sur Mobile
                       if (isWeb) ...[
-                        const Text("Statistiques Globales", 
+                        const Text("Tableau de bord",
                           style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white)),
-                        const Text("Analyse en temps réel de votre résidence", 
-                          style: TextStyle(color: Colors.white70, fontSize: 14)),
+                        Text("Analyse en temps réel de votre résidence pour l'année $currentYear", 
+                          style: const TextStyle(color: Colors.white70, fontSize: 14)),
                         const SizedBox(height: 30),
                       ],
 
                       // CARTES KPI
-                      _buildKpiSection(stats, isWeb),
+                      _buildKpiSection(stats, isWeb, currentYear),
                       const SizedBox(height: 35),
 
-                      // ANALYSES (Graphiques)
                       if (isWeb)
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(flex: 2, child: _buildMonthlyBalanceChart(revenues, expenses)),
+                            Expanded(flex: 2, child: _buildMonthlyBalanceChart(revenues, expenses, currentYear)),
                             const SizedBox(width: 25),
                             Expanded(flex: 1, child: _buildRecoveryGauge(stats.recoveryRate, true)),
                           ],
@@ -113,7 +109,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       else
                         Column(
                           children: [
-                            _buildMonthlyBalanceChart(revenues, expenses),
+                            _buildMonthlyBalanceChart(revenues, expenses, currentYear),
                             const SizedBox(height: 25),
                             _buildRecoveryGauge(stats.recoveryRate, false),
                           ],
@@ -129,7 +125,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildKpiSection(DashboardStats stats, bool isWeb) {
+  Widget _buildKpiSection(DashboardStats stats, bool isWeb, int year) {
     double cardWidth = isWeb ? 220 : (MediaQuery.of(context).size.width / 2) - 25;
 
     return Wrap(
@@ -139,12 +135,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _miniCard("Tranches", stats.tranches.toString(), Icons.layers, Colors.blue, cardWidth),
         _miniCard("Immeubles", stats.immeubles.toString(), Icons.apartment, Colors.indigo, cardWidth),
         _miniCard("Appartements", stats.appartements.toString(), Icons.home, Colors.teal, cardWidth),
-        _miniCard("Parkings", stats.parkings.toString(), Icons.local_parking, Colors.blueGrey, cardWidth),
+        
+        // SEPARATION DES ESPACES
+        _miniCard("Places Parking", stats.parkings.toString(), Icons.local_parking, Colors.blueGrey, cardWidth),
         _miniCard("Garages", stats.garages.toString(), Icons.storefront, Colors.brown, cardWidth),
         _miniCard("Boxes", stats.boxes.toString(), Icons.inventory_2, Colors.blueGrey, cardWidth),
-        _miniCard("Total Dépenses", "${stats.chargesTotales.toInt()} DH", Icons.outbond, Colors.redAccent, cardWidth),
-        _miniCard("Total Paiements", "${stats.revenusParkings.toInt()} DH", Icons.payments, Colors.green, cardWidth),
-        _miniCard("Solde Net", "${(stats.revenusParkings - stats.chargesTotales).toInt()} DH", Icons.account_balance_wallet, darkGrey, cardWidth),
+
+        _miniCard("Dépenses $year", "${stats.chargesTotales.toInt()} DH", Icons.outbond, Colors.redAccent, cardWidth),
+        _miniCard("Paiements $year", "${stats.revenusParkings.toInt()} DH", Icons.payments, Colors.green, cardWidth),
+        _miniCard("Solde Net $year", "${(stats.revenusParkings - stats.chargesTotales).toInt()} DH", Icons.account_balance_wallet, darkGrey, cardWidth),
       ],
     );
   }
@@ -154,7 +153,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       width: width,
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.9), // Effet Glassmorphism léger
+        color: Colors.white.withOpacity(0.9), 
         borderRadius: BorderRadius.circular(18),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
       ),
@@ -220,7 +219,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildMonthlyBalanceChart(List<double> revenues, List<double> expenses) {
+  Widget _buildMonthlyBalanceChart(List<double> revenues, List<double> expenses, int year) {
     double maxVal = 0;
     for (var v in [...revenues, ...expenses]) { if (v > maxVal) maxVal = v; }
     double calculatedMaxY = maxVal == 0 ? 1000 : maxVal * 1.2;
@@ -232,7 +231,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Bilan Mensuel Réel", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text("Bilan Mensuel Réel $year", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 35),
           Expanded(
             child: BarChart(

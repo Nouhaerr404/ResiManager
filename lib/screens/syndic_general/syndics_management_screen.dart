@@ -26,7 +26,6 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
   }
 
   void _loadData() {
-    print(">>> JE DEMANDE LES SYNDICS DE LA RESIDENCE : ${widget.residenceId}");
     setState(() {
       _syndicsFuture = _service.getMyInterSyndics(widget.syndicId, widget.residenceId);
     });
@@ -61,7 +60,7 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
             _buildTopKPIs(!isWeb),
             const SizedBox(height: 35),
 
-            _buildSyndicsTable(!isWeb, screenWidth),
+            _buildSyndicsTable(isWeb, screenWidth),
           ],
         ),
       ),
@@ -171,35 +170,47 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
     );
   }
 
-  Widget _buildSyndicsTable(bool isMobile, double screenWidth) {
+  Widget _buildSyndicsTable(bool isWeb, double screenWidth) {
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade100)),
+      decoration: BoxDecoration(
+        color: Colors.white, 
+        borderRadius: BorderRadius.circular(20), 
+        border: Border.all(color: Colors.grey.shade100),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)]
+      ),
       child: FutureBuilder<List<Map<String, dynamic>>>(
         future: _syndicsFuture,
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Padding(padding: EdgeInsets.all(50), child: Center(child: CircularProgressIndicator()));
           final list = snapshot.data!;
 
+          if (list.isEmpty) return const Padding(padding: EdgeInsets.all(40), child: Center(child: Text("Aucun inter-syndic trouvé.")));
+
           return SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: DataTable(
-              headingRowHeight: 60, dataRowHeight: 90,
-              headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 12),
-              columns: const [
-                DataColumn(label: Text('SYNDIC')),
-                DataColumn(label: Text('CONTACT')),
-                DataColumn(label: Text('TRANCHES AFFECTÉES')),
-                DataColumn(label: Text('STATUT')),
-                DataColumn(label: Text('ACTIONS')),
-              ],
-              rows: list.map((s) => DataRow(cells: [
-                DataCell(_buildSyndicCell(s)),
-                DataCell(_buildContactCell(s)),
-                DataCell(_buildTranchesCell(s['tranches'])),
-                DataCell(_buildStatusBadge(s['statut'])),
-                DataCell(_buildActions(s)),
-              ])).toList(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: isWeb ? screenWidth - 320 : 0),
+              child: DataTable(
+                headingRowHeight: 60, 
+                dataRowHeight: 95,
+                columnSpacing: isWeb ? 40 : 20,
+                headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 12, letterSpacing: 0.5),
+                columns: const [
+                  DataColumn(label: Text('SYNDIC')),
+                  DataColumn(label: Text('CONTACT')),
+                  DataColumn(label: Text('TRANCHES AFFECTÉES')),
+                  DataColumn(label: Text('STATUT')),
+                  DataColumn(label: Text('ACTIONS')),
+                ],
+                rows: list.map((s) => DataRow(cells: [
+                  DataCell(_buildSyndicCell(s)),
+                  DataCell(_buildContactCell(s)),
+                  DataCell(_buildTranchesCell(s['tranches'])),
+                  DataCell(_buildStatusBadge(s['statut'])),
+                  DataCell(_buildActions(s)),
+                ])).toList(),
+              ),
             ),
           );
         },
@@ -210,12 +221,13 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
   Widget _buildSyndicCell(Map<String, dynamic> s) {
     return Row(children: [
       CircleAvatar(
-          backgroundColor: primaryOrange,
-          child: Text(s['nom'][0], style: const TextStyle(color: Colors.white))
+          radius: 22,
+          backgroundColor: primaryOrange.withOpacity(0.1),
+          child: Text(s['nom'][0].toUpperCase(), style: TextStyle(color: primaryOrange, fontWeight: FontWeight.bold))
       ),
       const SizedBox(width: 12),
       Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text("${s['prenom']} ${s['nom']}", style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text("${s['prenom']} ${s['nom']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         Text("Depuis ${s['created_at'].toString().substring(0, 10)}", style: const TextStyle(color: Colors.grey, fontSize: 11)),
       ])
     ]);
@@ -223,8 +235,9 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
 
   Widget _buildContactCell(Map<String, dynamic> s) {
     return Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [const Icon(Icons.email_outlined, size: 14, color: Colors.grey), const SizedBox(width: 5), Text(s['email'], style: const TextStyle(fontSize: 12))]),
-      Row(children: [const Icon(Icons.phone_outlined, size: 14, color: Colors.grey), const SizedBox(width: 5), Text(s['telephone'] ?? "--", style: const TextStyle(fontSize: 12))]),
+      Row(children: [const Icon(Icons.email_outlined, size: 14, color: Colors.grey), const SizedBox(width: 8), Text(s['email'], style: const TextStyle(fontSize: 12, color: Colors.black87))]),
+      const SizedBox(height: 4),
+      Row(children: [const Icon(Icons.phone_outlined, size: 14, color: Colors.grey), const SizedBox(width: 8), Text(s['telephone'] ?? "--", style: const TextStyle(fontSize: 12, color: Colors.black87))]),
     ]);
   }
 
@@ -236,25 +249,38 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
     if (filteredTranches.isEmpty) {
       return const Text("Non affecté ici", style: TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold));
     }
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: filteredTranches.map((t) => Text("• ${t['nom']}", style: const TextStyle(fontSize: 11))).toList(),
+    return Wrap(
+      spacing: 5,
+      runSpacing: 5,
+      children: filteredTranches.map((t) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
+        child: Text(t['nom'], style: TextStyle(fontSize: 10, color: Colors.blue.shade700, fontWeight: FontWeight.bold)),
+      )).toList(),
     );
   }
   Widget _buildStatusBadge(String status) {
     bool isActive = status == 'actif';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(color: isActive ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-      child: Text(isActive ? "Actif" : "Inactif", style: TextStyle(color: isActive ? Colors.green : Colors.red, fontWeight: FontWeight.bold, fontSize: 11)),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        color: isActive ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1), 
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: isActive ? Colors.green.withOpacity(0.3) : Colors.red.withOpacity(0.3))
+      ),
+      child: Text(isActive ? "Actif" : "Inactif", style: TextStyle(color: isActive ? Colors.green : Colors.red, fontWeight: FontWeight.w900, fontSize: 11)),
     );
   }
 
   Widget _buildActions(Map<String, dynamic> s) {
     return Row(children: [
-      IconButton(icon: Icon(Icons.edit_outlined, color: primaryOrange, size: 20), onPressed: () => _showForm(syndic: s)),
       IconButton(
+        tooltip: "Modifier",
+        icon: Icon(Icons.edit_outlined, color: Colors.blue.shade400, size: 20), 
+        onPressed: () => _showForm(syndic: s)
+      ),
+      IconButton(
+        tooltip: s['statut'] == 'actif' ? "Désactiver" : "Activer",
         icon: Icon(s['statut'] == 'actif' ? Icons.block : Icons.check_circle_outline, color: primaryOrange, size: 20),
         onPressed: () async {
           await _service.toggleStatus(s['id'], s['statut']);
