@@ -118,17 +118,29 @@ class AuthService {
     }
   }
 
-  Future<Map<String, dynamic>> resetPassword(String newPassword, {String? accessToken}) async {
+  Future<Map<String, dynamic>> resetPassword(String newPassword, {int? userId}) async {
     try {
       final currentUser = _db.auth.currentUser;
-      if (currentUser == null || currentUser.email == null) {
-        return {'success': false, 'error': 'Session expirée ou utilisateur non authentifié.'};
+      
+      // Tentative de mise à jour de Supabase Auth si une session existe
+      if (currentUser != null) {
+        try {
+          await _db.auth.updateUser(UserAttributes(password: newPassword));
+        } catch (authError) {
+          // On ignore l'erreur auth si on peut quand même mettre à jour la table users
+        }
       }
       
-      await _db.auth.updateUser(UserAttributes(password: newPassword));
       final hashedPassword = await _hashPassword(newPassword);
-      // L'email dans currentUser est déjà normalisé par Supabase Auth
-      await _db.from('users').update({'password': hashedPassword}).eq('email', currentUser.email!);
+      
+      if (userId != null) {
+        await _db.from('users').update({'password': hashedPassword}).eq('id', userId);
+      } else if (currentUser?.email != null) {
+        await _db.from('users').update({'password': hashedPassword}).eq('email', currentUser!.email!);
+      } else {
+        return {'success': false, 'error': 'Utilisateur non identifié.'};
+      }
+
       return {'success': true};
     } catch (e) { return {'success': false, 'error': e.toString()}; }
   }

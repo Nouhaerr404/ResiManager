@@ -10,7 +10,7 @@ class GarageService {
         .select('''
           *,
           tranches(nom),
-          beneficiaires(nom, prenom, resident_id)
+          beneficiaires(nom, prenom, telephone, resident_id)
         ''')
         .eq('tranche_id', trancheId)
         .order('numero');
@@ -215,6 +215,26 @@ class GarageService {
       }).eq('id', garageId);
     } catch (e) {
       print('>>> ERREUR libererGarage: $e');
+    }
+  }
+
+  Future<String?> deleteGarage(int garageId) async {
+    try {
+      await _db.from('garages').delete().eq('id', garageId);
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> updateAllGaragesPrice(int trancheId, double newPrice) async {
+    try {
+      await _db.from('garages')
+          .update({'prix_annuel': newPrice})
+          .eq('tranche_id', trancheId);
+      return null;
+    } catch (e) {
+      return e.toString();
     }
   }
 }

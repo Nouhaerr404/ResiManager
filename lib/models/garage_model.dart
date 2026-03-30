@@ -11,6 +11,7 @@ class GarageModel {
   // Données jointes
   final String? beneficiaireNom;
   final String? beneficiairePrenom;
+  final String? beneficiaireTelephone;
   final String? trancheNom;
   final bool? isResident; // pour afficher "Résident" ou "Externe"
 
@@ -25,6 +26,7 @@ class GarageModel {
     this.beneficiaireId,
     this.beneficiaireNom,
     this.beneficiairePrenom,
+    this.beneficiaireTelephone,
     this.trancheNom,
     this.isResident,
   });
@@ -43,6 +45,7 @@ class GarageModel {
     beneficiaireId: j['beneficiaire_id'],
     beneficiaireNom: j['beneficiaires']?['nom'],
     beneficiairePrenom: j['beneficiaires']?['prenom'],
+    beneficiaireTelephone: j['beneficiaires']?['telephone'],
     trancheNom: j['tranches']?['nom'],
     isResident: j['beneficiaires']?['resident_id'] != null,
   );

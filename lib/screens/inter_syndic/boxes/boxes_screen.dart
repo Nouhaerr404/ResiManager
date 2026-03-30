@@ -6,24 +6,8 @@ import '../../../services/box_service.dart';
 import '../../../services/resident_service.dart';
 import '../../../services/tranche_service.dart';
 import '../../../widgets/inter_syndic_header.dart';
-// ── Brand palette — aligned with ResiManager desktop app
-class _C {
-  static const coral       = Color(0xFFE8603C);
-  static const coralLight  = Color(0xFFFFF0EB);
-  static const bg          = Color(0xFFF2F3F5);
-  static const white       = Color(0xFFFFFFFF);
-  static const dark        = Color(0xFF1A1A1A);
-  static const textMid     = Color(0xFF5A5A6A);
-  static const textLight   = Color(0xFF9A9AAF);
-  static const divider     = Color(0xFFE8E8F0);
-  static const iconBg      = Color(0xFFEDEDED);
-  static const blue        = Color(0xFF4B6BFB);
-  static const blueLight   = Color(0xFFEEF1FF);
-  static const amber       = Color(0xFFF5A623);
-  static const amberLight  = Color(0xFFFFF8EC);
-  static const green       = Color(0xFF34C98B);
-  static const greenLight  = Color(0xFFEBFAF4);
-}
+import 'package:url_launcher/url_launcher.dart';
+import '../../../theme/inter_syndic_palette.dart';
 
 class BoxesScreen extends StatefulWidget {
   final int trancheId;
@@ -51,6 +35,9 @@ class _BoxesScreenState extends State<BoxesScreen>
   bool _loading = true;
   String _filterStatut = 'tous';
   final _searchCtrl = TextEditingController();
+
+  double _prixAnnuelUnitaire = 800.0;
+  bool _loadingPrix = true;
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
 
@@ -74,18 +61,25 @@ class _BoxesScreenState extends State<BoxesScreen>
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final data = await _service
-          .getBoxesByTranche(widget.trancheId)
+      final data = await _service.getBoxesByTranche(widget.trancheId)
           .timeout(const Duration(seconds: 15));
       setState(() {
         _boxes = data;
+        _filtered = data;
+
+        // Calculer le prix unitaire moyen pour l'affichage/défaut
+        if (_boxes.isNotEmpty) {
+          _prixAnnuelUnitaire = _boxes.first.prixAnnuel;
+        }
+
         _loading = false;
+        _loadingPrix = false;
       });
       _applyFilter();
       _fadeCtrl.forward(from: 0);
     } catch (e) {
       debugPrint('>>> ERREUR load boxes: $e');
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -107,6 +101,27 @@ class _BoxesScreenState extends State<BoxesScreen>
     _applyFilter();
   }
 
+  Future<void> _callResident(String? phoneNumber) async {
+    if (phoneNumber == null || phoneNumber.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Numéro de téléphone non disponible')),
+        );
+      }
+      return;
+    }
+    final Uri url = Uri.parse('tel:$phoneNumber');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Impossible de lancer l\'appel')),
+        );
+      }
+    }
+  }
+
   int get _total => _boxes.length;
   int get _disponibles =>
       _boxes.where((p) => p.statut == StatutEspaceEnum.disponible).length;
@@ -115,293 +130,598 @@ class _BoxesScreenState extends State<BoxesScreen>
       .where((p) => p.statut == StatutEspaceEnum.occupe)
       .fold(0.0, (s, p) => s + p.prixAnnuel);
 
+  bool showFilters = false;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _C.bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(
-              child: _loading
-                  ? _buildLoader()
-                  : FadeTransition(
-                opacity: _fadeAnim,
-                child: RefreshIndicator(
-                  color: _C.coral,
-                  onRefresh: _load,
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+      backgroundColor: InterSyndicPalette.bg,
+      body: Stack(
+        children: [
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              // 1. Header Premium
+              SliverToBoxAdapter(
+                child: InterSyndicHeader(
+                  title: 'ResiManager',
+                  subtitle: 'Gestion Boxes',
+                  gridIcon: Icons.inventory_2_rounded,
+                  onBack: () => Navigator.pop(context),
+                  onAdd: _showAddBoxDialog,
+                  addLabel: 'Ajouter',
+                ),
+              ),
+
+              // 2. Carte Héros de Statistiques
+              SliverToBoxAdapter(
+                child: _buildHeroStatsCard(_total, _occupes, _disponibles, _revenusXan),
+              ),
+
+              // 2b. Prix unitaire (Style Resident)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: _buildInfoRow(),
+                ),
+              ),
+
+              // 3. Barre de Recherche et Bouton Filtres
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: Row(
                     children: [
-                      _buildPageTitle(),
-                      const SizedBox(height: 20),
-                      _buildStatsBanner(),
-                      const SizedBox(height: 20),
-                      _buildSearchBar(),
-                      const SizedBox(height: 12),
-                      _buildFilterTabs(),
-                      const SizedBox(height: 24),
-                      _buildSectionLabel(
-                          '${_filtered.length} box${_filtered.length > 1 ? 'es' : ''}'),
-                      const SizedBox(height: 14),
-                      if (_filtered.isEmpty)
-                        _buildEmpty()
-                      else
-                        ..._filtered.map(_buildBoxCard),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                            border: Border.all(color: InterSyndicPalette.divider),
+                          ),
+                          child: TextField(
+                            controller: _searchCtrl,
+                            onChanged: (_) => _applyFilter(),
+                            decoration: InputDecoration(
+                              hintText: 'Rechercher un box...',
+                              hintStyle: const TextStyle(color: InterSyndicPalette.textLight),
+                              prefixIcon: const Icon(Icons.search_rounded, color: InterSyndicPalette.textLight),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      GestureDetector(
+                        onTap: () => setState(() => showFilters = !showFilters),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: showFilters ? InterSyndicPalette.coral : Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (showFilters ? InterSyndicPalette.coral : Colors.black).withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                            border: Border.all(color: showFilters ? InterSyndicPalette.coral : InterSyndicPalette.divider),
+                          ),
+                          child: Icon(
+                            showFilters ? Icons.filter_list_off : Icons.filter_list, 
+                            color: showFilters ? Colors.white : InterSyndicPalette.darkMid,
+                            size: 20,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
+
+              // 4. Filtres (Optionnel)
+              if (showFilters)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: _buildFilterTabs(),
+                  ),
+                ),
+
+              // 5. Liste des boxes
+              if (_loading)
+                const SliverFillRemaining(
+                  child: Center(child: CircularProgressIndicator(color: InterSyndicPalette.coral)),
+                )
+              else if (_filtered.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _buildEmpty(),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _buildBoxCard(_filtered[index]),
+                      ),
+                      childCount: _filtered.length,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          
+          if (_loading)
+            Container(
+              color: Colors.white.withOpacity(0.3),
+              child: const Center(child: CircularProgressIndicator(color: InterSyndicPalette.coral)),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildLoader() => const Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CircularProgressIndicator(color: _C.coral, strokeWidth: 2.5),
-        SizedBox(height: 16),
-        Text('Chargement...',
-            style: TextStyle(
-                color: _C.textLight,
-                fontSize: 13,
-                fontWeight: FontWeight.w500)),
-      ],
-    ),
-  );
-
-  Widget _buildEmpty() => Padding(
-    padding: const EdgeInsets.only(top: 60),
-    child: Column(
-      children: [
-        Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-              color: _C.coralLight,
-              borderRadius: BorderRadius.circular(18)),
-          child:
-          const Icon(Icons.inventory_2_outlined, color: _C.coral, size: 30),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: InterSyndicPalette.coral, strokeWidth: 2.5),
+            SizedBox(height: 16),
+            Text('Chargement...',
+                style: TextStyle(
+                    color: InterSyndicPalette.textLight,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500)),
+          ],
         ),
-        const SizedBox(height: 14),
-        const Text('Aucun box',
-            style: TextStyle(
-                color: _C.dark,
-                fontSize: 15,
-                fontWeight: FontWeight.w700)),
-        const SizedBox(height: 6),
-        const Text('Modifiez les filtres ou ajoutez un box.',
-            style: TextStyle(color: _C.textLight, fontSize: 12)),
-      ],
-    ),
-  );
+      );
 
-  Widget _buildHeader() {
-    return InterSyndicHeader(
-      title: 'ResiManager',
-      subtitle: 'inter_syndic',
-      gridIcon: Icons.business_rounded,
-      onBack: () => Navigator.pop(context),
-      onAdd: _showAddBoxDialog,
-      addLabel: 'Ajouter',
+  Widget _buildEmpty() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: InterSyndicPalette.divider.withOpacity(0.3),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.inventory_2_rounded, size: 80, color: InterSyndicPalette.textLight.withOpacity(0.5)),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Aucun box trouvé', 
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: InterSyndicPalette.darkMid),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Essayez de modifier vos filtres ou d\'ajouter un box', 
+            style: TextStyle(fontSize: 14, color: InterSyndicPalette.textLight),
+          ),
+          const SizedBox(height: 24),
+          if (_searchCtrl.text.isNotEmpty || _filterStatut != 'tous')
+            OutlinedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _searchCtrl.clear();
+                  _filterStatut = 'tous';
+                  _applyFilter();
+                });
+              },
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Réinitialiser tout'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: InterSyndicPalette.coral,
+                side: const BorderSide(color: InterSyndicPalette.coral),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
-  Widget _buildPageTitle() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: const [
-        Text('Box',
-            style: TextStyle(
-                color: _C.dark,
-                fontWeight: FontWeight.w800,
-                fontSize: 26,
-                letterSpacing: -0.5)),
-        SizedBox(height: 4),
-        Text('Gestion des boxes de la tranche',
-            style: TextStyle(
-                color: _C.textMid,
-                fontSize: 13,
-                fontWeight: FontWeight.w400)),
-      ],
-    );
-  }
-
-  Widget _buildStatsBanner() {
+  Widget _buildHeroStatsCard(int total, int occupied, int vacant, double revenus) {
     return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _C.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _C.divider),
+        color: InterSyndicPalette.coral,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: InterSyndicPalette.coral.withOpacity(0.25),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                    color: _C.coralLight,
-                    borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.inventory_2_outlined,
-                    color: _C.coral, size: 22),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                   const Text(
+                    'Boxes',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  Text(
+                    '$total boxes au total',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('$_total boxes',
-                        style: const TextStyle(
-                            color: _C.dark,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 18,
-                            letterSpacing: -0.3)),
-                    const Text('dans cette tranche',
-                        style:
-                        TextStyle(color: _C.textLight, fontSize: 11)),
+                    const Icon(Icons.inventory_2_rounded, color: Colors.white, size: 12),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'Gestion Stockage',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Container(height: 1, color: _C.divider),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _bannerStat('$_disponibles', 'Disponibles', _C.green, _C.greenLight),
-              const SizedBox(width: 6),
-              _bannerStat('$_occupes', 'Occupés', _C.coral, _C.coralLight),
-              const SizedBox(width: 6),
-              _bannerStat('${_revenusXan.toInt()} DH', 'Revenus/an', _C.amber, _C.amberLight),
+               Text(
+                '${total > 0 ? ((occupied / total) * 100).toInt() : 0}% occupés',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+               Text(
+                '${revenus.toInt()} DH / an',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
             ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: total > 0 ? (occupied / total) : 0,
+              backgroundColor: Colors.white.withOpacity(0.2),
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+              minHeight: 8,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildHeroStatMiniItem(occupied.toString().padLeft(2, '0'), 'Occupés'),
+                _buildHeroStatDivider(),
+                _buildHeroStatMiniItem(vacant.toString().padLeft(2, '0'), 'Vacants'),
+                _buildHeroStatDivider(),
+                _buildHeroStatMiniItem('${revenus.toInt()}', 'DH/an'),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _bannerStat(String val, String label, Color color, Color bg) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center, // Centré pour gagner de la place
-          children: [
-            FittedBox( // Empêche le texte de déborder
-              fit: BoxFit.scaleDown,
-              child: Text(val, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
-            ),
-            const SizedBox(height: 2),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(label, style: TextStyle(color: color.withOpacity(0.8), fontSize: 9, fontWeight: FontWeight.w600)),
-            ),
+  Widget _buildHeroStatMiniItem(String value, String label) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.7),
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeroStatDivider() =>
+      Container(width: 1, height: 24, color: Colors.white.withOpacity(0.2));
+
+  // ── Info Card (Resident Style)
+  Widget _buildInfoRow() {
+    return _infoCard(
+      icon: Icons.monetization_on_rounded,
+      iconColor: InterSyndicPalette.coral,
+      iconBg: InterSyndicPalette.coral.withOpacity(0.1),
+      label: 'Prix unitaire / an',
+      value: _loadingPrix ? '...' : '${_prixAnnuelUnitaire.toInt()} DH',
+      onTap: _showEditPrixAnnuelDialog,
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+            color: InterSyndicPalette.coral.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.edit_rounded, size: 12, color: InterSyndicPalette.coral),
+            SizedBox(width: 4),
+            Text('Modifier',
+                style: TextStyle(
+                    color: InterSyndicPalette.coral,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSearchBar() {
-    return Container(
-      decoration: BoxDecoration(
-          color: _C.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _C.divider)),
-      child: TextField(
-        controller: _searchCtrl,
-        style: const TextStyle(fontSize: 14, color: _C.dark),
-        decoration: InputDecoration(
-          hintText: 'Rechercher un box...',
-          hintStyle: const TextStyle(color: _C.textLight, fontSize: 13),
-          prefixIcon: const Icon(Icons.search_rounded,
-              color: _C.textLight, size: 20),
-          suffixIcon: _searchCtrl.text.isNotEmpty
-              ? GestureDetector(
-              onTap: () {
-                _searchCtrl.clear();
-                _applyFilter();
-              },
-              child: const Icon(Icons.close_rounded,
-                  color: _C.textLight, size: 18))
-              : null,
-          border: InputBorder.none,
-          contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+  Widget _infoCard(
+      {required IconData icon,
+      required Color iconColor,
+      required Color iconBg,
+      required String label,
+      required String value,
+      VoidCallback? onTap,
+      Widget? trailing}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: InterSyndicPalette.divider),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4))
+            ]),
+        child: Row(children: [
+          Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                  color: iconBg, borderRadius: BorderRadius.circular(12)),
+              child: Icon(icon, color: iconColor, size: 20)),
+          const SizedBox(width: 16),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(label,
+                    style: const TextStyle(
+                        color: InterSyndicPalette.textLight,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500)),
+                const SizedBox(height: 2),
+                Text(value,
+                    style: const TextStyle(
+                        color: InterSyndicPalette.dark,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 17)),
+              ])),
+          if (trailing != null) trailing,
+        ]),
+      ),
+    );
+  }
+
+  void _showEditPrixAnnuelDialog() {
+    final prixCtrl = TextEditingController(text: _prixAnnuelUnitaire.toInt().toString());
+    bool updateAll = false;
+    bool saving = false;
+    String? errorMsg;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _dialogHeader(ctx, 'Ajuster le prix',
+                    icon: Icons.monetization_on_rounded, iconColor: InterSyndicPalette.coral),
+                const SizedBox(height: 20),
+                if (errorMsg != null) _errorBanner(errorMsg!),
+                
+                const Text(
+                  'Définissez le prix annuel par défaut pour les boxes de cette tranche.',
+                  style: TextStyle(color: InterSyndicPalette.textMid, fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                
+                _label('Nouveau prix annuel (DH) *'),
+                _field(prixCtrl, 'ex: 800', inputType: TextInputType.number),
+                
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Checkbox(
+                        value: updateAll,
+                        activeColor: InterSyndicPalette.coral,
+                        onChanged: (val) => setDialog(() => updateAll = val ?? false),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'Appliquer à tous les boxes existants de cette tranche',
+                        style: TextStyle(fontSize: 13, color: InterSyndicPalette.darkMid, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 24),
+                _dialogActions(
+                  ctx: ctx,
+                  saving: saving,
+                  confirmLabel: 'Enregistrer',
+                  confirmColor: InterSyndicPalette.coral,
+                  onConfirm: () async {
+                    final newPrice = double.tryParse(prixCtrl.text.trim());
+                    if (newPrice == null || newPrice <= 0) {
+                      setDialog(() => errorMsg = 'Veuillez entrer un prix valide');
+                      return;
+                    }
+
+                    setDialog(() => saving = true);
+
+                    if (updateAll) {
+                      final err = await _service.updateAllBoxesPrice(widget.trancheId, newPrice);
+                      if (err != null) {
+                        setDialog(() {
+                          errorMsg = err;
+                          saving = false;
+                        });
+                        return;
+                      }
+                    }
+
+                    setState(() {
+                      _prixAnnuelUnitaire = newPrice;
+                    });
+                    
+                    Navigator.pop(ctx);
+                    if (mounted) _load();
+                  },
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
+
   Widget _buildFilterTabs() {
     final filters = [
       ('tous', 'Tous', _total),
       ('disponible', 'Disponibles', _disponibles),
-      ('occupe', 'Occupes', _occupes),
+      ('occupe', 'Occupés', _occupes),
     ];
-    return Row(
-      children: filters.map((f) {
-        final isSelected = _filterStatut == f.$1;
-        return GestureDetector(
-          onTap: () => _setFilter(f.$1),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            margin: const EdgeInsets.only(right: 8),
-            padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: isSelected ? _C.coral : _C.white,
-              borderRadius: BorderRadius.circular(22),
-              border:
-              Border.all(color: isSelected ? _C.coral : _C.divider),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(f.$2,
-                    style: TextStyle(
-                        color: isSelected ? _C.white : _C.textMid,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12)),
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? Colors.white.withOpacity(0.25)
-                        : _C.bg,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text('${f.$3}',
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: filters.map((f) {
+          final isSelected = _filterStatut == f.$1;
+          return GestureDetector(
+            onTap: () => _setFilter(f.$1),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              margin: const EdgeInsets.only(right: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: isSelected ? InterSyndicPalette.coral : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: isSelected ? [
+                  BoxShadow(color: InterSyndicPalette.coral.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
+                ] : [],
+                border: Border.all(color: isSelected ? InterSyndicPalette.coral : InterSyndicPalette.divider),
+              ),
+              child: Row(
+                children: [
+                  Text(f.$2,
                       style: TextStyle(
-                          color: isSelected ? _C.white : _C.textLight,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700)),
-                ),
-              ],
+                          color: isSelected ? Colors.white : InterSyndicPalette.darkMid,
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                          fontSize: 13)),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.white.withOpacity(0.2) : InterSyndicPalette.bg,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text('${f.$3}',
+                        style: TextStyle(
+                            color: isSelected ? Colors.white : InterSyndicPalette.textMid,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800)),
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
-      }).toList(),
+          );
+        }).toList(),
+      ),
     );
   }
 
   Widget _buildSectionLabel(String text) => Text(
     text,
     style: const TextStyle(
-        color: _C.dark,
+        color: InterSyndicPalette.dark,
         fontWeight: FontWeight.w700,
         fontSize: 16,
         letterSpacing: -0.3),
@@ -409,132 +729,124 @@ class _BoxesScreenState extends State<BoxesScreen>
 
   Widget _buildBoxCard(BoxModel p) {
     final isOccupe = p.statut == StatutEspaceEnum.occupe;
-    final statusColor = isOccupe ? _C.coral : _C.green;
-    final statusBg = isOccupe ? _C.coralLight : _C.greenLight;
+    final statusColor = isOccupe ? InterSyndicPalette.coral : InterSyndicPalette.green;
+    final statusBg = isOccupe ? InterSyndicPalette.coralLight : InterSyndicPalette.greenLight;
     final statusLabel = isOccupe ? 'Occupé' : 'Disponible';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _C.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _C.divider),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: InterSyndicPalette.divider),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
         children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-                color: _C.coralLight,
-                borderRadius: BorderRadius.circular(12)),
-            child: const Icon(Icons.inventory_2_outlined,
-                color: _C.coral, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                    color: isOccupe ? InterSyndicPalette.coralLight : InterSyndicPalette.greenLight,
+                    borderRadius: BorderRadius.circular(14)),
+                child: Icon(Icons.inventory_2_rounded,
+                    color: isOccupe ? InterSyndicPalette.coral : InterSyndicPalette.green, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(p.numero,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                            color: _C.dark,
-                            letterSpacing: -0.2)),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                          color: statusBg,
-                          borderRadius: BorderRadius.circular(20)),
-                      child: Text(statusLabel,
-                          style: TextStyle(
-                              color: statusColor,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 5),
-                Row(
-                  children: [
-                    const Icon(Icons.payments_outlined,
-                        size: 13, color: _C.textLight),
-                    const SizedBox(width: 4),
-                    Text('${p.prixAnnuel.toInt()} DH/an',
-                        style: const TextStyle(
-                            color: _C.textMid, fontSize: 12)),
-                  ],
-                ),
-                if (p.immeubleNom != null) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.business_rounded,
-                          size: 13, color: _C.textLight),
-                      const SizedBox(width: 4),
-                      Text(p.immeubleNom!,
-                          style: const TextStyle(
-                              color: _C.textMid, fontSize: 12)),
-                    ],
-                  ),
-                ],
-                if (isOccupe && p.nomCompletBeneficiaire.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(Icons.person_outline_rounded,
-                          size: 13, color: _C.textLight),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(p.nomCompletBeneficiaire,
+                    Row(
+                      children: [
+                        Text(p.numero,
                             style: const TextStyle(
-                                color: _C.dark,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600),
-                            overflow: TextOverflow.ellipsis),
-                      ),
-                    ],
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                                color: InterSyndicPalette.dark,
+                                letterSpacing: -0.4)),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(20)),
+                          child: Text(statusLabel,
+                              style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w800)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text('${p.prixAnnuel.toInt()} DH / an',
+                        style: const TextStyle(
+                            color: InterSyndicPalette.coral, fontSize: 13, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (isOccupe) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: InterSyndicPalette.bg,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: InterSyndicPalette.divider),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.person_rounded, size: 16, color: InterSyndicPalette.textMid),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          p.nomCompletBeneficiaire.isNotEmpty ? p.nomCompletBeneficiaire : 'Résident inconnu',
+                          style: const TextStyle(color: InterSyndicPalette.dark, fontSize: 13, fontWeight: FontWeight.w700),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const Text('Résident assigné', style: TextStyle(color: InterSyndicPalette.textLight, fontSize: 10, fontWeight: FontWeight.w500)),
+                      ],
+                    ),
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
-          PopupMenuButton<String>(
-            icon: Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                  color: _C.bg, borderRadius: BorderRadius.circular(9),
-                  border: Border.all(color: _C.divider)),
-              child: const Icon(Icons.more_horiz_rounded,
-                  color: _C.textMid, size: 16),
-            ),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14)),
-            elevation: 8,
-            onSelected: (val) {
-              if (val == 'modifier') _showEditBoxDialog(p);
-              if (val == 'assigner') _showAssignerDialog(p);
-              if (val == 'liberer') _showLiberDialog(p);
-              if (val == 'supprimer') _showDeleteDialog(p);
-            },
-            itemBuilder: (_) => [
-              _menuItem('modifier', Icons.edit_rounded, 'Modifier', _C.dark),
-              if (!isOccupe)
-                _menuItem('assigner', Icons.person_add_rounded, 'Assigner',
-                    _C.green),
+          ],
+          const SizedBox(height: 16),
+          Row(
+            children: [
               if (isOccupe)
-                _menuItem('liberer', Icons.person_remove_rounded, 'Liberer',
-                    _C.coral),
-              _menuItem('supprimer', Icons.delete_outline_rounded, 'Supprimer',
-                  _C.coral),
+                Expanded(child: _buildIconActionBtn(Icons.phone_rounded, InterSyndicPalette.blue, () => _callResident(p.beneficiaireTelephone))),
+              if (isOccupe) const SizedBox(width: 8),
+              Expanded(child: _buildIconActionBtn(Icons.edit_rounded, InterSyndicPalette.darkMid, () => _showEditBoxDialog(p))),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildIconActionBtn(
+                  isOccupe ? Icons.person_remove_rounded : Icons.person_add_rounded,
+                  isOccupe ? InterSyndicPalette.coral : InterSyndicPalette.green,
+                  isOccupe ? () => _showLiberDialog(p) : () => _showAssignerDialog(p),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: _buildIconActionBtn(Icons.delete_outline_rounded, InterSyndicPalette.red, () => _showDeleteDialog(p))),
             ],
           ),
         ],
@@ -542,27 +854,17 @@ class _BoxesScreenState extends State<BoxesScreen>
     );
   }
 
-  PopupMenuItem<String> _menuItem(
-      String val, IconData icon, String label, Color color) {
-    return PopupMenuItem(
-      value: val,
-      child: Row(
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8)),
-            child: Icon(icon, size: 15, color: color),
-          ),
-          const SizedBox(width: 10),
-          Text(label,
-              style: TextStyle(
-                  color: color,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600)),
-        ],
+  Widget _buildIconActionBtn(IconData icon, Color color, VoidCallback? onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Icon(icon, color: color, size: 20),
       ),
     );
   }
@@ -577,142 +879,252 @@ class _BoxesScreenState extends State<BoxesScreen>
       children: [
         if (icon != null) ...[
           Container(
-            width: 36,
-            height: 36,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-                color: (iconColor ?? _C.coral).withOpacity(0.12),
-                borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: iconColor ?? _C.coral, size: 18),
+                color: (iconColor ?? InterSyndicPalette.coral).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: iconColor ?? InterSyndicPalette.coral, size: 20),
           ),
           const SizedBox(width: 12),
         ],
         Expanded(
           child: Text(title,
               style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 17,
-                  color: _C.dark)),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                  color: InterSyndicPalette.dark,
+                  letterSpacing: -0.4)),
         ),
         GestureDetector(
           onTap: () => Navigator.pop(ctx),
           child: Container(
-            width: 30,
-            height: 30,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
-                color: _C.bg,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: _C.divider)),
+                color: InterSyndicPalette.bg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: InterSyndicPalette.divider)),
             child: const Icon(Icons.close_rounded,
-                size: 15, color: _C.textMid),
+                size: 16, color: InterSyndicPalette.textMid),
           ),
         ),
       ],
     );
   }
 
+  Widget _errorBanner(String msg) => Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+            color: InterSyndicPalette.red.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: InterSyndicPalette.red.withOpacity(0.2))),
+        child: Row(children: [
+          const Icon(Icons.error_outline_rounded, color: InterSyndicPalette.red, size: 16),
+          const SizedBox(width: 8),
+          Expanded(child: Text(msg, style: const TextStyle(color: InterSyndicPalette.red, fontSize: 12, fontWeight: FontWeight.w600))),
+        ]),
+      );
+
+  Widget _label(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Text(text,
+            style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+                color: InterSyndicPalette.textMid)),
+      );
+
+  Widget _field(TextEditingController ctrl, String hint,
+          {String? prefix, bool readOnly = false, TextInputType inputType = TextInputType.text}) =>
+      TextField(
+        controller: ctrl,
+        readOnly: readOnly,
+        keyboardType: inputType,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: InterSyndicPalette.dark),
+        decoration: InputDecoration(
+          prefixText: prefix,
+          hintText: hint,
+          hintStyle: const TextStyle(color: InterSyndicPalette.textLight, fontSize: 13),
+          filled: true,
+          fillColor: readOnly ? InterSyndicPalette.bg : Colors.white,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: InterSyndicPalette.divider)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: InterSyndicPalette.coral, width: 1.5)),
+          contentPadding: const EdgeInsets.all(14),
+        ),
+      );
+
+  Widget _typeBtn(String label, bool active, Color color) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        decoration: BoxDecoration(
+            color: active ? color.withOpacity(0.1) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: active ? color : InterSyndicPalette.divider, width: active ? 1.5 : 1)),
+        child: Text(label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: active ? color : InterSyndicPalette.textMid,
+                fontWeight: FontWeight.w800,
+                fontSize: 13)),
+      );
+
+  Widget _dialogActions(
+          {required BuildContext ctx,
+          required bool saving,
+          required String confirmLabel,
+          required Color confirmColor,
+          required VoidCallback onConfirm}) =>
+      Row(children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: () => Navigator.pop(ctx),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                  color: InterSyndicPalette.bg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: InterSyndicPalette.divider)),
+              child: const Text('Annuler',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: InterSyndicPalette.darkMid,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14)),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: GestureDetector(
+            onTap: saving ? null : onConfirm,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                  color: confirmColor,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                        color: confirmColor.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4))
+                  ]),
+              child: saving
+                  ? const Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)))
+                  : Text(confirmLabel,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14)),
+            ),
+          ),
+        ),
+      ]);
+
   void _showAddBoxDialog() async {
     final resIdCtrl = TextEditingController(text: widget.residenceName ?? '');
     final trancheIdCtrl = TextEditingController(text: widget.trancheName ?? '');
     final boxIdCtrl = TextEditingController();
-    final prixCtrl = TextEditingController(text: '800');
+    final prixCtrl = TextEditingController(text: _prixAnnuelUnitaire.toInt().toString());
+    final residentSearchCtrl = TextEditingController();
     
-    int? selectedImmeubleId;
     String? errorMsg;
     bool saving = false;
     bool estOccupe = false;
     ResidentModel? selectedResident;
-
-
-
-    if (!mounted) return;
 
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialog) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          clipBehavior: Clip.antiAlias,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _dialogHeader(ctx, 'Ajouter Box', icon: Icons.inventory_2_outlined),
-                const SizedBox(height: 20),
-                if (errorMsg != null) _errorBanner(errorMsg!),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _dialogHeader(ctx, 'Ajouter un Box', icon: Icons.inventory_2_rounded),
+                  const SizedBox(height: 20),
+                  if (errorMsg != null) _errorBanner(errorMsg!),
 
-                _label('Codification du box *'),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(child: _field(resIdCtrl, 'Résidence', prefix: 'R', readOnly: true)),
-                    const SizedBox(width: 8),
-                    Expanded(child: _field(trancheIdCtrl, 'Tranche', prefix: '-T', readOnly: true)),
-                    const SizedBox(width: 8),
-                    Expanded(child: _field(boxIdCtrl, 'Box (ex: 05)', prefix: '-B')),
+                  _label('Codification du box *'),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(child: _field(resIdCtrl, 'Résidence', prefix: 'R')),
+                      const SizedBox(width: 8),
+                      Expanded(child: _field(trancheIdCtrl, 'Tranche', prefix: '-T')),
+                      const SizedBox(width: 8),
+                      Expanded(child: _field(boxIdCtrl, 'N°', prefix: '-B')),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  _label('Prix annuel (DH) *'),
+                  _field(prixCtrl, 'ex: 800', inputType: TextInputType.number),
+                  const SizedBox(height: 16),
+
+                  _label('Statut initial'),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setDialog(() => estOccupe = false),
+                          child: _typeBtn('Disponible', !estOccupe, InterSyndicPalette.green),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setDialog(() => estOccupe = true),
+                          child: _typeBtn('Occupé', estOccupe, InterSyndicPalette.coral),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  if (estOccupe) ...[
+                    const SizedBox(height: 16),
+                    _label('Assigner à un résident *'),
+                    _residentAutocomplete((r) => setDialog(() => selectedResident = r)),
                   ],
-                ),
-                const SizedBox(height: 14),
 
-                _label('Prix annuel (DH) *'),
-                _field(prixCtrl, 'ex: 800', inputType: TextInputType.number),
-                const SizedBox(height: 14),
-
-                _label('Statut du box'),
-                const SizedBox(height: 6),
-                Row(children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setDialog(() => estOccupe = false),
-                      child: _typeBtn(
-                          'Disponible', !estOccupe, _C.green),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => setDialog(() => estOccupe = true),
-                      child: _typeBtn('Occupé', estOccupe, _C.coral),
-                    ),
-                  ),
-                ]),
-
-                if (estOccupe) ...[
-                  const SizedBox(height: 14),
-                  _label('Assigner à un résident *'),
-                  _residentAutocomplete((r) => setDialog(() => selectedResident = r)),
-                ],
-
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: saving ? null : () async {
-                      if (resIdCtrl.text.isEmpty || trancheIdCtrl.text.isEmpty || boxIdCtrl.text.isEmpty || prixCtrl.text.isEmpty) {
-                        setDialog(() => errorMsg = 'Champs obligatoires');
+                  const SizedBox(height: 32),
+                  _dialogActions(
+                    ctx: ctx,
+                    saving: saving,
+                    confirmLabel: 'Confirmer',
+                    confirmColor: InterSyndicPalette.coral,
+                    onConfirm: () async {
+                      if (boxIdCtrl.text.isEmpty || prixCtrl.text.isEmpty) {
+                        setDialog(() => errorMsg = 'Veuillez remplir tous les champs');
                         return;
                       }
                       if (estOccupe && selectedResident == null) {
-                        setDialog(() => errorMsg = 'Sélectionnez un résident');
+                        setDialog(() => errorMsg = 'Veuillez sélectionner un résident');
                         return;
                       }
 
-                      setDialog(() { saving = true; errorMsg = null; });
-                      final resPart = widget.residenceId?.toString() ?? resIdCtrl.text.trim();
-                      final traPart = widget.trancheId.toString();
-                      final numero = 'R$resPart-T$traPart-B${boxIdCtrl.text.trim()}';
+                      setDialog(() => saving = true);
+                      
+                      final numero = 'R${resIdCtrl.text.trim()}-T${trancheIdCtrl.text.trim()}-B${boxIdCtrl.text.trim()}';
                       
                       String? err;
                       if (estOccupe) {
                         err = await _service.addBoxWithAssignment(
                           numero: numero,
                           trancheId: widget.trancheId,
-                          residenceId: widget.residenceId ?? 1, // Dynamic residenceId
+                          residenceId: widget.residenceId ?? 1,
                           prixAnnuel: double.tryParse(prixCtrl.text) ?? 0,
                           nom: selectedResident!.nom,
                           prenom: selectedResident!.prenom,
+                          telephone: selectedResident!.telephone,
                           residentId: selectedResident!.userId,
                         );
                       } else {
@@ -725,24 +1137,18 @@ class _BoxesScreenState extends State<BoxesScreen>
                       }
 
                       if (err != null) {
-                        setDialog(() { errorMsg = err; saving = false; });
+                        setDialog(() {
+                          errorMsg = err;
+                          saving = false;
+                        });
                       } else {
                         Navigator.pop(ctx);
                         _load();
                       }
                     },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _C.coral,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: saving
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('Confirmer', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -751,33 +1157,31 @@ class _BoxesScreenState extends State<BoxesScreen>
   }
 
   void _showEditBoxDialog(BoxModel p) {
-    // Try to parse R[res]-T[tra]-B[num]
-    String res = '';
-    String tra = '';
+    String res = widget.residenceName ?? '';
+    String tra = widget.trancheName ?? '';
     String num = p.numero;
 
     final match = RegExp(r'^R(.*?)-T(.*?)-B(.*)$').firstMatch(p.numero);
     if (match != null) {
-      res = match.group(1) ?? '';
-      tra = match.group(2) ?? '';
-      num = match.group(3) ?? '';
+      res = match.group(1) ?? res;
+      tra = match.group(2) ?? tra;
+      num = match.group(3) ?? num;
     }
 
-    final resIdCtrl = TextEditingController(text: res.isEmpty ? (widget.residenceName ?? '') : res);
-    final trancheIdCtrl = TextEditingController(text: tra.isEmpty ? (widget.trancheName ?? '') : tra);
+    final resIdCtrl = TextEditingController(text: res);
+    final trancheIdCtrl = TextEditingController(text: tra);
     final boxIdCtrl = TextEditingController(text: num);
     final prixCtrl = TextEditingController(text: p.prixAnnuel.toInt().toString());
-
+    
     String? errorMsg;
     bool saving = false;
 
     showDialog(
       context: context,
-      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialog) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: SingleChildScrollView(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -786,52 +1190,54 @@ class _BoxesScreenState extends State<BoxesScreen>
                 _dialogHeader(ctx, 'Modifier Box', icon: Icons.edit_rounded),
                 const SizedBox(height: 20),
                 if (errorMsg != null) _errorBanner(errorMsg!),
-                _label('Codification du box *'),
-                const SizedBox(height: 6),
+
+                _label('Codification du box'),
                 Row(
                   children: [
-                    Expanded(child: _field(resIdCtrl, 'Résidence', prefix: 'R', readOnly: true)),
+                    Expanded(child: _field(resIdCtrl, 'Résidence', prefix: 'R')),
                     const SizedBox(width: 8),
-                    Expanded(child: _field(trancheIdCtrl, 'Tranche', prefix: '-T', readOnly: true)),
+                    Expanded(child: _field(trancheIdCtrl, 'Tranche', prefix: '-T')),
                     const SizedBox(width: 8),
-                    Expanded(child: _field(boxIdCtrl, 'Box (ex: 05)', prefix: '-B')),
+                    Expanded(child: _field(boxIdCtrl, 'N°', prefix: '-B')),
                   ],
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
+
                 _label('Prix annuel (DH) *'),
                 _field(prixCtrl, 'ex: 800', inputType: TextInputType.number),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: saving ? null : () async {
-                      setDialog(() { saving = true; errorMsg = null; });
-                      final resPart = widget.residenceId?.toString() ?? resIdCtrl.text.trim();
-                      final traPart = widget.trancheId.toString();
-                      final numero = 'R$resPart-T$traPart-B${boxIdCtrl.text.trim()}';
-                      final err = await _service.updateBox(
-                        boxId: p.id,
-                        numero: numero,
-                        prixAnnuel: double.tryParse(prixCtrl.text) ?? 0,
-                      );
-                      if (err != null) {
-                        setDialog(() { errorMsg = err; saving = false; });
-                      } else {
-                        Navigator.pop(ctx);
-                        _load();
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _C.coral,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: saving
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('Modifier', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
+
+                const SizedBox(height: 32),
+                _dialogActions(
+                  ctx: ctx,
+                  saving: saving,
+                  confirmLabel: 'Enregistrer',
+                  confirmColor: InterSyndicPalette.coral,
+                  onConfirm: () async {
+                    if (boxIdCtrl.text.isEmpty || prixCtrl.text.isEmpty) {
+                      setDialog(() => errorMsg = 'Champs obligatoires');
+                      return;
+                    }
+
+                    setDialog(() => saving = true);
+                    
+                    final numero = 'R${resIdCtrl.text.trim()}-T${trancheIdCtrl.text.trim()}-B${boxIdCtrl.text.trim()}';
+                    
+                    final err = await _service.updateBox(
+                      boxId: p.id,
+                      numero: numero,
+                      prixAnnuel: double.tryParse(prixCtrl.text) ?? 0,
+                    );
+
+                    if (err != null) {
+                      setDialog(() {
+                        errorMsg = err;
+                        saving = false;
+                      });
+                    } else {
+                      Navigator.pop(ctx);
+                      _load();
+                    }
+                  },
                 ),
               ],
             ),
@@ -850,55 +1256,54 @@ class _BoxesScreenState extends State<BoxesScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialog) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _dialogHeader(ctx, 'Assigner Box', icon: Icons.person_add_rounded),
+                _dialogHeader(ctx, 'Assigner Box', icon: Icons.person_add_rounded, iconColor: InterSyndicPalette.green),
                 const SizedBox(height: 20),
                 if (errorMsg != null) _errorBanner(errorMsg!),
+
                 _label('Box: ${p.numero}'),
-                const SizedBox(height: 14),
-                _label('Chercher un résident *'),
+                const SizedBox(height: 16),
+                _label('Choisir un résident *'),
                 _residentAutocomplete((r) => setDialog(() => selectedResident = r)),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: saving ? null : () async {
-                      if (selectedResident == null) {
-                        setDialog(() => errorMsg = 'Sélectionnez un résident');
-                        return;
-                      }
-                      setDialog(() { saving = true; errorMsg = null; });
-                      final err = await _service.assignerBox(
-                        boxId: p.id,
-                        nom: selectedResident!.nom,
-                        prenom: selectedResident!.prenom,
-                        trancheId: widget.trancheId,
-                        residentId: selectedResident!.userId,
-                      );
-                      if (err != null) {
-                        setDialog(() { errorMsg = err; saving = false; });
-                      } else {
-                        Navigator.pop(ctx);
-                        _load();
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _C.coral,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: saving
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('Assigner', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
+
+                const SizedBox(height: 32),
+                _dialogActions(
+                  ctx: ctx,
+                  saving: saving,
+                  confirmLabel: 'Confirmer',
+                  confirmColor: InterSyndicPalette.green,
+                  onConfirm: () async {
+                    if (selectedResident == null) {
+                      setDialog(() => errorMsg = 'Veuillez sélectionner un résident');
+                      return;
+                    }
+
+                    setDialog(() => saving = true);
+                    final err = await _service.assignerBox(
+                      boxId: p.id,
+                      nom: selectedResident!.nom,
+                      prenom: selectedResident!.prenom,
+                      telephone: selectedResident!.telephone,
+                      trancheId: widget.trancheId,
+                      residentId: selectedResident!.userId,
+                    );
+
+                    if (err != null) {
+                      setDialog(() {
+                        errorMsg = err;
+                        saving = false;
+                      });
+                    } else {
+                      Navigator.pop(ctx);
+                      _load();
+                    }
+                  },
                 ),
               ],
             ),
@@ -909,91 +1314,96 @@ class _BoxesScreenState extends State<BoxesScreen>
   }
 
   void _showLiberDialog(BoxModel p) {
+    bool saving = false;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Libérer Box'),
-        content: Text('Voulez-vous libérer le box ${p.numero} ?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-          TextButton(
-            onPressed: () async {
-              await _service.libererBox(p.id);
-              Navigator.pop(ctx);
-              _load();
-            },
-            child: const Text('Libérer', style: TextStyle(color: _C.coral, fontWeight: FontWeight.bold)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _dialogHeader(ctx, 'Libérer Box', icon: Icons.person_remove_rounded),
+                const SizedBox(height: 20),
+                const Text(
+                  'Voulez-vous libérer ce box ?\nLe résident actuel ne sera plus associé à cet emplacement.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: InterSyndicPalette.textMid, fontSize: 13),
+                ),
+                const SizedBox(height: 24),
+                _dialogActions(
+                  ctx: ctx,
+                  saving: saving,
+                  confirmLabel: 'Oui, Libérer',
+                  confirmColor: InterSyndicPalette.coral,
+                  onConfirm: () async {
+                    setDialog(() => saving = true);
+                    await _service.libererBox(p.id);
+                    Navigator.pop(ctx);
+                    _load();
+                  },
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-    );
-  }
-
-  void _showDeleteDialog(BoxModel p) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Supprimer Box'),
-        content: Text('Voulez-vous supprimer définitivement le box ${p.numero} ?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
-          TextButton(
-            onPressed: () async {
-              await _service.deleteBox(p.id);
-              Navigator.pop(ctx);
-              _load();
-            },
-            child: const Text('Supprimer', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Helper Widgets
-  Widget _label(String t) => Text(t, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _C.textMid));
-
-  Widget _field(TextEditingController ctrl, String hint, {TextInputType? inputType, String? prefix, bool readOnly = false}) {
-    return Container(
-      decoration: BoxDecoration(color: readOnly ? Colors.black12 : _C.bg, borderRadius: BorderRadius.circular(10)),
-      child: TextField(
-        controller: ctrl,
-        readOnly: readOnly,
-        keyboardType: inputType,
-        style: const TextStyle(fontSize: 14, color: _C.dark, fontWeight: FontWeight.w600),
-        decoration: InputDecoration(
-          prefixText: prefix,
-          prefixStyle: const TextStyle(color: _C.textMid, fontWeight: FontWeight.bold),
-          hintText: hint,
-          hintStyle: const TextStyle(color: _C.textLight, fontSize: 13, fontWeight: FontWeight.normal),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         ),
       ),
     );
   }
 
-  Widget _typeBtn(String label, bool active, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(
-        color: active ? color : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: active ? color : _C.divider),
-      ),
-      child: Center(
-        child: Text(label,
-            style: TextStyle(
-                color: active ? Colors.white : _C.textMid,
-                fontWeight: FontWeight.bold,
-                fontSize: 13)),
+  void _showDeleteDialog(BoxModel p) {
+    bool saving = false;
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _dialogHeader(ctx, 'Supprimer Box', icon: Icons.delete_outline_rounded, iconColor: InterSyndicPalette.red),
+                const SizedBox(height: 20),
+                const Text(
+                  'Action irréversible.\nVoulez-vous vraiment supprimer définitivement ce box ?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: InterSyndicPalette.textMid, fontSize: 13),
+                ),
+                const SizedBox(height: 24),
+                _dialogActions(
+                  ctx: ctx,
+                  saving: saving,
+                  confirmLabel: 'Supprimer',
+                  confirmColor: InterSyndicPalette.red,
+                  onConfirm: () async {
+                    setDialog(() => saving = true);
+                    final err = await _service.deleteBox(p.id);
+                    if (err != null) {
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+                      setDialog(() => saving = false);
+                    } else {
+                      Navigator.pop(ctx);
+                      _load();
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
-
   Widget _residentAutocomplete(Function(ResidentModel) onSelected) {
     return Container(
-      decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(
+        color: InterSyndicPalette.bg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: InterSyndicPalette.divider),
+      ),
       child: Autocomplete<ResidentModel>(
         optionsBuilder: (val) async {
           if (val.text.isEmpty) return const Iterable<ResidentModel>.empty();
@@ -1004,26 +1414,16 @@ class _BoxesScreenState extends State<BoxesScreen>
         fieldViewBuilder: (ctx, ctrl, focus, onSub) => TextField(
           controller: ctrl,
           focusNode: focus,
-          style: const TextStyle(fontSize: 14),
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: InterSyndicPalette.dark),
           decoration: const InputDecoration(
-            hintText: 'Chercher...',
+            hintText: 'Rechercher un résident...',
+            hintStyle: TextStyle(color: InterSyndicPalette.textLight, fontSize: 13),
             border: InputBorder.none,
-            prefixIcon: Icon(Icons.search, size: 18),
-            contentPadding: EdgeInsets.symmetric(vertical: 12),
+            prefixIcon: Icon(Icons.search_rounded, size: 18, color: InterSyndicPalette.textMid),
+            contentPadding: EdgeInsets.symmetric(vertical: 14),
           ),
         ),
       ),
     );
   }
-
-  Widget _errorBanner(String msg) => Container(
-    margin: const EdgeInsets.only(bottom: 12),
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(color: _C.coralLight, borderRadius: BorderRadius.circular(10)),
-    child: Row(children: [
-      const Icon(Icons.error_outline_rounded, color: _C.coral, size: 16),
-      const SizedBox(width: 8),
-      Expanded(child: Text(msg, style: const TextStyle(color: _C.coral, fontSize: 12))),
-    ]),
-  );
 }

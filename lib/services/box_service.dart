@@ -11,7 +11,7 @@ class BoxService {
           *,
           tranches(nom),
           immeubles(nom),
-          beneficiaires(nom, prenom, resident_id)
+          beneficiaires(nom, prenom, telephone, resident_id)
         ''')
         .eq('tranche_id', trancheId)
         .order('numero');
@@ -220,6 +220,18 @@ class BoxService {
       }).eq('id', boxId);
     } catch (e) {
       print('>>> ERREUR libererBox: $e');
+    }
+  }
+
+  Future<String?> updateAllBoxesPrice(int trancheId, double nouvellePrix) async {
+    try {
+      await _db
+          .from('boxes')
+          .update({'prix_annuel': nouvellePrix})
+          .eq('tranche_id', trancheId);
+      return null;
+    } catch (e) {
+      return e.toString();
     }
   }
 }

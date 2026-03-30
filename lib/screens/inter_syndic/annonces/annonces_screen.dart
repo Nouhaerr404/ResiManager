@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import '../../../services/tranche_service.dart';
+import '../../../services/reunion_service.dart';
 import '../../../widgets/inter_syndic_header.dart';
 
 // ── Palette (identique aux autres écrans inter-syndic)
@@ -32,6 +33,7 @@ class AnnoncesScreen extends StatefulWidget {
 
 class _AnnoncesScreenState extends State<AnnoncesScreen> {
   final _service = TrancheService();
+  final _reunionService = ReunionService();
 
   List<Map<String, dynamic>> _all      = [];
   List<Map<String, dynamic>> _filtered = [];
@@ -85,195 +87,395 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
   int get _nbArchivee  => _all.where((a) => a['statut'] == 'archivee').length;
   int get _nbUrgente   => _all.where((a) => a['type'] == 'urgente').length;
 
+  bool showFilters = false;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _C.bg,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showFormDialog(null),
-        backgroundColor: _C.coral,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: const Icon(Icons.add_rounded, color: _C.white, size: 26),
-      ),
-      body: SafeArea(
-        child: Column(children: [
-          _buildHeader(),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator(color: _C.coral, strokeWidth: 2.5))
-                : RefreshIndicator(
-              color: _C.coral,
-              onRefresh: _load,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
-                children: [
-                  _buildStats(),
-                  const SizedBox(height: 20),
-                  _buildSearchBar(),
-                  const SizedBox(height: 12),
-                  _buildFilterTabs(),
-                  const SizedBox(height: 20),
-                  Text(
-                    '${_filtered.length} annonce${_filtered.length > 1 ? 's' : ''}',
-                    style: const TextStyle(color: _C.dark, fontWeight: FontWeight.w700, fontSize: 16, letterSpacing: -0.3),
-                  ),
-                  const SizedBox(height: 14),
-                  if (_filtered.isEmpty)
-                    _buildEmpty()
-                  else
-                    ..._filtered.map(_buildCard),
-                ],
+      body: Stack(
+        children: [
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: InterSyndicHeader(
+                  title: 'ResiManager',
+                  subtitle: 'Gestion Annonces',
+                  gridIcon: Icons.campaign_rounded,
+                  onBack: () => Navigator.pop(context),
+                  onAdd: () => _showFormDialog(null),
+                  addLabel: 'Ajouter',
+                ),
               ),
-            ),
+              SliverToBoxAdapter(
+                child: _buildHeroStatsCard(_all.length, _nbPubliee, _nbArchivee, _nbUrgente),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: _C.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                            border: Border.all(color: _C.divider),
+                          ),
+                          child: TextField(
+                            controller: _searchCtrl,
+                            // onChanged: (_) => _applyFilter(), listener in initState
+                            decoration: const InputDecoration(
+                              hintText: 'Rechercher une annonce...',
+                              hintStyle: TextStyle(color: _C.textLight),
+                              prefixIcon: Icon(Icons.search_rounded, color: _C.textLight),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      GestureDetector(
+                        onTap: () => setState(() => showFilters = !showFilters),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: showFilters ? _C.coral : _C.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (showFilters ? _C.coral : Colors.black).withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                            border: Border.all(color: showFilters ? _C.coral : _C.divider),
+                          ),
+                          child: Icon(
+                            showFilters ? Icons.filter_list_off : Icons.filter_list, 
+                            color: showFilters ? _C.white : _C.dark,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (showFilters)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: _buildFilterTabs(),
+                  ),
+                ),
+              if (_loading)
+                const SliverFillRemaining(
+                  child: Center(child: CircularProgressIndicator(color: _C.coral)),
+                )
+              else if (_filtered.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _buildEmpty(),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => _buildCard(_filtered[index]),
+                      childCount: _filtered.length,
+                    ),
+                  ),
+                ),
+            ],
           ),
-        ]),
+          if (_loading)
+            Container(
+              color: Colors.white.withOpacity(0.3),
+              child: const Center(child: CircularProgressIndicator(color: _C.coral)),
+            ),
+        ],
       ),
     );
   }
 
-  // ── Header ─────────────────────────────────────────────────
-  Widget _buildHeader() {
-    return InterSyndicHeader(
-      title: 'ResiManager',
-      subtitle: 'inter_syndic',
-      gridIcon: Icons.business_rounded,
-      onBack: () => Navigator.pop(context),
-      extraActions: [
-        if (_nbUrgente > 0)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(color: _C.coralLight, borderRadius: BorderRadius.circular(20)),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.warning_amber_rounded, size: 12, color: _C.coral),
-              const SizedBox(width: 5),
-              Text('$_nbUrgente urgente${_nbUrgente > 1 ? 's' : ''}',
-                  style: const TextStyle(color: _C.coral, fontSize: 11, fontWeight: FontWeight.w700)),
-            ]),
+  Widget _buildHeroStatsCard(int total, int publiee, int archivee, int urgente) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _C.coral,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: _C.coral.withOpacity(0.25),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                   const Text(
+                    'Annonces',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  Text(
+                    '$total annonces au total',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.campaign_rounded, color: Colors.white, size: 12),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'Communication',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+               Text(
+                '${total > 0 ? ((publiee / total) * 100).toInt() : 0}% publiées',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+               Text(
+                '${urgente} Urgente${urgente > 1 ? 's' : ''}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: total > 0 ? (publiee / total) : 0,
+              backgroundColor: Colors.white.withOpacity(0.2),
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+              minHeight: 8,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildHeroStatMiniItem(publiee.toString().padLeft(2, '0'), 'Publiées'),
+                _buildHeroStatDivider(),
+                _buildHeroStatMiniItem(urgente.toString().padLeft(2, '0'), 'Urgentes'),
+                _buildHeroStatDivider(),
+                _buildHeroStatMiniItem(archivee.toString().padLeft(2, '0'), 'Archivées'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroStatMiniItem(String value, String label) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.8),
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ],
     );
   }
 
-  // ── Stats ──────────────────────────────────────────────────
-  Widget _buildStats() {
-    return Row(children: [
-      _statCard(Icons.check_circle_outline_rounded, '$_nbPubliee', 'Publiées', _C.green, _C.greenLight),
-      const SizedBox(width: 10),
-      _statCard(Icons.edit_note_rounded, '$_nbArchivee', 'Archivées', _C.blue, _C.blueLight),
-      const SizedBox(width: 10),
-      _statCard(Icons.warning_amber_rounded, '$_nbUrgente', 'Urgentes', _C.coral, _C.coralLight),
-    ]);
-  }
+  Widget _buildHeroStatDivider() =>
+      Container(width: 1, height: 24, color: Colors.white.withOpacity(0.2));
 
-  Widget _statCard(IconData icon, String value, String label, Color color, Color bg) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        decoration: BoxDecoration(color: _C.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: _C.divider)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          Container(width: 32, height: 32, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
-              child: Icon(icon, color: color, size: 16)),
-          const SizedBox(height: 8),
-          FittedBox(fit: BoxFit.scaleDown, child: Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _C.dark, letterSpacing: -0.5))),
-          const SizedBox(height: 2),
-          FittedBox(fit: BoxFit.scaleDown, child: Text(label, style: const TextStyle(color: _C.textLight, fontSize: 9))),
-        ]),
-      ),
-    );
-  }
-
-  // ── Barre de recherche ─────────────────────────────────────
-  Widget _buildSearchBar() {
-    return Container(
-      decoration: BoxDecoration(color: _C.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _C.divider)),
-      child: TextField(
-        controller: _searchCtrl,
-        style: const TextStyle(fontSize: 14, color: _C.dark),
-        decoration: InputDecoration(
-          hintText: 'Rechercher une annonce...',
-          hintStyle: const TextStyle(color: _C.textLight, fontSize: 13),
-          prefixIcon: const Icon(Icons.search_rounded, color: _C.textLight, size: 20),
-          suffixIcon: _searchCtrl.text.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.close_rounded, color: _C.textLight, size: 18),
-                  onPressed: () { _searchCtrl.clear(); _applyFilter(); },
-                )
-              : null,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        ),
-      ),
-    );
-  }
-
-  // ── Filtres ────────────────────────────────────────────────
   Widget _buildFilterTabs() {
     final filters = [
       ('tous',      'Tous',        _all.length),
       ('publiee',   'Publiées',    _nbPubliee),
-      ('archivee',  'Archivées',   _nbArchivee),
       ('urgente',   'Urgentes',    _nbUrgente),
+      ('archivee',  'Archivées',   _nbArchivee),
     ];
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: Row(children: filters.map((f) {
-        final isSelected = _filterType == f.$1;
-        return GestureDetector(
-          onTap: () => _setFilter(f.$1),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            margin: const EdgeInsets.only(right: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: isSelected ? _C.coral : _C.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: isSelected ? _C.coral : _C.divider),
-            ),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Text(f.$2, style: TextStyle(color: isSelected ? _C.white : _C.textMid, fontWeight: FontWeight.w600, fontSize: 12)),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: isSelected ? _C.white.withValues(alpha: 0.25) : _C.bg,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text('${f.$3}', style: TextStyle(color: isSelected ? _C.white : _C.textLight, fontSize: 10, fontWeight: FontWeight.w700)),
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: filters.map((f) {
+          final isSelected = _filterType == f.$1;
+          return GestureDetector(
+            onTap: () => _setFilter(f.$1),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.only(right: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: isSelected ? _C.coral : _C.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  if (isSelected)
+                    BoxShadow(
+                      color: _C.coral.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                ],
+                border: Border.all(color: isSelected ? _C.coral : _C.divider),
               ),
-            ]),
-          ),
-        );
-      }).toList()),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    f.$2,
+                    style: TextStyle(
+                        color: isSelected ? _C.white : _C.textMid,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isSelected ? _C.white.withOpacity(0.2) : _C.bg,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${f.$3}',
+                      style: TextStyle(
+                          color: isSelected ? _C.white : _C.textMid,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
-  // ── Empty state ────────────────────────────────────────────
   Widget _buildEmpty() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 60),
-      child: Column(children: [
-        Container(
-          width: 64, height: 64,
-          decoration: BoxDecoration(color: _C.coralLight, borderRadius: BorderRadius.circular(18)),
-          child: const Icon(Icons.campaign_outlined, color: _C.coral, size: 30),
-        ),
-        const SizedBox(height: 16),
-        const Text('Aucune annonce', style: TextStyle(color: _C.dark, fontSize: 16, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 6),
-        Text(
-          _filterType == 'tous'
-              ? 'Appuyez sur + pour créer une nouvelle annonce'
-              : 'Aucune annonce avec ce filtre',
-          style: const TextStyle(color: _C.textLight, fontSize: 12),
-          textAlign: TextAlign.center,
-        ),
-      ]),
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: _C.divider.withOpacity(0.3),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.campaign_outlined, size: 80, color: _C.textLight.withOpacity(0.5)),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Aucune annonce', 
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: _C.dark),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _filterType == 'tous'
+                ? 'Essayez d\'ajouter une nouvelle annonce'
+                : 'Aucune annonce avec ce filtre', 
+            style: const TextStyle(fontSize: 14, color: _C.textLight),
+          ),
+          const SizedBox(height: 24),
+          if (_filterType != 'tous' || _searchCtrl.text.isNotEmpty)
+            OutlinedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _searchCtrl.clear();
+                  _filterType = 'tous';
+                  _applyFilter();
+                });
+              },
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Réinitialiser tout'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _C.coral,
+                side: const BorderSide(color: _C.coral),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
   // ── Carte annonce ──────────────────────────────────────────
   Widget _buildCard(Map<String, dynamic> a) {
     final bool isUrgent   = a['type'] == 'urgente';
+    final bool isReunion  = a['type'] == 'reunion';
     final bool isPubliee  = a['statut'] == 'publiee';
     final String dateStr  = (a['created_at'] ?? '').toString().split('T')[0];
 
@@ -283,9 +485,12 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
         color: _C.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isUrgent ? _C.coral.withValues(alpha: 0.4) : _C.divider,
-          width: isUrgent ? 1.5 : 1,
+          color: isUrgent ? _C.coral.withValues(alpha: 0.4) : (isReunion ? _C.blue.withValues(alpha: 0.4) : _C.divider),
+          width: (isUrgent || isReunion) ? 1.5 : 1,
         ),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
       ),
       child: Column(children: [
 
@@ -296,7 +501,7 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
 
             // Titre + badges
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              // Barre colorée latérale (simulée avec un Container)
+              // Barre colorée latérale
               Container(
                 width: 4, height: 48,
                 decoration: BoxDecoration(
@@ -305,7 +510,9 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
                     end: Alignment.bottomCenter,
                     colors: isUrgent
                         ? [_C.coral, const Color(0xFFFF9A6C)]
-                        : [const Color(0xFF2D2D2D), const Color(0xFF6B6B6B)],
+                        : isReunion 
+                            ? [_C.blue, const Color(0xFF88A0FF)]
+                            : [const Color(0xFF2D2D2D), const Color(0xFF6B6B6B)],
                   ),
                   borderRadius: BorderRadius.circular(4),
                 ),
@@ -327,6 +534,12 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(color: _C.coral, borderRadius: BorderRadius.circular(20)),
                           child: const Text('URGENT', style: TextStyle(color: _C.white, fontSize: 8, fontWeight: FontWeight.w800)),
+                        ),
+                      if (isReunion)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(color: _C.blue, borderRadius: BorderRadius.circular(20)),
+                          child: const Text('RÉUNION', style: TextStyle(color: _C.white, fontSize: 8, fontWeight: FontWeight.w800)),
                         ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -509,12 +722,24 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
     final isEdit = existing != null;
     final titreCtrl   = TextEditingController(text: existing?['titre'] ?? '');
     final contenuCtrl = TextEditingController(text: existing?['contenu'] ?? '');
+    
+    // Reunion specific fields
+    final dateCtrl = TextEditingController();
+    final hourCtrl = TextEditingController();
+    final lieuCtrl = TextEditingController();
+    DateTime? selectedDate;
+    
     String selectedType = existing?['type'] ?? 'normale';
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialog) => Dialog(
+        builder: (ctx, setDialog) {
+          bool isSaving = false;
+          String? errorMessage;
+
+          return Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           child: Padding(
@@ -586,63 +811,201 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
                 // Type
                 const Text('Type', style: TextStyle(color: _C.textLight, fontSize: 12, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
-                Row(children: [
-                  _typeOption('normale', 'Normale', Icons.info_outline_rounded, _C.dark, setDialog, selectedType, (v) => selectedType = v),
-                  const SizedBox(width: 10),
-                  _typeOption('urgente', 'Urgente', Icons.warning_amber_rounded, _C.coral, setDialog, selectedType, (v) => selectedType = v),
-                ]),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(children: [
+                    _typeOption('normale', 'Normale', Icons.info_outline_rounded, _C.dark, setDialog, selectedType, (v) => selectedType = v),
+                    const SizedBox(width: 8),
+                    _typeOption('information', 'Info', Icons.lightbulb_outline_rounded, _C.amber, setDialog, selectedType, (v) => selectedType = v),
+                    const SizedBox(width: 8),
+                    _typeOption('urgente', 'Urgente', Icons.warning_amber_rounded, _C.coral, setDialog, selectedType, (v) => selectedType = v),
+                    const SizedBox(width: 8),
+                    _typeOption('reunion', 'Réunion', Icons.groups_rounded, _C.blue, setDialog, selectedType, (v) => selectedType = v),
+                  ]),
+                ),
+                
+                if (selectedType == 'reunion') ...[
+                  const SizedBox(height: 20),
+                  const Text('Détails de la réunion', style: TextStyle(color: _C.dark, fontSize: 14, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('Date', style: TextStyle(color: _C.textLight, fontSize: 11)),
+                        const SizedBox(height: 4),
+                        GestureDetector(
+                          onTap: () async {
+                            final d = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365)));
+                            if (d != null) { setDialog(() { selectedDate = d; dateCtrl.text = "${d.day}/${d.month}/${d.year}"; }); }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10)),
+                            child: Row(children: [
+                              const Icon(Icons.calendar_today_rounded, size: 14, color: _C.textLight),
+                              const SizedBox(width: 8),
+                              Text(dateCtrl.text.isEmpty ? 'Sélectionner' : dateCtrl.text, style: TextStyle(fontSize: 13, color: dateCtrl.text.isEmpty ? _C.textLight : _C.dark)),
+                            ]),
+                          ),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('Heure', style: TextStyle(color: _C.textLight, fontSize: 11)),
+                        const SizedBox(height: 4),
+                        GestureDetector(
+                          onTap: () async {
+                            final t = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+                            if (t != null) { setDialog(() => hourCtrl.text = "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}"); }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10)),
+                            child: Row(children: [
+                              const Icon(Icons.access_time_rounded, size: 14, color: _C.textLight),
+                              const SizedBox(width: 8),
+                              Text(hourCtrl.text.isEmpty ? 'Sélectionner' : hourCtrl.text, style: TextStyle(fontSize: 13, color: hourCtrl.text.isEmpty ? _C.textLight : _C.dark)),
+                            ]),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ]),
+                  const SizedBox(height: 12),
+                  const Text('Lieu', style: TextStyle(color: _C.textLight, fontSize: 11)),
+                  const SizedBox(height: 4),
+                  Container(
+                    decoration: BoxDecoration(color: _C.bg, borderRadius: BorderRadius.circular(10)),
+                    child: TextField(
+                      controller: lieuCtrl,
+                      style: const TextStyle(fontSize: 13, color: _C.dark),
+                      decoration: const InputDecoration(
+                        hintText: 'Ex: Salle de réunion, Garden...',
+                        hintStyle: TextStyle(color: _C.textLight, fontSize: 12),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 24),
+
+                if (errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: _C.coralLight, borderRadius: BorderRadius.circular(10)),
+                      child: Row(children: [
+                        const Icon(Icons.error_outline_rounded, color: _C.coral, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(errorMessage!, style: const TextStyle(color: _C.coral, fontSize: 12, fontWeight: FontWeight.w600))),
+                      ]),
+                    ),
+                  ),
                 const SizedBox(height: 24),
 
                 // Bouton confirmer
                 GestureDetector(
-                  onTap: () async {
+                  onTap: isSaving ? null : () async {
                     final titre   = titreCtrl.text.trim();
                     final contenu = contenuCtrl.text.trim();
+                    
                     if (titre.isEmpty || contenu.isEmpty) {
-                      _showSnack('Veuillez remplir tous les champs', isError: true);
+                      setDialog(() => errorMessage = 'Veuillez remplir tous les champs');
                       return;
                     }
-                    Navigator.pop(ctx);
-                    String? err;
-                    if (isEdit) {
-                      err = await _service.updateAnnonce(
-                        id: existing!['id'],
-                        titre: titre,
-                        contenu: contenu,
-                        type: selectedType,
-                        statut: existing['statut'] ?? 'archivee',
-                      );
-                    } else {
-                      err = await _service.addAnnonce(
-                        trancheId: widget.trancheId,
-                        titre: titre,
-                        contenu: contenu,
-                        type: selectedType,
-                      );
+                    if (selectedType == 'reunion') {
+                      if (selectedDate == null || hourCtrl.text.isEmpty || lieuCtrl.text.trim().isEmpty) {
+                        setDialog(() => errorMessage = 'Veuillez remplir les détails de la réunion');
+                        return;
+                      }
                     }
-                    if (!mounted) return;
-                    if (err != null) {
-                      _showSnack('Erreur : $err', isError: true);
-                    } else {
+
+                    setDialog(() { isSaving = true; errorMessage = null; });
+                    
+                    String? err;
+                    int? createdAnnonceId;
+
+                    try {
+                      // 1. Créer l'annonce d'abord
+                      if (isEdit) {
+                        err = await _service.updateAnnonce(
+                          id: existing!['id'],
+                          titre: titre,
+                          contenu: contenu,
+                          type: selectedType,
+                          statut: existing['statut'] ?? 'publiee',
+                        );
+                      } else {
+                        // On modifie temporairement l'appel pour gérer le retour d'ID si on le fait
+                        // Pour l'instant on garde la compatibilité si addAnnonce n'est pas encore mis à jour
+                        final res = await _service.addAnnonce(
+                          trancheId: widget.trancheId,
+                          titre: titre,
+                          contenu: contenu,
+                          type: selectedType,
+                        );
+                        // Si addAnnonce retourne Map<String, dynamic>
+                        if (res is Map) {
+                          err = res['error'];
+                          createdAnnonceId = res['id'];
+                        } else {
+                          err = res as String?;
+                        }
+                      }
+
+                      if (err != null) throw Exception(err);
+
+                      // 2. Si c'est une réunion, créer l'entrée réunion liée
+                      if (selectedType == 'reunion' && !isEdit) {
+                        final rErr = await _reunionService.addReunion(
+                          titre: titre,
+                          description: contenu,
+                          date: selectedDate!,
+                          heure: hourCtrl.text,
+                          lieu: lieuCtrl.text.trim(),
+                          trancheId: widget.trancheId,
+                          annonceId: createdAnnonceId,
+                        );
+                        if (rErr != null) throw Exception('Erreur réunion : $rErr');
+                      }
+
+                      if (!mounted) return;
+                      Navigator.pop(ctx);
                       _showSnack(isEdit ? 'Annonce modifiée ✓' : 'Annonce créée ✓');
                       _load();
+
+                    } catch (e) {
+                      setDialog(() { 
+                        isSaving = false; 
+                        errorMessage = e.toString().replaceAll('Exception: ', ''); 
+                      });
                     }
                   },
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: BoxDecoration(color: _C.coral, borderRadius: BorderRadius.circular(12)),
-                    child: Text(
-                      isEdit ? 'Enregistrer les modifications' : 'Créer l\'annonce',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: _C.white, fontWeight: FontWeight.w800, fontSize: 14),
+                    decoration: BoxDecoration(
+                      color: isSaving ? _C.textLight : _C.coral, 
+                      borderRadius: BorderRadius.circular(12)
                     ),
+                    child: isSaving 
+                      ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)))
+                      : Text(
+                          isEdit ? 'Enregistrer les modifications' : 'Créer l\'annonce',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: _C.white, fontWeight: FontWeight.w800, fontSize: 14),
+                        ),
                   ),
                 ),
-              ]),
+                ]),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -657,27 +1020,26 @@ class _AnnoncesScreenState extends State<AnnoncesScreen> {
     void Function(String) onSelect,
   ) {
     final isSelected = current == value;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setDialog(() => onSelect(value)),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? (value == 'urgente' ? _C.coralLight : _C.bg) : _C.bg,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? color : _C.divider,
-              width: isSelected ? 2 : 1,
-            ),
+    return GestureDetector(
+      onTap: () => setDialog(() => onSelect(value)),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        margin: const EdgeInsets.only(right: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? (value == 'urgente' ? _C.coralLight : _C.bg) : _C.bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? color : _C.divider,
+            width: isSelected ? 2 : 1,
           ),
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(icon, size: 16, color: isSelected ? color : _C.textLight),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(color: isSelected ? color : _C.textMid, fontWeight: FontWeight.w700, fontSize: 13)),
-            if (isSelected) ...[ const SizedBox(width: 4), Icon(Icons.check_circle_rounded, size: 14, color: color)],
-          ]),
         ),
+        child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, size: 16, color: isSelected ? color : _C.textLight),
+          const SizedBox(width: 8),
+          Text(label, style: TextStyle(color: isSelected ? color : _C.textMid, fontWeight: FontWeight.w700, fontSize: 13)),
+          if (isSelected) ...[ const SizedBox(width: 4), Icon(Icons.check_circle_rounded, size: 14, color: color)],
+        ]),
       ),
     );
   }

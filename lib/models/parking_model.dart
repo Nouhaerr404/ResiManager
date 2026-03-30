@@ -16,6 +16,7 @@ class ParkingModel {
   final String? trancheNom;
   final String? beneficiaireNom;
   final String? beneficiairePrenom;
+  final String? beneficiaireTelephone;
   final bool? beneficiaireEstResident;
 
   ParkingModel({
@@ -30,6 +31,7 @@ class ParkingModel {
     this.trancheNom,
     this.beneficiaireNom,
     this.beneficiairePrenom,
+    this.beneficiaireTelephone,
     this.beneficiaireEstResident,
   });
 
@@ -68,6 +70,7 @@ class ParkingModel {
       trancheNom: tranche?['nom'],
       beneficiaireNom: benef?['nom'],
       beneficiairePrenom: benef?['prenom'],
+      beneficiaireTelephone: benef?['telephone'],
       beneficiaireEstResident: benef?['resident_id'] != null,
     );
   }
