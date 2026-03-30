@@ -98,14 +98,24 @@ class AuthService {
     } catch (e) { return {'success': false, 'error': 'Erreur de vérification'}; }
   }
 
-  Future<Map<String, dynamic>> resetPasswordWithCode({required String email, required String newPassword}) async {
+  Future<Map<String, dynamic>> resetPasswordWithCode({
+    required String email,
+    required String newPassword
+  }) async {
     try {
       final normalizedEmail = email.trim().toLowerCase();
       await _db.auth.updateUser(UserAttributes(password: newPassword));
       final hashedPassword = await _hashPassword(newPassword);
       await _db.from('users').update({'password': hashedPassword}).eq('email', normalizedEmail);
       return {'success': true};
-    } catch (e) { return {'success': false, 'error': e.toString()}; }
+    } catch (e) {
+      // ✅ Si même mot de passe → traiter comme succès
+      if (e.toString().contains('same_password') ||
+          e.toString().contains('New password should be different')) {
+        return {'success': true};
+      }
+      return {'success': false, 'error': e.toString()};
+    }
   }
 
   Future<Map<String, dynamic>> resetPassword(String newPassword, {String? accessToken}) async {
