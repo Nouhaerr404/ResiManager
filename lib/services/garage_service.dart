@@ -4,6 +4,34 @@ import '../models/garage_model.dart';
 class GarageService {
   final _db = Supabase.instance.client;
 
+  /// Récupère le mandat actif (le plus récent non terminé, sinon le plus récent) pour une tranche.
+  Future<int?> _getActiveMandatId(int trancheId) async {
+    try {
+      // Cherche d'abord un mandat en cours (date_fin null)
+      final enCours = await _db
+          .from('historique_affectations')
+          .select('id')
+          .eq('tranche_id', trancheId)
+          .isFilter('date_fin', null)
+          .order('date_debut', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (enCours != null) return enCours['id'] as int?;
+      // Sinon le plus récent
+      final recent = await _db
+          .from('historique_affectations')
+          .select('id')
+          .eq('tranche_id', trancheId)
+          .order('date_debut', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      return recent?['id'] as int?;
+    } catch (e) {
+      print('>>> ERREUR _getActiveMandatId Garage: $e');
+      return null;
+    }
+  }
+
   Future<List<GarageModel>> getGaragesByTranche(int trancheId) async {
     final response = await _db
         .from('garages')
@@ -91,6 +119,7 @@ class GarageService {
     required String prenom,
     String? telephone,
     int? residentId,
+    int? mandatId, // mandat explicite
   }) async {
     try {
       final benef = await _db.from('beneficiaires').insert({
@@ -110,14 +139,15 @@ class GarageService {
         'beneficiaire_id': benef['id'],
       });
 
-      // CRÉATION DU PAIEMENT si c'est un résident
+      // CRÉATION DU PAIEMENT si c'est un résident — avec mandat_id résolu
       if (residentId != null) {
         await _createPayment(
           residentId: residentId,
           trancheId: trancheId,
           residenceId: residenceId,
-          montant: prixAnnuel,
+          montant: prixAnnuel, // ← vrai prix
           type: 'garage',
+          mandatId: mandatId, // ← mandat actif (résolu dans _createPayment si null)
         );
       }
 
@@ -134,6 +164,7 @@ class GarageService {
     required int residenceId,
     required double montant,
     required String type,
+    int? mandatId, // mandat explicite (prioritaire)
   }) async {
     try {
       final resData = await _db.from('residents').select('appartement_id').eq('user_id', residentId).maybeSingle();
@@ -142,6 +173,20 @@ class GarageService {
 
       final trancheData = await _db.from('tranches').select('inter_syndic_id').eq('id', trancheId).maybeSingle();
       final int isId = trancheData?['inter_syndic_id'] ?? 1;
+
+      // Résoudre le mandat_id : priorité au paramètre, sinon chercher le mandat actif
+      final int? resolvedMandatId = mandatId ?? await _getActiveMandatId(trancheId);
+
+      // Éviter les doublons
+      var dupQuery = _db.from('paiements')
+          .select('id')
+          .eq('appartement_id', appartId)
+          .eq('type_paiement', type);
+      if (resolvedMandatId != null) {
+        dupQuery = dupQuery.eq('mandat_id', resolvedMandatId);
+      }
+      final existing = await dupQuery.maybeSingle();
+      if (existing != null) return;
 
       await _db.from('paiements').insert({
         'resident_id': residentId,
@@ -154,6 +199,7 @@ class GarageService {
         'statut': 'impaye',
         'annee': DateTime.now().year,
         'mois': DateTime.now().month,
+        if (resolvedMandatId != null) 'mandat_id': resolvedMandatId,
       });
     } catch (e) {
       print('>>> ERREUR _createPayment Garage: $e');
@@ -167,7 +213,8 @@ class GarageService {
     String? telephone,
     required String type,
     required int trancheId,
-    int? residentId, // AJOUTÉ
+    int? residentId,
+    int? mandatId, // mandat explicite depuis le contexte appelant
   }) async {
     try {
       // Récupérer les infos du garage pour le prix et la résidence
@@ -190,14 +237,15 @@ class GarageService {
         'beneficiaire_id': benef['id'],
       }).eq('id', garageId);
 
-      // CRÉATION DU PAIEMENT si c'est un résident
+      // CRÉATION DU PAIEMENT si c'est un résident — avec mandat_id résolu
       if (residentId != null) {
         await _createPayment(
           residentId: residentId,
           trancheId: trancheId,
           residenceId: resId,
-          montant: prix,
+          montant: prix, // ← vrai prix du garage
           type: 'garage',
+          mandatId: mandatId, // ← mandat actif (résolu dans _createPayment si null)
         );
       }
 

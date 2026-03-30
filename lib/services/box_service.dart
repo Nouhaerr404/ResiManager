@@ -4,6 +4,32 @@ import '../models/box_model.dart';
 class BoxService {
   final _db = Supabase.instance.client;
 
+  /// Récupère le mandat actif (le plus récent non terminé, sinon le plus récent) pour une tranche.
+  Future<int?> _getActiveMandatId(int trancheId) async {
+    try {
+      final enCours = await _db
+          .from('historique_affectations')
+          .select('id')
+          .eq('tranche_id', trancheId)
+          .isFilter('date_fin', null)
+          .order('date_debut', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (enCours != null) return enCours['id'] as int?;
+      final recent = await _db
+          .from('historique_affectations')
+          .select('id')
+          .eq('tranche_id', trancheId)
+          .order('date_debut', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      return recent?['id'] as int?;
+    } catch (e) {
+      print('>>> ERREUR _getActiveMandatId Box: $e');
+      return null;
+    }
+  }
+
   Future<List<BoxModel>> getBoxesByTranche(int trancheId) async {
     final response = await _db
         .from('boxes')
@@ -69,6 +95,7 @@ class BoxService {
     String? telephone,
     int? residentId,
     int? immeubleId,
+    int? mandatId, // mandat explicite
   }) async {
     try {
       final benef = await _db.from('beneficiaires').insert({
@@ -89,7 +116,6 @@ class BoxService {
         if (immeubleId != null) 'immeuble_id': immeubleId,
       });
 
-      // CRÉATION DU PAIEMENT si c'est un résident
       if (residentId != null) {
         await _createPayment(
           residentId: residentId,
@@ -97,6 +123,7 @@ class BoxService {
           residenceId: residenceId,
           montant: prixAnnuel,
           type: 'box',
+          mandatId: mandatId,
         );
       }
 
@@ -113,6 +140,7 @@ class BoxService {
     required int residenceId,
     required double montant,
     required String type,
+    int? mandatId,
   }) async {
     try {
       final resData = await _db.from('residents').select('appartement_id').eq('user_id', residentId).maybeSingle();
@@ -121,6 +149,18 @@ class BoxService {
 
       final trancheData = await _db.from('tranches').select('inter_syndic_id').eq('id', trancheId).maybeSingle();
       final int isId = trancheData?['inter_syndic_id'] ?? 1;
+
+      final int? resolvedMandatId = mandatId ?? await _getActiveMandatId(trancheId);
+
+      var dupQuery = _db.from('paiements')
+          .select('id')
+          .eq('appartement_id', appartId)
+          .eq('type_paiement', type);
+      if (resolvedMandatId != null) {
+        dupQuery = dupQuery.eq('mandat_id', resolvedMandatId);
+      }
+      final existing = await dupQuery.maybeSingle();
+      if (existing != null) return;
 
       await _db.from('paiements').insert({
         'resident_id': residentId,
@@ -133,6 +173,7 @@ class BoxService {
         'statut': 'impaye',
         'annee': DateTime.now().year,
         'mois': DateTime.now().month,
+        if (resolvedMandatId != null) 'mandat_id': resolvedMandatId,
       });
     } catch (e) {
       print('>>> ERREUR _createPayment Box: $e');
@@ -172,15 +213,14 @@ class BoxService {
     required String prenom,
     String? telephone,
     required int trancheId,
-    int? residentId, // AJOUTÉ
+    int? residentId,
+    int? mandatId, // mandat explicite
   }) async {
     try {
-      // Récupérer les infos du box pour le prix et la résidence
       final bInfo = await _db.from('boxes').select('prix_annuel, residence_id').eq('id', boxId).single();
       final double prix = double.parse(bInfo['prix_annuel'].toString());
       final int resId = bInfo['residence_id'];
 
-      // Créer bénéficiaire
       final benef = await _db.from('beneficiaires').insert({
         'nom': nom,
         'prenom': prenom,
@@ -189,20 +229,19 @@ class BoxService {
         if (residentId != null) 'resident_id': residentId,
       }).select('id').single();
 
-      // Assigner box
       await _db.from('boxes').update({
         'statut': 'occupe',
         'beneficiaire_id': benef['id'],
       }).eq('id', boxId);
 
-      // CRÉATION DU PAIEMENT si c'est un résident
       if (residentId != null) {
         await _createPayment(
           residentId: residentId,
           trancheId: trancheId,
           residenceId: resId,
-          montant: prix,
+          montant: prix, // ← vrai prix du box
           type: 'box',
+          mandatId: mandatId,
         );
       }
 

@@ -793,6 +793,7 @@ class ResidentService {
           montant: 0,
           type: 'parking',
           mandatId: mandatId,
+          resourceId: parkingId, // ← récupère le vrai prix_annuel
         );
       }
       if (boxId != null) {
@@ -811,6 +812,7 @@ class ResidentService {
           montant: 0,
           type: 'box',
           mandatId: mandatId,
+          resourceId: boxId, // ← récupère le vrai prix_annuel
         );
       }
       if (garageId != null) {
@@ -830,6 +832,7 @@ class ResidentService {
           montant: 0,
           type: 'garage',
           mandatId: mandatId,
+          resourceId: garageId, // ← récupère le vrai prix_annuel
         );
       }
 
@@ -1015,6 +1018,7 @@ class ResidentService {
     required double montant,
     required String type,
     required int mandatId,
+    int? resourceId, // ID du parking / box / garage pour récupérer le vrai prix
   }) async {
     try {
       final resData = await _db
@@ -1032,6 +1036,30 @@ class ResidentService {
           .maybeSingle();
       final int isId = (trancheData?['inter_syndic_id'] as int?) ?? 1;
 
+      // ── Récupérer le vrai prix depuis la ressource si resourceId fourni ──
+      double montantEffectif = montant;
+      if (resourceId != null) {
+        final String tableName = type == 'parking'
+            ? 'parkings'
+            : type == 'box'
+            ? 'boxes'
+            : 'garages';
+        try {
+          final resourceData = await _db
+              .from(tableName)
+              .select('prix_annuel')
+              .eq('id', resourceId)
+              .maybeSingle();
+          if (resourceData != null) {
+            montantEffectif =
+                double.tryParse(resourceData['prix_annuel'].toString()) ??
+                    montant;
+          }
+        } catch (e) {
+          debugPrint('>>> WARN fetch prix $tableName #$resourceId: $e');
+        }
+      }
+
       final existing = await _db
           .from('paiements')
           .select('id')
@@ -1046,7 +1074,7 @@ class ResidentService {
         'appartement_id': appartId,
         'residence_id': residenceId,
         'inter_syndic_id': isId,
-        'montant_total': montant,
+        'montant_total': montantEffectif,
         'montant_paye': 0,
         'type_paiement': type,
         'statut': 'impaye',
