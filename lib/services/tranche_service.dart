@@ -533,9 +533,10 @@ class TrancheService {
     required String titre,
     required String contenu,
     required String type,
+    int? mandatId,
   }) async {
     try {
-      // Récupération de l'inter_syndic_id, requis par la BD
+      // Récupération de l'inter_syndic_id requis par la BD
       final trancheInfo = await _db
           .from('tranches')
           .select('inter_syndic_id')
@@ -544,8 +545,30 @@ class TrancheService {
 
       final interSyndicId = trancheInfo?['inter_syndic_id'] ?? 1;
 
+      // Détection automatique du mandat actif si non fourni
+      int? activeMandatId = mandatId;
+      if (activeMandatId == null) {
+        final nowStr = DateTime.now().toIso8601String().split('T')[0];
+        final mandatRes = await _db
+            .from('historique_affectations')
+            .select('id, date_fin')
+            .eq('tranche_id', trancheId)
+            .eq('inter_syndic_id', interSyndicId)
+            .lte('date_debut', nowStr)
+            .order('date_debut', ascending: false);
+            
+        final List mandats = mandatRes as List? ?? [];
+        for (var m in mandats) {
+          if (m['date_fin'] == null || m['date_fin'].toString().compareTo(nowStr) >= 0) {
+            activeMandatId = m['id'] as int;
+            break;
+          }
+        }
+      }
+
       final res = await _db.from('annonces').insert({
         'tranche_id':      trancheId,
+        'mandat_id':       activeMandatId,
         'inter_syndic_id': interSyndicId,
         'titre':           titre.trim(),
         'contenu':         contenu.trim(),
@@ -581,6 +604,11 @@ class TrancheService {
 
   Future<String?> deleteAnnonce(int id) async {
     try {
+      // 1. Supprimer d'abord la réunion liée s'il y en a une, pour éviter
+      // la violation de clé étrangère (fk_reunions_annonce)
+      await _db.from('reunions').delete().eq('annonce_id', id);
+
+      // 2. Ensuite, supprimer l'annonce elle-même
       await _db.from('annonces').delete().eq('id', id);
       return null;
     } catch (e) {
