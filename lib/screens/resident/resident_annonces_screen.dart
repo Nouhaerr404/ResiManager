@@ -53,12 +53,8 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
   }
 
   Future<void> _fetchAnnonces({bool resetPage = false}) async {
-    if (resetPage) {
-      setState(() => _page = 0);
-    }
-
+    if (resetPage) setState(() => _page = 0);
     setState(() => _isLoading = true);
-
     final result = await _service.getAnnoncesPaginated(
       userId: widget.userId,
       typeAnnonce: _filterType,
@@ -67,7 +63,6 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
       page: _page,
       pageSize: _pageSize,
     );
-
     setState(() {
       _annonces = result['annonces'];
       _hasMore = result['hasMore'];
@@ -76,17 +71,11 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
   }
 
   void _nextPage() {
-    if (_hasMore) {
-      setState(() => _page++);
-      _fetchAnnonces();
-    }
+    if (_hasMore) { setState(() => _page++); _fetchAnnonces(); }
   }
 
   void _prevPage() {
-    if (_page > 0) {
-      setState(() => _page--);
-      _fetchAnnonces();
-    }
+    if (_page > 0) { setState(() => _page--); _fetchAnnonces(); }
   }
 
   void _onSearchChanged(String value) {
@@ -97,9 +86,110 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
     });
   }
 
+  // ══════════════════════════════════════════════════════
+  // BOTTOMSHEET SÉLECTEUR MANDAT
+  // ══════════════════════════════════════════════════════
+  void _showMandatPicker() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Poignée
+          Container(
+            margin: const EdgeInsets.only(top: 12, bottom: 4),
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('Filtrer par mandat',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+          const Divider(height: 1),
+
+          // Option "Tous"
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.calendar_month_rounded,
+                  color: _orange, size: 18),
+            ),
+            title: const Text('Tous les mandats',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            trailing: _selectedMandatId == null
+                ? const Icon(Icons.check_circle_rounded, color: _orange)
+                : null,
+            onTap: () {
+              setState(() => _selectedMandatId = null);
+              Navigator.pop(ctx);
+              _fetchAnnonces(resetPage: true);
+            },
+          ),
+
+          // Liste mandats
+          ..._mandats.map((m) {
+            final bool isSel = _selectedMandatId == m['id'];
+            final bool enCours = m['est_en_cours'] == true;
+            return ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: enCours
+                      ? Colors.green.withOpacity(0.1)
+                      : _orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  enCours ? Icons.radio_button_checked : Icons.history_rounded,
+                  color: enCours ? Colors.green : _orange,
+                  size: 18,
+                ),
+              ),
+              title: Text(m['label'],
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: isSel ? _orange : Colors.black87)),
+              subtitle: Text(
+                '${m['syndic_nom']}${enCours ? ' · En cours' : ''}',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+              ),
+              trailing: isSel
+                  ? const Icon(Icons.check_circle_rounded, color: _orange)
+                  : null,
+              onTap: () {
+                setState(() => _selectedMandatId = m['id'] as int);
+                Navigator.pop(ctx);
+                _fetchAnnonces(resetPage: true);
+              },
+            );
+          }),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool inLayout = widget.onNavigate != null;
+
+    // Libellé du mandat sélectionné
+    String mandatLabel = 'Tous mandats';
+    if (_selectedMandatId != null && _mandats.isNotEmpty) {
+      final found = _mandats.where((m) => m['id'] == _selectedMandatId);
+      if (found.isNotEmpty) mandatLabel = found.first['label'];
+    }
 
     final body = Column(
       children: [
@@ -113,6 +203,7 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  // Icône + Titre
                   Expanded(
                     child: Row(children: [
                       Container(
@@ -146,46 +237,43 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
                     ]),
                   ),
                   const SizedBox(width: 8),
-                  // ── Dropdown Mandat ──
+
+                  // ── BOUTON MANDAT → ouvre BottomSheet ──
                   if (_mandats.isNotEmpty)
-                    Container(
-                      height: 40,
-                      width: 160,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF5F4F0),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<int?>(
-                          isExpanded: true,
-                          value: _selectedMandatId,
-                          hint: const Text("Mandat",
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: _orange,
-                                  fontWeight: FontWeight.w700)),
-                          icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                              size: 16, color: _orange),
-                          style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.black,
-                              fontWeight: FontWeight.w600),
-                          items: [
-                            const DropdownMenuItem(
-                                value: null, child: Text("Tous")),
-                            ..._mandats.map((m) => DropdownMenuItem<int>(
-                              value: m['id'] as int,
-                              child: Text(m['label'],
-                                  style: const TextStyle(fontSize: 11),
-                                  overflow: TextOverflow.ellipsis),
-                            ))
-                          ],
-                          onChanged: (val) {
-                            setState(() => _selectedMandatId = val);
-                            _fetchAnnonces(resetPage: true);
-                          },
+                    GestureDetector(
+                      onTap: _showMandatPicker,
+                      child: Container(
+                        height: 40,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF5F4F0),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _orange.withOpacity(0.3)),
                         ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(
+                            _selectedMandatId == null
+                                ? Icons.calendar_month_rounded
+                                : Icons.history_rounded,
+                            size: 15, color: _orange,
+                          ),
+                          const SizedBox(width: 6),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 100),
+                            child: Text(
+                              mandatLabel,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: _orange,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.keyboard_arrow_down_rounded,
+                              size: 16, color: _orange),
+                        ]),
                       ),
                     ),
                 ],
@@ -231,32 +319,19 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(children: [
-                  _filterChip(
-                    label: "Toutes",
-                    value: 'tous',
-                    color: const Color(0xFF2D2D2D),
-                  ),
+                  _filterChip(label: "Toutes", value: 'tous',
+                      color: const Color(0xFF2D2D2D)),
                   const SizedBox(width: 8),
-                  _filterChip(
-                    label: "Urgentes",
-                    value: 'urgente',
-                    color: _orange,
-                    icon: Icons.warning_amber_rounded,
-                  ),
+                  _filterChip(label: "Urgentes", value: 'urgente',
+                      color: _orange, icon: Icons.warning_amber_rounded),
                   const SizedBox(width: 8),
-                  _filterChip(
-                    label: "Normales",
-                    value: 'normale',
-                    color: const Color(0xFF2D2D2D),
-                    icon: Icons.info_outline_rounded,
-                  ),
+                  _filterChip(label: "Normales", value: 'normale',
+                      color: const Color(0xFF2D2D2D),
+                      icon: Icons.info_outline_rounded),
                   const SizedBox(width: 8),
-                  _filterChip(
-                    label: "Informations",
-                    value: 'information',
-                    color: const Color(0xFF4A90D9),
-                    icon: Icons.campaign_outlined,
-                  ),
+                  _filterChip(label: "Informations", value: 'information',
+                      color: const Color(0xFF4A90D9),
+                      icon: Icons.campaign_outlined),
                 ]),
               ),
             ],
@@ -267,19 +342,15 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
         Expanded(
           child: _isLoading
               ? const Center(
-            child: CircularProgressIndicator(
-              color: _orange,
-              strokeWidth: 2.5,
-            ),
-          )
+              child: CircularProgressIndicator(
+                  color: _orange, strokeWidth: 2.5))
               : _annonces.isEmpty
               ? Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: 72,
-                  height: 72,
+                  width: 72, height: 72,
                   decoration: BoxDecoration(
                     color: Colors.grey.shade100,
                     shape: BoxShape.circle,
@@ -288,8 +359,7 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
                     _searchQuery.isNotEmpty
                         ? Icons.search_off_rounded
                         : Icons.campaign_outlined,
-                    size: 32,
-                    color: Colors.grey.shade300,
+                    size: 32, color: Colors.grey.shade300,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -298,9 +368,7 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
                       ? "Aucun résultat pour \"$_searchQuery\""
                       : "Aucune annonce trouvée.",
                   style: TextStyle(
-                    color: Colors.grey.shade400,
-                    fontSize: 14,
-                  ),
+                      color: Colors.grey.shade400, fontSize: 14),
                 ),
               ],
             ),
@@ -314,9 +382,9 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
                   itemCount: _annonces.length,
                   itemBuilder: (context, index) {
                     final a = _annonces[index];
-                    bool isUrgent = a['type'] == 'urgente';
                     return _AnnonceCard(
-                        annonce: a, isUrgent: isUrgent);
+                        annonce: a,
+                        isUrgent: a['type'] == 'urgente');
                   },
                 ),
               ),
@@ -341,8 +409,7 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
                     MainAxisAlignment.spaceBetween,
                     children: [
                       TextButton.icon(
-                        onPressed:
-                        _page > 0 ? _prevPage : null,
+                        onPressed: _page > 0 ? _prevPage : null,
                         icon: const Icon(
                             Icons.arrow_back_ios_rounded,
                             size: 16),
@@ -353,14 +420,11 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
                           Colors.grey.shade400,
                         ),
                       ),
-                      Text(
-                        "Page ${_page + 1}",
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF1A1A1A),
-                          fontSize: 13,
-                        ),
-                      ),
+                      Text("Page ${_page + 1}",
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF1A1A1A),
+                              fontSize: 13)),
                       TextButton.icon(
                         onPressed: _hasMore ? _nextPage : null,
                         label: const Icon(
@@ -387,15 +451,12 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F4F0),
       appBar: AppBar(
-        title: const Text(
-          "Annonces",
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w700,
-            fontSize: 20,
-            letterSpacing: -0.3,
-          ),
-        ),
+        title: const Text("Annonces",
+            style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.w700,
+                fontSize: 20,
+                letterSpacing: -0.3)),
         backgroundColor: const Color(0xFFF5F4F0),
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -424,14 +485,11 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
         decoration: BoxDecoration(
           color: selected ? color : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? color : Colors.grey.shade300,
-          ),
+          border: Border.all(color: selected ? color : Colors.grey.shade300),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           if (icon != null) ...[
-            Icon(icon,
-                size: 13,
+            Icon(icon, size: 13,
                 color: selected ? Colors.white : Colors.grey.shade500),
             const SizedBox(width: 5),
           ],
@@ -447,6 +505,9 @@ class _ResidentAnnoncesScreenState extends State<ResidentAnnoncesScreen> {
   }
 }
 
+// ══════════════════════════════════════════════════════
+// CARTE ANNONCE
+// ══════════════════════════════════════════════════════
 class _AnnonceCard extends StatelessWidget {
   final Map annonce;
   final bool isUrgent;
@@ -459,9 +520,7 @@ class _AnnonceCard extends StatelessWidget {
     String dateStr = createdAt.split('T')[0];
     if (createdAt.length >= 10) {
       final parts = dateStr.split('-');
-      if (parts.length == 3) {
-        dateStr = "${parts[2]}/${parts[1]}/${parts[0]}";
-      }
+      if (parts.length == 3) dateStr = "${parts[2]}/${parts[1]}/${parts[0]}";
     }
 
     return Container(
@@ -485,7 +544,6 @@ class _AnnonceCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Barre colorée gauche
               Container(
                 width: 4,
                 decoration: BoxDecoration(
@@ -498,7 +556,6 @@ class _AnnonceCard extends StatelessWidget {
                   ),
                 ),
               ),
-              // Contenu
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
@@ -529,48 +586,37 @@ class _AnnonceCard extends StatelessWidget {
                                 color: const Color(0xFFFF6B4A),
                                 borderRadius: BorderRadius.circular(20),
                               ),
-                              child: const Text(
-                                "URGENT",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.8,
-                                ),
-                              ),
+                              child: const Text("URGENT",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.8,
+                                  )),
                             ),
                           ],
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        annonce['contenu'] ?? '',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 13,
-                          height: 1.5,
-                          letterSpacing: 0.1,
-                        ),
-                      ),
+                      Text(annonce['contenu'] ?? '',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 13,
+                            height: 1.5,
+                            letterSpacing: 0.1,
+                          )),
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.calendar_today_outlined,
-                            size: 11,
-                            color: Colors.grey.shade400,
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            "Publié le $dateStr",
+                      Row(children: [
+                        Icon(Icons.calendar_today_outlined,
+                            size: 11, color: Colors.grey.shade400),
+                        const SizedBox(width: 5),
+                        Text("Publié le $dateStr",
                             style: TextStyle(
                               fontSize: 11,
                               color: Colors.grey.shade400,
                               letterSpacing: 0.2,
-                            ),
-                          ),
-                        ],
-                      ),
+                            )),
+                      ]),
                     ],
                   ),
                 ),
