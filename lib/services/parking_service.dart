@@ -10,7 +10,7 @@ class ParkingService {
         .select('''
           *,
           tranches(nom),
-          beneficiaires(nom, prenom, resident_id)
+          beneficiaires(nom, prenom, resident_id, telephone)
         ''')
         .eq('tranche_id', trancheId)
         .order('numero');
@@ -207,6 +207,18 @@ class ParkingService {
   Future<String?> deleteParking(int parkingId) async {
     try {
       await _db.from('parkings').delete().eq('id', parkingId);
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<String?> updateAllParkingsPrice(int trancheId, double nouvellePrix) async {
+    try {
+      await _db
+          .from('parkings')
+          .update({'prix_annuel': nouvellePrix})
+          .eq('tranche_id', trancheId);
       return null;
     } catch (e) {
       return e.toString();
