@@ -12,6 +12,7 @@ import 'boxes/boxes_screen.dart';
 import 'reclamations/reclamations_screen.dart';
 import 'immeubles/immeubles_screen.dart';
 import 'annonces/annonces_screen.dart';
+import 'planning/planning_calendar_screen.dart';
 import '../../services/finance_service.dart';
 import '../../services/expense_report_pdf_service.dart';
 import '../../utils/temp_session.dart';
@@ -752,6 +753,22 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
           MaterialPageRoute(
               builder: (_) =>
                   AnnoncesScreen(trancheId: widget.tranche.id))),
+    ),
+    _ModuleData(
+      label: 'Planning',
+      value: 'Calendrier',
+      sub: 'Mandat & Notes',
+      icon: Icons.calendar_month_rounded,
+      iconBg: _C.greenLight,
+      valueColor: _C.green,
+      interactive: true,
+      onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => PlanningCalendarScreen(
+                    trancheId: widget.tranche.id,
+                    residenceId: widget.tranche.residenceId,
+                  ))),
     ),
   ];
 

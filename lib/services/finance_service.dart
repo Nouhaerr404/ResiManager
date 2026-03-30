@@ -158,8 +158,9 @@ class FinanceService {
   Future<List<Map<String, dynamic>>> getInterSyndicMandates(int interSyndicId, int residenceId) async {
     try {
       final response = await _db.from('historique_affectations')
-          .select('id, tranche_id, date_debut, date_fin, tranches(nom)')
+          .select('id, tranche_id, date_debut, date_fin, tranches!inner(nom, residence_id)')
           .eq('inter_syndic_id', interSyndicId)
+          .eq('tranches.residence_id', residenceId)
           .order('date_debut', ascending: false);
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
