@@ -7,7 +7,6 @@ class ReunionService {
   final _db = Supabase.instance.client;
 
   // ─────────────────────────────────────────────────────────
-
   // Utilise pour personnaliser les PDFs de convocation
   // ─────────────────────────────────────────────────────────
   Future<Map<String, String>> getTrancheInfo(int trancheId) async {
@@ -47,20 +46,38 @@ class ReunionService {
   }
 
   // ─────────────────────────────────────────────────────────
-  // GET reunions par tranche (avec nb participants)
+  // GET reunions par tranche — FILTRE PAR MANDAT (inter_syndic_id)
+  //
+  // [interSyndicId] : si fourni, filtre les reunions par inter_syndic_id.
+  //   → Correspond au mandat selectionne dans le sélecteur.
+  //   → Si null, charge TOUTES les reunions de la tranche (vue historique globale).
+  //
+  // Pattern identique a ResidentService.getResidentsByTranche(mandatId: ...)
   // ─────────────────────────────────────────────────────────
-  Future<List<ReunionModel>> getReunionsByTranche(int trancheId) async {
+  Future<List<ReunionModel>> getReunionsByTranche(
+      int trancheId, {
+        int? interSyndicId, // <-- nouveau parametre mandat
+      }) async {
     try {
-      final res = await _db
+      // Construction dynamique de la requete selon le filtre mandat
+      var query = _db
           .from('reunions')
           .select('*')
-          .eq('tranche_id', trancheId)
-          .order('date', ascending: false);
+          .eq('tranche_id', trancheId);
 
-      final reunions = (res as List).map((r) => ReunionModel.fromJson(r)).toList();
+      if (interSyndicId != null) {
+        // Filtre par inter_syndic_id du mandat selectionne
+        query = query.eq('inter_syndic_id', interSyndicId);
+      }
+
+      final res = await query.order('date', ascending: false);
+
+      final reunions =
+      (res as List).map((r) => ReunionModel.fromJson(r)).toList();
       if (reunions.isEmpty) return [];
 
-      final reunionIds      = reunions.map((r) => r.id).toList();
+      // Enrichissement avec nb participants + nb confirmes
+      final reunionIds = reunions.map((r) => r.id).toList();
       final participantsRes = await _db
           .from('reunion_resident')
           .select('reunion_id, confirmation')
@@ -69,14 +86,22 @@ class ReunionService {
       final participants = participantsRes as List;
 
       return reunions.map((r) {
-        final rp = participants.where((p) => p['reunion_id'] == r.id).toList();
+        final rp =
+        participants.where((p) => p['reunion_id'] == r.id).toList();
         return ReunionModel(
-          id: r.id, titre: r.titre, description: r.description,
-          date: r.date, heure: r.heure, lieu: r.lieu,
-          trancheId: r.trancheId, interSyndicId: r.interSyndicId,
-          statut: r.statut, createdAt: r.createdAt,
+          id: r.id,
+          titre: r.titre,
+          description: r.description,
+          date: r.date,
+          heure: r.heure,
+          lieu: r.lieu,
+          trancheId: r.trancheId,
+          interSyndicId: r.interSyndicId,
+          statut: r.statut,
+          createdAt: r.createdAt,
           nbParticipants: rp.length,
-          nbConfirmes: rp.where((p) => p['confirmation'] == 'confirme').length,
+          nbConfirmes:
+          rp.where((p) => p['confirmation'] == 'confirme').length,
         );
       }).toList();
     } catch (e) {
@@ -97,14 +122,15 @@ class ReunionService {
     int? annonceId,
   }) async {
     try {
-      // On récupère le vrai inter_syndic_id pour éviter les erreurs FK si ID 1 n'existe pas
+      // On recupere le vrai inter_syndic_id pour eviter les erreurs FK
       final trancheInfo = await _db
           .from('tranches')
           .select('inter_syndic_id')
           .eq('id', trancheId)
           .maybeSingle();
 
-      final interSyndicId = trancheInfo?['inter_syndic_id'] ?? TempSession.interSyndicId;
+      final interSyndicId =
+          trancheInfo?['inter_syndic_id'] ?? TempSession.interSyndicId;
 
       await _db.from('reunions').insert({
         'titre':           titre.trim(),
@@ -152,7 +178,8 @@ class ReunionService {
   // ─────────────────────────────────────────────────────────
   // CHANGER STATUT
   // ─────────────────────────────────────────────────────────
-  Future<String?> updateStatut(int reunionId, StatutReunionEnum statut) async {
+  Future<String?> updateStatut(
+      int reunionId, StatutReunionEnum statut) async {
     try {
       await _db.from('reunions').update({
         'statut':     statut.name,
@@ -169,8 +196,14 @@ class ReunionService {
   // ─────────────────────────────────────────────────────────
   Future<String?> deleteReunion(int reunionId) async {
     try {
-      await _db.from('reunion_resident').delete().eq('reunion_id', reunionId);
-      await _db.from('notifications').delete().eq('reunion_id', reunionId);
+      await _db
+          .from('reunion_resident')
+          .delete()
+          .eq('reunion_id', reunionId);
+      await _db
+          .from('notifications')
+          .delete()
+          .eq('reunion_id', reunionId);
       await _db.from('reunions').delete().eq('id', reunionId);
       return null;
     } catch (e) {
@@ -181,25 +214,42 @@ class ReunionService {
   // ─────────────────────────────────────────────────────────
   // GET residents d'une tranche
   // ─────────────────────────────────────────────────────────
-  Future<List<Map<String, dynamic>>> getResidentsDeTranche(int trancheId) async {
+  Future<List<Map<String, dynamic>>> getResidentsDeTranche(
+      int trancheId) async {
     try {
-      final immRes = await _db.from('immeubles').select('id').eq('tranche_id', trancheId);
-      final immIds = (immRes as List).map((i) => i['id'] as int).toList();
+      final immRes = await _db
+          .from('immeubles')
+          .select('id')
+          .eq('tranche_id', trancheId);
+      final immIds =
+      (immRes as List).map((i) => i['id'] as int).toList();
       if (immIds.isEmpty) return [];
 
-      final appRes = await _db.from('appartements').select('id')
-          .inFilter('immeuble_id', immIds).eq('statut', 'occupe');
-      final appIds = (appRes as List).map((a) => a['id'] as int).toList();
+      final appRes = await _db
+          .from('appartements')
+          .select('id')
+          .inFilter('immeuble_id', immIds)
+          .eq('statut', 'occupe');
+      final appIds =
+      (appRes as List).map((a) => a['id'] as int).toList();
       if (appIds.isEmpty) return [];
 
-      final resRes = await _db.from('residents').select('user_id')
-          .inFilter('appartement_id', appIds).eq('statut', 'actif');
-      final userIds = (resRes as List).map((r) => r['user_id'] as int).toList();
+      final resRes = await _db
+          .from('residents')
+          .select('user_id')
+          .inFilter('appartement_id', appIds)
+          .eq('statut', 'actif');
+      final userIds =
+      (resRes as List).map((r) => r['user_id'] as int).toList();
       if (userIds.isEmpty) return [];
 
-      final usersRes = await _db.from('users')
-          .select('id, nom, prenom, email, telephone').inFilter('id', userIds);
-      return (usersRes as List).map((u) => Map<String, dynamic>.from(u)).toList();
+      final usersRes = await _db
+          .from('users')
+          .select('id, nom, prenom, email, telephone')
+          .inFilter('id', userIds);
+      return (usersRes as List)
+          .map((u) => Map<String, dynamic>.from(u))
+          .toList();
     } catch (e) {
       return [];
     }
@@ -208,24 +258,34 @@ class ReunionService {
   // ─────────────────────────────────────────────────────────
   // ENVOYER CONVOCATIONS (notifications en base uniquement)
   // ─────────────────────────────────────────────────────────
-  Future<String?> envoyerConvocations(int reunionId, List<int> userIds) async {
+  Future<String?> envoyerConvocations(
+      int reunionId, List<int> userIds) async {
     try {
-      await _db.from('reunion_resident').delete().eq('reunion_id', reunionId);
+      await _db
+          .from('reunion_resident')
+          .delete()
+          .eq('reunion_id', reunionId);
       if (userIds.isEmpty) return null;
 
       await _db.from('reunion_resident').insert(
-        userIds.map((uid) => {
+        userIds
+            .map((uid) => {
           'reunion_id':   reunionId,
           'resident_id':  uid,
           'confirmation': 'en_attente',
-        }).toList(),
+        })
+            .toList(),
       );
 
-      final r = await _db.from('reunions')
-          .select('titre, date, heure').eq('id', reunionId).single();
+      final r = await _db
+          .from('reunions')
+          .select('titre, date, heure')
+          .eq('id', reunionId)
+          .single();
 
       await _db.from('notifications').insert(
-        userIds.map((uid) => {
+        userIds
+            .map((uid) => {
           'user_id':    uid,
           'titre':      'Convocation reunion',
           'message':    'Vous etes convoque(e) a la reunion "${r['titre']}" '
@@ -233,7 +293,8 @@ class ReunionService {
           'type':       'reunion',
           'lu':         false,
           'reunion_id': reunionId,
-        }).toList(),
+        })
+            .toList(),
       );
 
       return null;
@@ -245,7 +306,8 @@ class ReunionService {
   // ─────────────────────────────────────────────────────────
   // GET CONVOCATIONS d'une reunion avec details residents
   // ─────────────────────────────────────────────────────────
-  Future<List<ReunionResidentModel>> getConvocations(int reunionId) async {
+  Future<List<ReunionResidentModel>> getConvocations(
+      int reunionId) async {
     try {
       final res = await _db
           .from('reunion_resident')
@@ -255,8 +317,12 @@ class ReunionService {
       final rows = res as List;
       if (rows.isEmpty) return [];
 
-      final userIds = rows.map((r) => r['resident_id'] as int).toList();
-      final users   = await _db.from('users').select('id, nom, prenom').inFilter('id', userIds);
+      final userIds =
+      rows.map((r) => r['resident_id'] as int).toList();
+      final users = await _db
+          .from('users')
+          .select('id, nom, prenom')
+          .inFilter('id', userIds);
 
       return rows.map((r) {
         final user = (users as List).firstWhere(
@@ -269,11 +335,14 @@ class ReunionService {
           reunionId:    r['reunion_id'] as int,
           residentId:   r['resident_id'] as int,
           confirmation: ConfirmationEnum.values.firstWhere(
-                (e) => e.name == (r['confirmation']?.toString() ?? 'en_attente'),
+                (e) =>
+            e.name ==
+                (r['confirmation']?.toString() ?? 'en_attente'),
             orElse: () => ConfirmationEnum.en_attente,
           ),
           createdAt: r['created_at'] != null
-              ? DateTime.tryParse(r['created_at'].toString()) : null,
+              ? DateTime.tryParse(r['created_at'].toString())
+              : null,
           nom:    user['nom']?.toString(),
           prenom: user['prenom']?.toString(),
         );
@@ -286,7 +355,9 @@ class ReunionService {
   String _fmt(String d) {
     try {
       final dt = DateTime.parse(d);
-      return '${dt.day.toString().padLeft(2,'0')}/${dt.month.toString().padLeft(2,'0')}/${dt.year}';
-    } catch (_) { return d; }
+      return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+    } catch (_) {
+      return d;
+    }
   }
 }
