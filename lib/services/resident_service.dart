@@ -227,10 +227,8 @@ class ResidentService {
           .inFilter('appartement_id', appartementIds);
 
       if (mandatId != null) {
-        // Filtrer par mandat spécifique
         paiQuery = paiQuery.eq('mandat_id', mandatId);
       } else {
-        // Fallback : filtrer par année (vue historique sans mandat)
         paiQuery = paiQuery.eq('annee', anneeFiltre);
       }
 
@@ -361,7 +359,6 @@ class ResidentService {
             .where((p) => p['appartement_id'] == r['appartement_id'])
             .toList();
 
-        // Exclure les résidents sans paiement pour ce mandat/année
         if (residentPaiements.isEmpty) continue;
 
         double totalM = 0;
@@ -438,6 +435,14 @@ class ResidentService {
               .toList(),
         ));
       }
+
+      // ✅ AJOUT DU TRI ALPHABÉTIQUE PAR PRÉNOM PUIS NOM
+      result.sort((a, b) {
+        final prenomCompare = a.prenom.toLowerCase().compareTo(b.prenom.toLowerCase());
+        if (prenomCompare != 0) return prenomCompare;
+        return a.nom.toLowerCase().compareTo(b.nom.toLowerCase());
+      });
+
       return result;
     } catch (e) {
       debugPrint('>>> ERREUR getResidentsByTranche: $e');
