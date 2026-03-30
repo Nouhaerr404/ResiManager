@@ -44,7 +44,6 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
   static const Color _white   = Colors.white;
 
   @override
-  @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
@@ -112,27 +111,38 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
 
     if (inLayout) return body;
 
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
-        title: const Text('Mes Paiements',
-            style: TextStyle(color: Colors.white,
-                fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: _orange,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white),
-          onPressed: () => Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ResidentDashboardScreen(userId: widget.userId),
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ResidentDashboardScreen(userId: widget.userId),
+          ),
+        );
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: _bg,
+        appBar: AppBar(
+          title: const Text('Mes Paiements',
+              style: TextStyle(color: Colors.white,
+                  fontWeight: FontWeight.bold, fontSize: 18)),
+          backgroundColor: _orange,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: Colors.white),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white),
+            onPressed: () => Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ResidentDashboardScreen(userId: widget.userId),
+              ),
             ),
           ),
         ),
+        drawer: ResidentMobileDrawer(currentIndex: 2, userId: widget.userId),
+        body: body,
       ),
-      drawer: ResidentMobileDrawer(currentIndex: 2, userId: widget.userId),
-      body: body,
     );
   }
 
@@ -158,16 +168,21 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text("Mes Paiements",
-                    style: TextStyle(color: Colors.white,
-                        fontSize: 20, fontWeight: FontWeight.bold)),
-                if (_overview != null && _overview!['num_appart'] != null)
-                  Text(
-                      'App. ${_overview!['num_appart']} • ${_overview!['tranche_nom'] ?? ''}',
-                      style: const TextStyle(
-                          color: Colors.white70, fontSize: 12)),
-              ]),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text("Mes Paiements",
+                      style: TextStyle(color: Colors.white,
+                          fontSize: 20, fontWeight: FontWeight.bold)),
+                  if (_overview != null && _overview!['num_appart'] != null)
+                    Text(
+                        'App. ${_overview!['num_appart']} • ${_overview!['tranche_nom'] ?? ''}',
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 12)),
+                ]),
+              ),
+              const SizedBox(width: 8),
               _buildYearSelector(),
             ],
           ),
@@ -203,8 +218,11 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
       child: Column(children: [
         Icon(icon, color: Colors.white, size: 18),
         const SizedBox(height: 6),
-        Text(value, style: const TextStyle(
-            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(value, style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+        ),
         Text(label, style: const TextStyle(
             color: Colors.white70, fontSize: 10)),
       ]),
@@ -284,10 +302,13 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
             color: Colors.white, size: 14,
           ),
           const SizedBox(width: 6),
-          Text(
-            _mandatSelectionne?['label'] ?? 'Mandat',
-            style: const TextStyle(color: Colors.white,
-                fontWeight: FontWeight.bold, fontSize: 12),
+          Flexible(
+            child: Text(
+              _mandatSelectionne?['label'] ?? 'Mandat',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white,
+                  fontWeight: FontWeight.bold, fontSize: 12),
+            ),
           ),
           const SizedBox(width: 4),
           const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 16),
@@ -535,9 +556,12 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
         Text(label, style: TextStyle(
             color: color, fontSize: 10, fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
-        Text('${_format(amount)}',
-            style: TextStyle(color: color,
-                fontSize: 15, fontWeight: FontWeight.bold)),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text('${_format(amount)}',
+              style: TextStyle(color: color,
+                  fontSize: 15, fontWeight: FontWeight.bold)),
+        ),
         Text('DH', style: TextStyle(color: color.withOpacity(0.7),
             fontSize: 10)),
       ]),
@@ -839,8 +863,8 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
     // Libellé mois/année de la cotisation
     String targetLabel = "";
     if (month != null && year != null) {
-       const monthsFull = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
-       targetLabel = "Cotisation ${monthsFull[month]} $year";
+      const monthsFull = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+      targetLabel = "Cotisation ${monthsFull[month]} $year";
     }
 
     // ── Couleur selon STATUT
@@ -911,19 +935,25 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
 
             Row(children: [
               // BADGE TYPE
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(
-                  color: typeColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: typeColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(typeIcon, size: 10, color: typeColor),
+                    const SizedBox(width: 3),
+                    Flexible(
+                      child: Text(typeLabel,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: typeColor, fontSize: 10,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ]),
                 ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(typeIcon, size: 10, color: typeColor),
-                  const SizedBox(width: 3),
-                  Text(typeLabel, style: TextStyle(
-                      color: typeColor, fontSize: 10,
-                      fontWeight: FontWeight.w600)),
-                ]),
               ),
               const SizedBox(width: 6),
               // BADGE STATUT
