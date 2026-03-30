@@ -365,7 +365,12 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   }
 
   Widget _buildHeroStats() {
-    final pct = _total == 0 ? 0.0 : _complets / _total;
+    final total = _residents.length;
+    final compl = _residents.where((r) => r.statutPaiement == 'complet').length;
+    final part = _residents.where((r) => r.statutPaiement == 'partiel').length;
+    final imp = total - compl - part;
+    final pct = total == 0 ? 0.0 : compl / total;
+
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       decoration: BoxDecoration(
@@ -379,66 +384,98 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // --- GAUCHE : Titre et Badges ---
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Résidents', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 22, letterSpacing: -0.5)),
-                      const SizedBox(height: 2),
-                      Row(children: [
-                        Text('$_total résidents', style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12, fontWeight: FontWeight.w500)),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(8),
+                      const Text(
+                        'Résidents',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 22, letterSpacing: -0.5),
+                      ),
+                      const SizedBox(height: 4),
+                      // Utilisation de Wrap pour éviter l'overflow si les badges sont trop longs
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            '$total résidents',
+                            style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12, fontWeight: FontWeight.w500),
                           ),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(
-                              _canEditCurrentMandat ? Icons.edit_rounded : Icons.visibility_rounded,
-                              size: 9,
-                              color: Colors.white,
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                            const SizedBox(width: 3),
-                            Text(
-                              _canEditCurrentMandat ? 'Votre mandat' : 'Lecture seule',
-                              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _canEditCurrentMandat ? Icons.edit_rounded : Icons.visibility_rounded,
+                                  size: 9,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  _canEditCurrentMandat ? 'Votre mandat' : 'Lecture seule',
+                                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+                                ),
+                              ],
                             ),
-                          ]),
-                        ),
-                      ]),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
+
+                const SizedBox(width: 8),
+
+                // --- DROITE : Sélecteur de Mandat ---
                 _loadingMandats
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : _mandatsDisponibles.isEmpty
-                    ? Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)), child: const Text('Aucun mandat', style: TextStyle(color: Colors.white, fontSize: 11)))
-                    : GestureDetector(
-                  onTap: _showMandatPickerMenu,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.22), borderRadius: BorderRadius.circular(14)),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.calendar_today_rounded, color: Colors.white, size: 12),
-                      const SizedBox(width: 6),
-                      Text(_getMandatLabel(_selectedMandat), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 11)),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 14),
-                    ]),
+                    : Flexible( // Flexible permet au bouton de ne pas dépasser de l'écran
+                  child: GestureDetector(
+                    onTap: _showMandatPickerMenu,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.calendar_today_rounded, color: Colors.white, size: 12),
+                          const SizedBox(width: 4),
+                          Flexible( // Empêche le texte de la date de pousser les bords
+                            child: Text(
+                              _getMandatLabel(_selectedMandat),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 10),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 14),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
+
+          // --- PROGRESSION ---
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
             child: Column(
               children: [
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                   Text('${(pct * 100).toInt()}% complets', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
-                  Text('$_complets / $_total', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+                  Text('$compl / $total', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
                 ]),
                 const SizedBox(height: 8),
                 ClipRRect(
@@ -453,17 +490,19 @@ class _ResidentsScreenState extends State<ResidentsScreen>
               ],
             ),
           ),
+
+          // --- STATS CHIPS ---
           Container(
             margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(14)),
             child: Row(
               children: [
-                _heroChip(Icons.check_circle_rounded, '$_complets', 'Complets', Colors.white),
+                _heroChip(Icons.check_circle_rounded, '$compl', 'Complets', Colors.white),
                 _dividerV(),
-                _heroChip(Icons.timelapse_rounded, '$_partiels', 'Partiels', Colors.white.withValues(alpha: 0.85)),
+                _heroChip(Icons.timelapse_rounded, '$part', 'Partiels', Colors.white.withValues(alpha: 0.85)),
                 _dividerV(),
-                _heroChip(Icons.cancel_rounded, '$_impayes', 'Impayés', Colors.white.withValues(alpha: 0.85)),
+                _heroChip(Icons.cancel_rounded, '$imp', 'Impayés', Colors.white.withValues(alpha: 0.85)),
               ],
             ),
           ),

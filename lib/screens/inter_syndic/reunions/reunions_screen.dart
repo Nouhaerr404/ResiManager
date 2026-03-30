@@ -333,87 +333,108 @@ class _ReunionsScreenState extends State<ReunionsScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Titre + sous-titre
+              // --- GAUCHE : Titre et Badges ---
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Reunions',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Reunions',
                       style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w800,
-                          fontSize: 22, letterSpacing: -0.5)),
-                  const SizedBox(height: 2),
-                  Row(children: [
-                    Text(
-                      '${_reunions.length} reunion(s)',
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.75),
-                          fontSize: 12, fontWeight: FontWeight.w500),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 22,
+                        letterSpacing: -0.5,
                       ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(
-                          _canEditCurrentMandat
-                              ? Icons.edit_rounded
-                              : Icons.visibility_rounded,
-                          size: 9, color: Colors.white,
-                        ),
-                        const SizedBox(width: 3),
-                        Text(
-                          _canEditCurrentMandat ? 'Votre mandat' : 'Lecture seule',
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 9,
-                              fontWeight: FontWeight.w700),
-                        ),
-                      ]),
                     ),
-                  ]),
-                ]),
+                    const SizedBox(height: 4),
+                    // Utilisation de Wrap au lieu de Row pour éviter l'overflow horizontal
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          '${_reunions.length} reunion(s)',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.75),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _canEditCurrentMandat
+                                    ? Icons.edit_rounded
+                                    : Icons.visibility_rounded,
+                                size: 9,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                _canEditCurrentMandat ? 'Votre mandat' : 'Lecture seule',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              // ── Sélecteur de mandat ────────────────────
+
+              const SizedBox(width: 8),
+
+              // --- DROITE : Sélecteur de mandat ---
               _loadingMandats
                   ? const SizedBox(
-                width: 20, height: 20,
+                width: 20,
+                height: 20,
                 child: CircularProgressIndicator(
                     color: Colors.white, strokeWidth: 2),
               )
-                  : _mandatsDisponibles.isEmpty
-                  ? Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12)),
-                child: const Text('Aucun mandat',
-                    style: TextStyle(
-                        color: Colors.white, fontSize: 11)),
-              )
-                  : GestureDetector(
-                onTap: _showMandatPickerMenu,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.22),
-                    borderRadius: BorderRadius.circular(14),
+                  : Flexible( // Empêche le bouton de pousser les autres éléments
+                child: GestureDetector(
+                  onTap: _showMandatPickerMenu,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.calendar_today_rounded, color: Colors.white, size: 12),
+                        const SizedBox(width: 5),
+                        Flexible( // Empêche le texte de la date de dépasser
+                          child: Text(
+                            _getMandatLabel(_selectedMandat),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 10, // Taille optimisée pour mobile
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 14),
+                      ],
+                    ),
                   ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.calendar_today_rounded,
-                        color: Colors.white, size: 12),
-                    const SizedBox(width: 6),
-                    Text(_getMandatLabel(_selectedMandat),
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 11)),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.keyboard_arrow_down_rounded,
-                        color: Colors.white, size: 14),
-                  ]),
                 ),
               ),
             ],
