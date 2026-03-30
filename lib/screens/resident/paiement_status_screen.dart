@@ -25,7 +25,15 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
   Map<String, dynamic>? _history;
   bool _loadingOverview = true;
   bool _loadingHistory = true;
+  
+  // FILTRES AVANCÉS
   int? _filterYear;
+  int? _filterMonth;
+  String _filterStatus = 'tous';
+  String _filterType = 'tous';
+  List<Map<String, dynamic>> _mandats = [];
+  Map<String, dynamic>? _mandatSelectionne;
+  bool _mandatsLoaded = false;
 
   static const Color _orange  = Color(0xFFFF6B4A);
   static const Color _purple  = Color(0xFF6C63FF);
@@ -36,13 +44,27 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
   static const Color _white   = Colors.white;
 
   @override
+  @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _loadMandats();
+  }
+
+  Future<void> _loadMandats() async {
+    final mandats = await _service.getMandatsVecus(widget.userId);
+    setState(() {
+      _mandats = mandats;
+      _mandatSelectionne = mandats.isNotEmpty
+          ? mandats.firstWhere(
+              (m) => m['est_en_cours'] == true,
+          orElse: () => mandats.first)
+          : null;
+      _mandatsLoaded = true;
+    });
     _fetchOverview();
     _fetchHistory();
   }
-
   @override
   void dispose() {
     _tabController.dispose();
@@ -57,7 +79,10 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
 
   Future<void> _fetchHistory() async {
     setState(() => _loadingHistory = true);
-    final data = await _service.getHistoriquePaiementsComplet(widget.userId);
+    final data = await _service.getHistoriquePaiementsParMandat(
+      widget.userId,
+      mandatId: _mandatSelectionne?['id'],
+    );
     setState(() { _history = data; _loadingHistory = false; });
   }
 
@@ -178,34 +203,86 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
   }
 
   Widget _buildYearSelector() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white30),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<int>(
-          value: _selectedYear,
-          icon: const Icon(Icons.keyboard_arrow_down,
-              color: Colors.white, size: 18),
-          isDense: true,
-          dropdownColor: _orange,
-          items: [
-            for (int y = DateTime.now().year; y >= DateTime.now().year - 4; y--)
-              DropdownMenuItem(value: y,
-                  child: Text('$y', style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold, fontSize: 13))),
+    if (_mandats.isEmpty) return const SizedBox();
+    final bool enCours = _mandatSelectionne?['est_en_cours'] == true;
+    return GestureDetector(
+      onTap: () => showModalBottomSheet(
+        context: context,
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (ctx) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 4),
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2)),
+            ),
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Mes mandats',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+            ..._mandats.map((m) {
+              final bool isSel = _mandatSelectionne?['id'] == m['id'];
+              final bool ec    = m['est_en_cours'] == true;
+              return ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: ec ? Colors.green.withOpacity(0.1)
+                        : _orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    ec ? Icons.radio_button_checked : Icons.history_rounded,
+                    color: ec ? Colors.green : _orange, size: 18,
+                  ),
+                ),
+                title: Text(m['label'],
+                    style: TextStyle(fontWeight: FontWeight.w600,
+                        color: isSel ? _orange : _dark)),
+                subtitle: Text(
+                  '${m['syndic_nom']}${ec ? ' · En cours' : ''}',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                ),
+                trailing: isSel
+                    ? const Icon(Icons.check_circle_rounded, color: _orange)
+                    : null,
+                onTap: () {
+                  setState(() => _mandatSelectionne = m);
+                  Navigator.pop(ctx);
+                  _fetchHistory();
+                },
+              );
+            }),
+            const SizedBox(height: 20),
           ],
-          onChanged: (v) {
-            if (v != null) {
-              setState(() => _selectedYear = v);
-              _fetchOverview();
-            }
-          },
         ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white30),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(
+            enCours ? Icons.radio_button_checked : Icons.history_rounded,
+            color: Colors.white, size: 14,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            _mandatSelectionne?['label'] ?? 'Mandat',
+            style: const TextStyle(color: Colors.white,
+                fontWeight: FontWeight.bold, fontSize: 12),
+          ),
+          const SizedBox(width: 4),
+          const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 16),
+        ]),
       ),
     );
   }
@@ -544,47 +621,107 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
         ? List<Map<String, dynamic>>.from(_history!['historique'] as List)
         : [];
 
-    final Map<int, List> byYear = {};
-    for (var h in all) {
-      final int y = (h['annee'] as int?) ?? 0;
-      byYear.putIfAbsent(y, () => []).add(h);
-    }
+    // Extraire les années et mois dispos
+    final Set<int> availableYears = all.map((h) => (h['annee'] as int?) ?? 0).toSet();
+    final List<int> sortedYears = availableYears.toList()..sort((a, b) => b.compareTo(a));
 
-    final double total =
-        (_history!['total_verse'] as num?)?.toDouble() ?? 0.0;
-    final List<int> years =
-    byYear.keys.toList()..sort((a, b) => b.compareTo(a));
-    final List<Map<String, dynamic>> filtered = _filterYear == null
-        ? all
-        : all.where((h) => h['annee'] == _filterYear).toList();
+    // Filtrage combiné
+    final List<Map<String, dynamic>> filtered = all.where((h) {
+      final bool yearMatch   = _filterYear == null   || h['annee'] == _filterYear;
+      final bool monthMatch  = _filterMonth == null  || h['mois'] == _filterMonth;
+      final bool statusMatch = _filterStatus == 'tous' || h['statut'] == _filterStatus;
+      final bool typeMatch   = _filterType == 'tous'   || h['type_paiement'] == _filterType;
+      return yearMatch && monthMatch && statusMatch && typeMatch;
+    }).toList();
+
     final double filteredTotal = filtered.fold(0.0,
-            (double s, h) =>
-        s + ((h['montant_paye'] as num?)?.toDouble() ?? 0.0));
+            (double s, h) => s + ((h['montant_paye'] as num?)?.toDouble() ?? 0.0));
 
     return Column(children: [
-      // ── FILTRES ──
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      // ── BARRE DE FILTRES AVANCÉS ──
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+        ),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(children: [
-            _chip(label: 'Tous (${all.length})',
-                selected: _filterYear == null,
-                onTap: () => setState(() => _filterYear = null)),
-            ...years.map((y) {
-              final int cnt = (byYear[y] as List).length;
-              return Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: _chip(
-                    label: '$y ($cnt)',
-                    selected: _filterYear == y,
-                    onTap: () => setState(() => _filterYear = y)),
-              );
-            }),
+            // FILTRE TYPE
+            _filterDropdown<String>(
+              label: "Type",
+              value: _filterType,
+              items: {
+                'tous': 'Tous types',
+                'charges': 'Charges',
+                'parking': 'Parking',
+                'garage': 'Garage',
+                'box': 'Box',
+              },
+              onChanged: (v) => setState(() => _filterType = v!),
+            ),
+            const SizedBox(width: 8),
+            // FILTRE STATUT
+            _filterDropdown<String>(
+              label: "Statut",
+              value: _filterStatus,
+              items: {
+                'tous': 'Tous statuts',
+                'complet': 'Complet',
+                'partiel': 'Partiel',
+                'impaye': 'Impayé',
+              },
+              onChanged: (v) => setState(() => _filterStatus = v!),
+            ),
+            const SizedBox(width: 8),
+            // FILTRE ANNÉE
+            _filterDropdown<int?>(
+              label: "Année",
+              value: _filterYear,
+              items: {
+                null: 'Toutes',
+                for (var y in sortedYears) y: '$y',
+              },
+              onChanged: (v) => setState(() => _filterYear = v),
+            ),
+            const SizedBox(width: 8),
+            // FILTRE MOIS
+            _filterDropdown<int?>(
+              label: "Mois",
+              value: _filterMonth,
+              items: {
+                null: 'Tous',
+                1: 'Janv', 2: 'Févr', 3: 'Mars', 4: 'Avril', 
+                5: 'Mai', 6: 'Juin', 7: 'Juil', 8: 'Août', 
+                9: 'Sept', 10: 'Oct', 11: 'Nov', 12: 'Déc',
+              },
+              onChanged: (v) => setState(() => _filterMonth = v),
+            ),
           ]),
         ),
       ),
-      const SizedBox(height: 8),
+
+      // ── COMPTEUR ──
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Row(children: [
+          Text('${filtered.length} résultat(s)', 
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w600)),
+          const Spacer(),
+          if (_filterYear != null || _filterMonth != null || _filterStatus != 'tous' || _filterType != 'tous')
+            GestureDetector(
+              onTap: () => setState(() {
+                _filterYear = null; _filterMonth = null; 
+                _filterStatus = 'tous'; _filterType = 'tous';
+              }),
+              child: const Text('Réinitialiser', 
+                  style: TextStyle(color: _orange, fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+        ]),
+      ),
 
       // ── LISTE ──
       Expanded(
@@ -592,16 +729,12 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
             ? Center(child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.receipt_long_outlined,
+            Icon(Icons.filter_list_off_rounded,
                 size: 64, color: Colors.grey.shade300),
             const SizedBox(height: 12),
-            Text('Aucun paiement trouvé',
+            Text('Aucun résultat pour ces filtres',
                 style: TextStyle(
                     color: Colors.grey.shade400, fontSize: 15)),
-            const SizedBox(height: 6),
-            Text('Sélectionnez une autre année',
-                style: TextStyle(
-                    color: Colors.grey.shade300, fontSize: 12)),
           ],
         ))
             : ListView.builder(
@@ -632,13 +765,13 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
                 color: Colors.white70, size: 18),
           ),
           const SizedBox(width: 10),
-          const Text('TOTAL VERSÉ',
+          const Text('TOTAL FILTRÉ',
               style: TextStyle(color: Colors.white70,
                   fontWeight: FontWeight.bold,
                   fontSize: 12, letterSpacing: 0.5)),
           const Spacer(),
           Text(
-              '${_format(_filterYear == null ? total : filteredTotal)} DH',
+              '${_format(filteredTotal)} DH',
               style: const TextStyle(color: _green,
                   fontWeight: FontWeight.bold, fontSize: 18)),
         ]),
@@ -646,11 +779,41 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
     ]);
   }
 
+  Widget _filterDropdown<T>({
+    required String label,
+    required T value,
+    required Map<T, String> items,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: _bg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isDense: true,
+          hint: Text(label, style: const TextStyle(fontSize: 12)),
+          style: const TextStyle(color: _dark, fontSize: 12, fontWeight: FontWeight.w600),
+          items: items.entries.map((e) => DropdownMenuItem<T>(
+            value: e.key,
+            child: Text(e.value),
+          )).toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
   Widget _buildPaymentItem(Map<String, dynamic> item, int index) {
     final String? dateStr  = item['date_paiement'] as String?;
     final double  amount   = (item['montant_paye'] as num?)?.toDouble() ?? 0.0;
     final int?    year     = item['annee'] as int?;
-    final String  type     = item['type_paiement']?.toString() ?? 'charges'; // ← TYPE
+    final int?    month    = item['mois'] as int?;
+    final String  type     = item['type_paiement']?.toString() ?? 'charges';
     final String? ref      = item['reference'] as String?;
     final String  statut   = item['statut']?.toString() ?? 'impaye';
 
@@ -664,7 +827,14 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
       } catch (_) { dateLabel = dateStr; }
     }
 
-    // ── Couleur selon STATUT (pour le badge statut)
+    // Libellé mois/année de la cotisation
+    String targetLabel = "";
+    if (month != null && year != null) {
+       const monthsFull = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+       targetLabel = "Cotisation ${monthsFull[month]} $year";
+    }
+
+    // ── Couleur selon STATUT
     Color statusColor; String statusLabel; IconData statusIcon;
     switch (statut) {
       case 'complet':
@@ -678,7 +848,7 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
         statusIcon = Icons.cancel_rounded;
     }
 
-    // ── Icône + couleur selon TYPE ← NOUVEAU
+    // ── Icône + couleur selon TYPE
     IconData typeIcon; Color typeColor; String typeLabel;
     switch (type) {
       case 'garage':
@@ -711,7 +881,7 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Row(children: [
-          // ── ICONE TYPE ← NOUVEAU
+          // ── ICONE TYPE
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
@@ -724,29 +894,30 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
           // ── INFOS ──
           Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(dateLabel, style: const TextStyle(
-                fontWeight: FontWeight.w600, fontSize: 13)),
-            const SizedBox(height: 4),
+            Text(targetLabel.isNotEmpty ? targetLabel : dateLabel, 
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            if (targetLabel.isNotEmpty)
+              Text("Payé le $dateLabel", style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+            const SizedBox(height: 6),
 
-            // ── BADGE TYPE ← NOUVEAU
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              decoration: BoxDecoration(
-                color: typeColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(typeIcon, size: 10, color: typeColor),
-                const SizedBox(width: 3),
-                Text(typeLabel, style: TextStyle(
-                    color: typeColor, fontSize: 10,
-                    fontWeight: FontWeight.w600)),
-              ]),
-            ),
-            const SizedBox(height: 4),
-
-            // ── BADGE STATUT ──
             Row(children: [
+              // BADGE TYPE
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: typeColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(typeIcon, size: 10, color: typeColor),
+                  const SizedBox(width: 3),
+                  Text(typeLabel, style: TextStyle(
+                      color: typeColor, fontSize: 10,
+                      fontWeight: FontWeight.w600)),
+                ]),
+              ),
+              const SizedBox(width: 6),
+              // BADGE STATUT
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -760,113 +931,35 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
                       fontWeight: FontWeight.bold)),
                 ]),
               ),
-              const SizedBox(width: 6),
-              Text('${year ?? "???"}',
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
             ]),
           ])),
 
           // ── MONTANT ──
-          Text('${_format(amount)} DH',
-              style: TextStyle(
-                  color: statusColor,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15)),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('${_format(amount)} DH',
+                  style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16)),
+              _btnRecuMini(),
+            ],
+          ),
         ]),
       ),
     );
   }
-  Widget _typeBadgeHistorique(String type, String? ref) {
-    IconData icon;
-    Color color;
-    String label;
 
-    switch (type) {
-      case 'parking':
-        icon = Icons.local_parking_rounded; color = _purple;
-        label = 'Parking${ref != null ? ' $ref' : ''}'; break;
-      case 'garage':
-        icon = Icons.garage_rounded; color = Color(0xFF0891B2);
-        label = 'Garage${ref != null ? ' $ref' : ''}'; break;
-      case 'box':
-        icon = Icons.inventory_2_rounded; color = _yellow;
-        label = 'Box${ref != null ? ' $ref' : ''}'; break;
-      default:
-        icon = Icons.home_work_rounded; color = _orange;
-        label = 'Charges';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 10, color: color),
-        const SizedBox(width: 3),
-        Text(label, style: TextStyle(
-            color: color, fontSize: 10, fontWeight: FontWeight.w600)),
-      ]),
-    );
-  }
-  Widget _btnRecu() => GestureDetector(
+  Widget _btnRecuMini() => GestureDetector(
     onTap: () => ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Téléchargement du reçu...'),
             behavior: SnackBarBehavior.floating)),
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-          color: _dark,
-          borderRadius: BorderRadius.circular(8)),
-      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.download_rounded, size: 12, color: Colors.white),
-        SizedBox(width: 4),
-        Text('Reçu', style: TextStyle(
-            color: Colors.white, fontSize: 11,
-            fontWeight: FontWeight.w600)),
-      ]),
+    child: Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text('Détails >', style: TextStyle(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.bold)),
     ),
   );
-
-  Widget _btnRecuDisabled() => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-    decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(8)),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(Icons.download_rounded, size: 12,
-          color: Colors.grey.shade400),
-      const SizedBox(width: 4),
-      Text('Reçu', style: TextStyle(
-          color: Colors.grey.shade400, fontSize: 11)),
-    ]),
-  );
-
-  Widget _chip({required String label, required bool selected,
-    required VoidCallback onTap}) =>
-      GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(
-              horizontal: 14, vertical: 7),
-          decoration: BoxDecoration(
-              color: selected ? _orange : Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                  color: selected ? _orange : Colors.grey.shade200),
-              boxShadow: selected
-                  ? [BoxShadow(color: _orange.withOpacity(0.3),
-                  blurRadius: 6, offset: const Offset(0, 2))]
-                  : []),
-          child: Text(label, style: TextStyle(
-              color: selected ? Colors.white : Colors.grey.shade600,
-              fontWeight: selected
-                  ? FontWeight.bold : FontWeight.normal,
-              fontSize: 12)),
-        ),
-      );
 
   String _format(double v) {
     final String s = v.toStringAsFixed(0);
