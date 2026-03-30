@@ -15,10 +15,12 @@ class AuthService {
   // ✅ LOGIN
   Future<Map<String, dynamic>?> login(String email, String password) async {
     try {
+      final normalizedEmail = email.trim().toLowerCase();
+      
       // 1. Vérifier le statut AVANT de connecter
       final res = await _db.from('users')
           .select('id, role, statut')
-          .eq('email', email.trim())
+          .eq('email', normalizedEmail)
           .maybeSingle();
 
       if (res == null) return {'error': 'Email introuvable.'};
@@ -30,7 +32,7 @@ class AuthService {
 
       // 2. Connexion via Supabase Auth seulement si actif
       final authRes = await _db.auth.signInWithPassword(
-          email: email.trim(), password: password);
+          email: normalizedEmail, password: password);
 
       if (authRes.user != null) {
         return {'id': res['id'], 'role': res['role']};
@@ -39,9 +41,10 @@ class AuthService {
     } catch (e) {
       // Fallback anciens comptes
       try {
+        final normalizedEmail = email.trim().toLowerCase();
         final res = await _db.from('users')
             .select()
-            .eq('email', email.trim())
+            .eq('email', normalizedEmail)
             .maybeSingle();
         if (res == null) return {'error': 'Email introuvable.'};
 
@@ -62,12 +65,13 @@ class AuthService {
   // ✅ REGISTER
   Future<Map<String, dynamic>> register({required String nom, required String prenom, required String email, required String password, String? telephone}) async {
     try {
-      final authRes = await _db.auth.signUp(email: email.trim(), password: password);
+      final normalizedEmail = email.trim().toLowerCase();
+      final authRes = await _db.auth.signUp(email: normalizedEmail, password: password);
       if (authRes.user == null) return {'error': 'Erreur Auth'};
       final hashedPassword = await _hashPassword(password);
       
       await _db.from('users').insert({
-        'nom': nom.trim(), 'prenom': prenom.trim(), 'email': email.trim(),
+        'nom': nom.trim(), 'prenom': prenom.trim(), 'email': normalizedEmail,
         'telephone': telephone?.trim(), 'password': hashedPassword,
         'role': 'syndic_general', 'statut': 'actif',
       });
@@ -77,16 +81,18 @@ class AuthService {
 
   Future<bool> sendResetCode(String email) async {
     try {
-      final userExists = await _db.from('users').select('id').eq('email', email.trim()).maybeSingle();
+      final normalizedEmail = email.trim().toLowerCase();
+      final userExists = await _db.from('users').select('id').eq('email', normalizedEmail).maybeSingle();
       if (userExists == null) return false;
-      await _db.auth.resetPasswordForEmail(email.trim());
+      await _db.auth.resetPasswordForEmail(normalizedEmail);
       return true;
     } catch (e) { return false; }
   }
 
   Future<Map<String, dynamic>> verifyCode(String email, String code) async {
     try {
-      final res = await _db.auth.verifyOTP(email: email.trim(), token: code, type: OtpType.recovery);
+      final normalizedEmail = email.trim().toLowerCase();
+      final res = await _db.auth.verifyOTP(email: normalizedEmail, token: code, type: OtpType.recovery);
       if (res.session != null) return {'success': true, 'userId': res.user?.id};
       return {'success': false, 'error': 'Code incorrect ou expiré.'};
     } catch (e) { return {'success': false, 'error': 'Erreur de vérification'}; }
@@ -94,9 +100,10 @@ class AuthService {
 
   Future<Map<String, dynamic>> resetPasswordWithCode({required String email, required String newPassword}) async {
     try {
+      final normalizedEmail = email.trim().toLowerCase();
       await _db.auth.updateUser(UserAttributes(password: newPassword));
       final hashedPassword = await _hashPassword(newPassword);
-      await _db.from('users').update({'password': hashedPassword}).eq('email', email.trim());
+      await _db.from('users').update({'password': hashedPassword}).eq('email', normalizedEmail);
       return {'success': true};
     } catch (e) { return {'success': false, 'error': e.toString()}; }
   }
@@ -110,6 +117,7 @@ class AuthService {
       
       await _db.auth.updateUser(UserAttributes(password: newPassword));
       final hashedPassword = await _hashPassword(newPassword);
+      // L'email dans currentUser est déjà normalisé par Supabase Auth
       await _db.from('users').update({'password': hashedPassword}).eq('email', currentUser.email!);
       return {'success': true};
     } catch (e) { return {'success': false, 'error': e.toString()}; }
@@ -117,9 +125,10 @@ class AuthService {
 
   Future<String?> soumettreDemandeInscription({required String nom, required String prenom, required String email, required String password, String? telephone}) async {
     try {
+      final normalizedEmail = email.trim().toLowerCase();
       final hashedPassword = await _hashPassword(password);
       await _db.from('demandes_inscription').insert({
-        'nom': nom.trim(), 'prenom': prenom.trim(), 'email': email.trim(),
+        'nom': nom.trim(), 'prenom': prenom.trim(), 'email': normalizedEmail,
         'telephone': telephone?.trim(), 'password': hashedPassword, 'statut': 'en_attente',
       });
       return null;
