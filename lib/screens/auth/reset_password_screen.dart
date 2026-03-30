@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
-import 'login_screen.dart'; // ← AJOUTEZ CET IMPORT
+import 'login_screen.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   final String? accessToken;
@@ -11,7 +11,7 @@ class ResetPasswordScreen extends StatefulWidget {
 }
 
 class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
-  final AuthService _authService = AuthService(); // ← Ajoutez le type AuthService
+  final AuthService _authService = AuthService();
   final _newPassCtrl = TextEditingController();
   final _confirmPassCtrl = TextEditingController();
   bool _loading = false;
@@ -46,9 +46,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       _error = null;
     });
 
+    // ✅ Utilisation de la nouvelle signature (sans accessToken)
     final result = await _authService.resetPassword(
       newPass,
-      accessToken: widget.accessToken,
     );
 
     setState(() => _loading = false);
@@ -58,17 +58,14 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     } else {
       String errorMsg = result['error'] ?? "Erreur lors de la réinitialisation";
 
-      // Si même mot de passe → traiter comme succès
       if (errorMsg.contains('same_password') ||
           errorMsg.contains('New password should be different')) {
-        setState(() => _success = true); // ← afficher succès quand même
+        setState(() => _success = true);
         return;
       }
 
       setState(() => _error = errorMsg);
     }
-
-
   }
 
   @override
@@ -107,7 +104,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               width: 100,
               height: 100,
               decoration: BoxDecoration(
-                color: _coral.withValues(alpha: 0.1),
+                color: _coral.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.password, color: _coral, size: 50),

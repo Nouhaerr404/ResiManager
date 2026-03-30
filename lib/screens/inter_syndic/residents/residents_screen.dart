@@ -69,7 +69,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
 
   int? get _currentMandatId => _selectedMandat?['id'] as int?;
 
-  /// ID de l'inter-syndic connecté — utilisé pour vérifier les droits
+  /// ID de l'inter-syndic connecté
   int get _interSyndicId => TempSession.interSyndicId ?? 0;
 
   /// Vérifie si l'inter-syndic connecté est propriétaire du mandat sélectionné.
@@ -114,8 +114,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
   Future<void> _loadMandats() async {
     try {
       final db = Supabase.instance.client;
-      // Charger TOUS les mandats de la tranche, pas seulement ceux de l'IS connecté
-      // afin que l'IS puisse voir l'historique mais ne modifier que le sien
       final mandatsRes = await db
           .from('historique_affectations')
           .select('id, date_debut, date_fin, inter_syndic_id')
@@ -197,11 +195,16 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     }
   }
 
+  /// Charge les résidents filtrés par le mandat sélectionné
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
+      // ── FILTRAGE PAR MANDAT : passe le mandatId au service
       final data = await _service
-          .getResidentsByTranche(widget.trancheId)
+          .getResidentsByTranche(
+        widget.trancheId,
+        mandatId: _currentMandatId,
+      )
           .timeout(const Duration(seconds: 15));
       setState(() { _residents = data; _loading = false; });
       _applyFilter();
@@ -306,14 +309,13 @@ class _ResidentsScreenState extends State<ResidentsScreen>
       subtitle: 'inter_syndic',
       gridIcon: Icons.business_rounded,
       onBack: () => Navigator.pop(context),
-      // Le bouton Ajouter n'est visible que si l'IS est propriétaire du mandat
       onAdd: _canEditCurrentMandat ? _showAddResidentDialog : null,
       addLabel: 'Ajouter',
     );
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // BANNIÈRE DE RESTRICTION MANDAT
+  // BANNIÈRE LECTURE SEULE
   // ─────────────────────────────────────────────────────────────────
 
   Widget _buildReadOnlyBanner() {
@@ -346,7 +348,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     return Column(
       children: [
         _buildHeroStats(),
-        // Bannière si lecture seule
         if (!_canEditCurrentMandat && _selectedMandat != null)
           _buildReadOnlyBanner(),
         Padding(
@@ -387,7 +388,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                       Row(children: [
                         Text('$_total résidents', style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12, fontWeight: FontWeight.w500)),
                         const SizedBox(width: 6),
-                        // Badge lecture seule ou édition
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                           decoration: BoxDecoration(
@@ -498,7 +498,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             iconBg: _C.coralLight,
             label: 'Prix annuel',
             value: _loadingPrix ? '...' : '${_prixAnnuel?.toInt() ?? 0} DH',
-            // Modification prix uniquement si l'IS est propriétaire
             onTap: _canEditCurrentMandat ? _showEditPrixAnnuelDialog : null,
             trailing: _canEditCurrentMandat
                 ? Container(
@@ -575,7 +574,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             ]),
           ])),
           const SizedBox(width: 8),
-          // Bouton Payer désactivé si lecture seule
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
@@ -773,7 +771,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             ),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Row(children: [
-              // Bouton Payer — désactivé si lecture seule
               _actionBtn(
                 'Payer',
                 Icons.payments_rounded,
@@ -781,9 +778,9 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                 onTap: _canEditCurrentMandat ? () => _onPayButtonClicked(r) : () => _showReadOnlyMessage(),
               ),
               const SizedBox(width: 6),
+              // Historique visible pour tous les mandats
               _iconActionBtn(Icons.history_rounded, _C.blue, _C.blueLight, () => _showHistoriqueDialog(r)),
               const SizedBox(width: 6),
-              // Modifier — désactivé si lecture seule
               _iconActionBtn(
                 Icons.edit_rounded,
                 _canEditCurrentMandat ? _C.textMid : _C.textLight,
@@ -791,7 +788,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                 _canEditCurrentMandat ? () => _showEditDialog(r) : () => _showReadOnlyMessage(),
               ),
               const SizedBox(width: 6),
-              // Supprimer — désactivé si lecture seule
               _iconActionBtn(
                 Icons.delete_rounded,
                 _canEditCurrentMandat ? _C.red : _C.textLight,
@@ -805,7 +801,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     );
   }
 
-  /// Affiche un message indiquant que le mandat est en lecture seule
   void _showReadOnlyMessage() {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1066,8 +1061,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     );
   }
 
-  // ── DIALOG AJOUTER RÉSIDENT
-  // NOUVEAU : pas de champ mot de passe — généré automatiquement et envoyé par email
+  // ── DIALOG AJOUTER RÉSIDENT — avec envoi email automatique
   void _showAddResidentDialog() {
     if (!_canEditCurrentMandat) { _showReadOnlyMessage(); return; }
 
@@ -1118,7 +1112,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
             ])),
             const SizedBox(height: 12),
 
-            // Bannière info mot de passe automatique
+            // Bannière info mot de passe automatique + email
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: _C.blueLight, borderRadius: BorderRadius.circular(10)),
@@ -1127,7 +1121,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    'Un mot de passe sécurisé sera généré automatiquement et envoyé par email au résident.',
+                    'Un mot de passe sécurisé sera généré et envoyé par email au résident dès l\'ajout.',
                     style: TextStyle(color: _C.blue, fontSize: 11, fontWeight: FontWeight.w500),
                   ),
                 ),
@@ -1167,6 +1161,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
               if (selectedAppartId == null) { setDialog(() => errorMsg = 'Sélectionnez un appartement'); return; }
               if (_currentMandatId == null) { setDialog(() => errorMsg = 'Aucun mandat actif sélectionné'); return; }
               setDialog(() { saving = true; errorMsg = null; });
+
               final err = await _service.addResident(
                 nom: nomCtrl.text,
                 prenom: prenomCtrl.text,
@@ -1177,27 +1172,39 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                 appartementId: selectedAppartId!,
                 montantTotal: _prixAnnuel ?? 0.0,
                 mandatId: _currentMandatId!,
-                interSyndicId: _interSyndicId, // ← vérification droits
+                interSyndicId: _interSyndicId,
                 parkingId: selectedParkingId,
                 boxId: selectedBoxId,
                 garageId: selectedGarageId,
               );
+
               if (!ctx.mounted) return;
               if (err.$1 != null) {
                 setDialog(() { errorMsg = err.$1; saving = false; });
               } else {
-
                 Navigator.pop(ctx);
                 _load();
-                // Confirmation succès
+                // ── Snackbar avec statut de l'email ──────────────
+                final bool emailEnvoye = err.$2;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Row(children: [
-                      Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
-                      SizedBox(width: 8),
-                      Text('Résident ajouté. Email de connexion envoyé.'),
+                    content: Row(children: [
+                      Icon(
+                        emailEnvoye ? Icons.mark_email_read_rounded : Icons.check_circle_rounded,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          emailEnvoye
+                              ? 'Résident ajouté. Email de connexion envoyé à ${emailCtrl.text.trim()}.'
+                              : 'Résident ajouté. L\'email n\'a pas pu être envoyé (vérifiez la configuration Resend).',
+                        ),
+                      ),
                     ]),
-                    backgroundColor: _C.green,
+                    backgroundColor: emailEnvoye ? _C.green : _C.orange,
+                    duration: const Duration(seconds: 5),
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
@@ -1236,7 +1243,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
       appartementId: r.appartementId ?? 0,
       mandatId: _currentMandatId!,
       montantTotal: montantPourNouveauMandat,
-      interSyndicId: _interSyndicId, // ← vérification droits
+      interSyndicId: _interSyndicId,
     );
 
     if (newId != null) {
@@ -1311,7 +1318,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
               montantAjoute: montant,
               montantDejaPane: selectedPaiement!.montantPaye,
               montantTotal: selectedPaiement!.montantTotal,
-              interSyndicId: _interSyndicId, // ← vérification droits
+              interSyndicId: _interSyndicId,
             );
             if (!ctx.mounted) return;
             if (err != null) { setDialog(() { errorMsg = err; saving = false; }); } else { Navigator.pop(ctx); _load(); }
@@ -1327,20 +1334,26 @@ class _ResidentsScreenState extends State<ResidentsScreen>
     Text(val, style: TextStyle(color: c, fontWeight: FontWeight.w800, fontSize: 13)),
   ]);
 
-  // ── DIALOG HISTORIQUE
+  // ── DIALOG HISTORIQUE — filtré par mandat sélectionné
   void _showHistoriqueDialog(ResidentModel r) {
     List<Map<String, dynamic>> historique = [];
     bool fetchDone = false;
     bool fetchLaunched = false;
     int? selectedAnnee;
     final String mandatLabel = _getMandatLabel(_selectedMandat);
+    // ── Filtrer l'historique par le mandat sélectionné
+    final int? mandatIdForHistorique = _currentMandatId;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(builder: (ctx, setDialog) {
         if (!fetchLaunched) {
           fetchLaunched = true;
-          _service.getHistoriquePaiements(r.userId).then((data) {
+          // Passe le mandatId pour filtrer l'historique
+          _service.getHistoriquePaiements(
+            r.userId,
+            mandatId: mandatIdForHistorique,
+          ).then((data) {
             if (ctx.mounted) {
               setDialog(() {
                 historique = data;
@@ -1363,7 +1376,16 @@ class _ResidentsScreenState extends State<ResidentsScreen>
           child: Padding(padding: const EdgeInsets.all(22), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             _dHeader(ctx, 'Historique', icon: Icons.history_rounded, iconColor: _C.blue),
             const SizedBox(height: 12),
-            Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7), decoration: BoxDecoration(color: _C.blueLight, borderRadius: BorderRadius.circular(8)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.calendar_today_rounded, color: _C.blue, size: 12), const SizedBox(width: 6), Text(mandatLabel, style: const TextStyle(color: _C.blue, fontWeight: FontWeight.w700, fontSize: 11))])),
+            // Badge mandat
+            Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7), decoration: BoxDecoration(color: _canEditCurrentMandat ? _C.blueLight : _C.orangeLight, borderRadius: BorderRadius.circular(8)), child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(
+                _canEditCurrentMandat ? Icons.calendar_today_rounded : Icons.visibility_rounded,
+                color: _canEditCurrentMandat ? _C.blue : _C.orange,
+                size: 12,
+              ),
+              const SizedBox(width: 6),
+              Text(mandatLabel, style: TextStyle(color: _canEditCurrentMandat ? _C.blue : _C.orange, fontWeight: FontWeight.w700, fontSize: 11)),
+            ])),
             const SizedBox(height: 12),
             Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: _C.surface, borderRadius: BorderRadius.circular(12)), child: Column(children: [
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -1473,7 +1495,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
               montantTotal: double.tryParse(prixCtrl.text.trim()),
               annee: _fallbackAnnee,
               mandatId: _currentMandatId,
-              interSyndicId: _interSyndicId, // ← vérification droits
+              interSyndicId: _interSyndicId,
             );
             if (!ctx.mounted) return;
             if (err != null) {
@@ -1514,7 +1536,7 @@ class _ResidentsScreenState extends State<ResidentsScreen>
                 final err = await _service.deleteResident(
                   r.userId,
                   r.appartementId,
-                  interSyndicId: _interSyndicId, // ← vérification droits
+                  interSyndicId: _interSyndicId,
                   mandatId: _currentMandatId,
                 );
                 if (!ctx.mounted) return;
@@ -1557,7 +1579,6 @@ class _ResidentsScreenState extends State<ResidentsScreen>
           ])),
           const SizedBox(height: 16),
           if (activeTab == 0) ...[
-            // Lecture seule si mandat pas le sien
             if (!_canEditCurrentMandat) ...[
               _buildReadOnlyBanner(),
             ] else if (_appartementsLibres.isEmpty) ...[
