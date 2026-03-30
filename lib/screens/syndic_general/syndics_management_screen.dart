@@ -379,7 +379,7 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
                             phoneController.text.trim()
                           );
                         } else {
-                          await _service.createAndInviteSyndic(
+                          final success = await _service.createAndInviteSyndic(
                             email: emailController.text.trim(), 
                             nom: nomController.text.trim(), 
                             prenom: prenomController.text.trim(), 
@@ -387,11 +387,15 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
                             mySyndicGeneralId: widget.syndicId, 
                             residenceId: widget.residenceId,
                           );
+                          if (!success) throw Exception("Erreur lors de la création");
                         }
                         if (mounted) {
                           Navigator.pop(context);
                           _loadData();
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEdit ? "Modifié avec succès" : "Syndic ajouté avec succès"), backgroundColor: Colors.green));
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(isEdit ? "Modifié avec succès" : "Syndic ajouté. Email d'activation envoyé."), 
+                            backgroundColor: Colors.green
+                          ));
                         }
                       } catch (e) {
                         setDialogState(() => isLoading = false);
