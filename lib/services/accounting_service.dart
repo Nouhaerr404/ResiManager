@@ -46,8 +46,8 @@ class AccountingService {
       // Paiements
       _db.from('paiements').select('*, resident:resident_id(nom, prenom), appartements(id, numero, immeuble_id)').eq('mandat_id', mandateId),
       
-      // Appartements
-      _db.from('appartements').select('id, numero, immeuble_id, immeubles!inner(tranche_id)').eq('immeubles.tranche_id', trancheId),
+      // Appartements (Correction : Ajout du champ nom pour l'immeuble)
+      _db.from('appartements').select('id, numero, immeuble_id, immeubles!inner(nom, tranche_id)').eq('immeubles.tranche_id', trancheId),
     ]);
 
     final List<Map<String, dynamic>> trancheExpenses = List<Map<String, dynamic>>.from(res[0] as List);
