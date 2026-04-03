@@ -273,6 +273,10 @@ class _PlanningCalendarScreenState extends State<PlanningCalendarScreen> {
             },
             eventLoader: _getEventsForDay,
             startingDayOfWeek: StartingDayOfWeek.monday,
+            daysOfWeekStyle: const DaysOfWeekStyle(
+              weekdayStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+              weekendStyle: TextStyle(color: Colors.white70),
+            ),
             calendarStyle: CalendarStyle(
               outsideDaysVisible: false,
               defaultTextStyle: const TextStyle(color: Colors.white),
@@ -318,7 +322,7 @@ class _PlanningCalendarScreenState extends State<PlanningCalendarScreen> {
                   child: Text(
                     '${day.day}',
                     style: TextStyle(
-                      color: inMandate ? const Color(0xFF34C98B) : Colors.white,
+                      color: Colors.white,
                       fontWeight: inMandate ? FontWeight.bold : FontWeight.w500,
                     ),
                   ),
@@ -387,11 +391,11 @@ class _PlanningCalendarScreenState extends State<PlanningCalendarScreen> {
             padding: const EdgeInsets.only(top: 8),
             child: Row(
               children: [
-                const Icon(Icons.history_rounded, color: Colors.white38, size: 12),
+                const Icon(Icons.history_rounded, color: Colors.white70, size: 12),
                 const SizedBox(width: 6),
                 Text(
                   "Mandat : ${DateFormat('dd/MM/yyyy').format(DateTime.parse(currentMandate['date_debut']))} → ${currentMandate['date_fin'] != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(currentMandate['date_fin'])) : 'En cours'}",
-                  style: const TextStyle(color: Colors.white38, fontSize: 12, fontWeight: FontWeight.w500),
+                  style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -402,7 +406,7 @@ class _PlanningCalendarScreenState extends State<PlanningCalendarScreen> {
             child: Padding(
               padding: EdgeInsets.only(top: 40),
               child: Text('Aucun événement pour ce jour', 
-                style: TextStyle(color: Colors.white38, fontSize: 14)),
+                style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500)),
             ),
           )
         else

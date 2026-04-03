@@ -1,4 +1,4 @@
-import 'dart:ui'; // pour ImageFilter
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../models/tranche_model.dart';
 import '../../services/tranche_service.dart';
@@ -14,6 +14,7 @@ import 'immeubles/immeubles_screen.dart';
 import 'annonces/annonces_screen.dart';
 import 'planning/planning_calendar_screen.dart';
 import '../../services/finance_service.dart';
+import '../../services/resident_service.dart';
 import '../../services/expense_report_pdf_service.dart';
 import '../../utils/temp_session.dart';
 
@@ -49,14 +50,19 @@ class TrancheDashboardScreen extends StatefulWidget {
 
 class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
     with SingleTickerProviderStateMixin {
-  final _service = TrancheService();
+  final _service        = TrancheService();
   final _financeService = FinanceService();
+  final _residentService = ResidentService();
+
   Map<String, dynamic>? _stats;
   bool _loading = true;
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
   String _selectedView = 'dashboard';
   Map<String, dynamic>? _currentMandat;
+
+  // Nombre de résidents calculé exactement comme ResidentsScreen
+  int _nbResidents = 0;
 
   @override
   void initState() {
@@ -76,19 +82,23 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
   Future<void> _loadStats() async {
     setState(() => _loading = true);
     try {
+      // ── 1. Stats générales de la tranche
       final data = await _service.getTrancheStats(widget.tranche.id);
-      
-      // Récupérer le mandat actuel
-      final mandats = await _financeService.getInterSyndicMandates(TempSession.interSyndicId, widget.tranche.residenceId);
+
+      // ── 2. Récupérer le mandat actif de l'IS connecté pour cette tranche
+      final mandats = await _financeService.getInterSyndicMandates(
+        TempSession.interSyndicId,
+        widget.tranche.residenceId,
+      );
       final now = DateTime.now();
       Map<String, dynamic>? activeMandat;
-      
+
       for (var m in mandats) {
         if (m['tranche_id'] == widget.tranche.id) {
-          DateTime start = DateTime.parse(m['date_debut']);
-          DateTime? end = m['date_fin'] != null ? DateTime.parse(m['date_fin']) : null;
-          
-          if (now.isAfter(start.subtract(const Duration(days: 1))) && 
+          final DateTime start = DateTime.parse(m['date_debut']);
+          final DateTime? end =
+          m['date_fin'] != null ? DateTime.parse(m['date_fin']) : null;
+          if (now.isAfter(start.subtract(const Duration(days: 1))) &&
               (end == null || now.isBefore(end.add(const Duration(days: 1))))) {
             activeMandat = m;
             break;
@@ -96,18 +106,35 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
         }
       }
 
-      setState(() {
-        _stats = data;
-        _currentMandat = activeMandat;
-        _loading = false;
-      });
-      _fadeCtrl.forward(from: 0);
+      // ── 3. Compter les résidents EXACTEMENT comme ResidentsScreen :
+      //       getResidentsByTranche avec le même mandatId que l'écran des résidents.
+      //       Si aucun mandat actif trouvé via getInterSyndicMandates, on tente
+      //       quand même via getResidentsByTranche sans filtre de mandat.
+      final int? activeMandatId = activeMandat?['id'] as int?;
+      final residents = await _residentService.getResidentsByTranche(
+        widget.tranche.id,
+        mandatId: activeMandatId,
+      );
+
+      // ── 4. Mettre à jour le state avec tout
+      if (mounted) {
+        setState(() {
+          _stats         = data;
+          _currentMandat = activeMandat;
+          _nbResidents   = residents.length;
+          _loading       = false;
+        });
+        _fadeCtrl.forward(from: 0);
+      }
     } catch (e) {
-      setState(() {
-        _stats = {};
-        _loading = false;
-      });
-      _fadeCtrl.forward(from: 0);
+      if (mounted) {
+        setState(() {
+          _stats       = {};
+          _nbResidents = 0;
+          _loading     = false;
+        });
+        _fadeCtrl.forward(from: 0);
+      }
     }
   }
 
@@ -289,7 +316,7 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
   }
 
   Widget _buildPageTitle() {
-    final syndicName = widget.tranche.interSyndicNom ?? 'Inter-Syndic';
+    final syndicName   = widget.tranche.interSyndicNom ?? 'Inter-Syndic';
     final residenceName = widget.tranche.residenceNom;
 
     return Column(
@@ -435,15 +462,19 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
                     Padding(
                       padding: const EdgeInsets.only(left: 10, bottom: 2),
                       child: Text(
-                        "(${DateTime.parse(_currentMandat!['date_debut']).year}/${_currentMandat!['date_fin'] != null ? DateTime.parse(_currentMandat!['date_fin']).year : '...' })",
-                        style: const TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.w600),
+                        "(${DateTime.parse(_currentMandat!['date_debut']).year}/${_currentMandat!['date_fin'] != null ? DateTime.parse(_currentMandat!['date_fin']).year : '...'})",
+                        style: const TextStyle(
+                            color: Colors.white60,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600),
                       ),
                     ),
                 ],
               ),
               IconButton(
                 onPressed: _generateReport,
-                icon: const Icon(Icons.picture_as_pdf_rounded, color: _C.white, size: 24),
+                icon: const Icon(Icons.picture_as_pdf_rounded,
+                    color: _C.white, size: 24),
                 tooltip: 'Générer rapport PDF',
               ),
             ],
@@ -579,7 +610,8 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
                         fontSize: 14,
                         letterSpacing: -0.3)),
                 Text(sub,
-                    style: const TextStyle(color: _C.textLight, fontSize: 9)),
+                    style:
+                    const TextStyle(color: _C.textLight, fontSize: 9)),
               ],
             ),
           ),
@@ -620,7 +652,8 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
   List<_ModuleData> _buildModuleList() => [
     _ModuleData(
       label: 'Residents',
-      value: '${_num(_stats?['nbResidents'] ?? 0)}',
+      // ✅ On utilise _nbResidents calculé via getResidentsByTranche + mandatId
+      value: '$_nbResidents',
       sub: 'residents actifs',
       icon: Icons.people_rounded,
       iconBg: _C.coralLight,
@@ -657,7 +690,6 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
               builder: (_) =>
                   InterSyndicImmeublesScreen(tranche: widget.tranche))),
     ),
-    // ── Personnel supprimé ──
     _ModuleData(
       label: 'Parkings',
       value: '${_num(_stats?['nbParkings'] ?? 0)}',
@@ -766,9 +798,9 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
           context,
           MaterialPageRoute(
               builder: (_) => PlanningCalendarScreen(
-                    trancheId: widget.tranche.id,
-                    residenceId: widget.tranche.residenceId,
-                  ))),
+                trancheId: widget.tranche.id,
+                residenceId: widget.tranche.residenceId,
+              ))),
     ),
   ];
 
@@ -836,9 +868,11 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
           const SizedBox(height: 16),
           _resumeRow(
             _resumeItem(Icons.business_rounded, 'Immeubles',
-                '${_num(_stats?['nbImmeubles'] ?? widget.tranche.nombreImmeubles)}', _C.blue, _C.blueLight),
+                '${_num(_stats?['nbImmeubles'] ?? widget.tranche.nombreImmeubles)}',
+                _C.blue, _C.blueLight),
             _resumeItem(Icons.home_outlined, 'Appartements',
-                '${_num(_stats?['nbAppartements'] ?? widget.tranche.nombreAppartements)}', _C.coral, _C.coralLight),
+                '${_num(_stats?['nbAppartements'] ?? widget.tranche.nombreAppartements)}',
+                _C.coral, _C.coralLight),
           ),
           Container(
               height: 1,
@@ -876,8 +910,8 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
         Container(
           width: 32,
           height: 32,
-          decoration:
-          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(
+              color: bg, borderRadius: BorderRadius.circular(8)),
           child: Icon(icon, color: color, size: 16),
         ),
         const SizedBox(width: 10),
@@ -903,21 +937,31 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
     );
   }
 
-  // ── GENERATION DE RAPPORT PDF ──────────────────────────────
+  // ── GÉNÉRATION DE RAPPORT PDF
   Future<void> _generateReport() async {
-    // 1. Loader
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => const Center(child: CircularProgressIndicator(color: _C.coral)),
+      builder: (ctx) =>
+      const Center(child: CircularProgressIndicator(color: _C.coral)),
     );
 
     try {
-      final start = _currentMandat?['date_debut'].toString().split('-').reversed.join('/');
-      final end = _currentMandat?['date_fin']?.toString().split('-').reversed.join('/') ?? 'En cours';
-      final span = _currentMandat != null ? "$start au $end" : DateTime.now().year.toString();
+      final start = _currentMandat?['date_debut']
+          .toString()
+          .split('-')
+          .reversed
+          .join('/');
+      final end = _currentMandat?['date_fin']
+          ?.toString()
+          .split('-')
+          .reversed
+          .join('/') ??
+          'En cours';
+      final span = _currentMandat != null
+          ? "$start au $end"
+          : DateTime.now().year.toString();
 
-      // 2. Fetch fresh data
       final financeData = await _financeService.getInterSyndicFinances(
         widget.tranche.interSyndicId ?? 0,
         widget.tranche.residenceId,
@@ -926,7 +970,6 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
         trancheId: widget.tranche.id,
       );
 
-      // 3. Generate PDF
       final pdfBytes = await ExpenseReportPdfService.generate(
         residenceNom: widget.tranche.residenceNom ?? 'Résidence',
         trancheNom: widget.tranche.nom,
@@ -935,20 +978,22 @@ class _TrancheDashboardScreenState extends State<TrancheDashboardScreen>
       );
 
       if (mounted) {
-        Navigator.pop(context); // Close loader
-        // 4. Preview/Share
+        Navigator.pop(context);
         await ExpenseReportPdfService.preview(pdfBytes);
       }
     } catch (e) {
       if (mounted) {
-        Navigator.pop(context); // Close loader
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur : $e'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Erreur : $e'), backgroundColor: Colors.red),
         );
       }
     }
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _ModuleData {
   final String label, value, sub;
