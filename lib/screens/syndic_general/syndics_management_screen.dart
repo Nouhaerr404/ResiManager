@@ -341,7 +341,7 @@ class _SyndicsManagementScreenState extends State<SyndicsManagementScreen> {
                 TextField(
                   controller: phoneController,
                   keyboardType: TextInputType.phone,
-                  decoration: _buildInputDecoration("+212 6..."),
+                  decoration: _buildInputDecoration(" "),
                 ),
               ],
             ),
