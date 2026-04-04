@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../utils/temp_session.dart';
+import '../../../services/auth_service.dart';
 
 // ── Palette interne (cohérente avec le reste de l'espace Inter-Syndic)
 class _C {
@@ -29,6 +30,7 @@ class InterSyndicProfileScreen extends StatefulWidget {
 class _InterSyndicProfileScreenState extends State<InterSyndicProfileScreen>
     with SingleTickerProviderStateMixin {
   final _supabase = Supabase.instance.client;
+  final _authService = AuthService();
 
   bool _editMode = false;
   bool _saving   = false;
@@ -40,6 +42,11 @@ class _InterSyndicProfileScreenState extends State<InterSyndicProfileScreen>
   final _emailCtrl     = TextEditingController();
   final _telCtrl       = TextEditingController();
   final _formKey        = GlobalKey<FormState>();
+
+  // ── Password controllers
+  final _newPasswordCtrl = TextEditingController();
+  final _confirmPasswordCtrl = TextEditingController();
+  bool _changingPassword = false;
 
   // ── Original values (for cancel)
   late String _origNom, _origPrenom, _origEmail, _origTel;
@@ -64,6 +71,8 @@ class _InterSyndicProfileScreenState extends State<InterSyndicProfileScreen>
     _prenomCtrl.dispose();
     _emailCtrl.dispose();
     _telCtrl.dispose();
+    _newPasswordCtrl.dispose();
+    _confirmPasswordCtrl.dispose();
     super.dispose();
   }
 
@@ -149,6 +158,41 @@ class _InterSyndicProfileScreenState extends State<InterSyndicProfileScreen>
     _emailCtrl.text  = _origEmail;
     _telCtrl.text    = _origTel;
     setState(() => _editMode = false);
+  }
+
+  Future<void> _changePassword() async {
+    if (_newPasswordCtrl.text.isEmpty || _confirmPasswordCtrl.text.isEmpty) {
+      _showSnack('Veuillez remplir les champs de mot de passe');
+      return;
+    }
+    if (_newPasswordCtrl.text != _confirmPasswordCtrl.text) {
+      _showSnack('Les mots de passe ne correspondent pas');
+      return;
+    }
+    if (_newPasswordCtrl.text.length < 6) {
+      _showSnack('Le mot de passe doit contenir au moins 6 caractères');
+      return;
+    }
+
+    setState(() => _changingPassword = true);
+    try {
+      final result = await _authService.resetPassword(
+        _newPasswordCtrl.text.trim(),
+        userId: TempSession.interSyndicId,
+      );
+
+      if (result['success'] == true) {
+        _showSnack('Mot de passe modifié avec succès', success: true);
+        _newPasswordCtrl.clear();
+        _confirmPasswordCtrl.clear();
+      } else {
+        _showSnack(result['error'] ?? 'Erreur lors de la modification');
+      }
+    } catch (e) {
+      _showSnack('Erreur : $e');
+    } finally {
+      setState(() => _changingPassword = false);
+    }
   }
 
   void _showSnack(String msg, {bool success = false}) {
@@ -241,6 +285,12 @@ class _InterSyndicProfileScreenState extends State<InterSyndicProfileScreen>
                                 _buildSectionLabel('Compte'),
                                 const SizedBox(height: 14),
                                 _buildAccountCard(),
+                                const SizedBox(height: 28),
+
+                                // ── Security Section
+                                _buildSectionLabel('Sécurité'),
+                                const SizedBox(height: 14),
+                                _buildPasswordCard(),
                                 const SizedBox(height: 32),
 
                                 // ── CTA
@@ -693,6 +743,96 @@ class _InterSyndicProfileScreenState extends State<InterSyndicProfileScreen>
           ),
           if (enabled)
             const Icon(Icons.edit_rounded, size: 14, color: _C.coral),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPasswordCard() {
+    return _glassCard(
+      child: Column(
+        children: [
+          _passwordFieldRow(
+            icon: Icons.lock_outline,
+            label: 'Nouveau mot de passe',
+            controller: _newPasswordCtrl,
+          ),
+          _divider(),
+          _passwordFieldRow(
+            icon: Icons.lock_reset,
+            label: 'Confirmer le mot de passe',
+            controller: _confirmPasswordCtrl,
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _changingPassword ? null : _changePassword,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _C.coral,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: _changingPassword
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('Mettre à jour le mot de passe'),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ),
+    );
+  }
+
+  Widget _passwordFieldRow({
+    required IconData icon,
+    required String label,
+    required TextEditingController controller,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+                color: _C.coralLight, borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: _C.coral, size: 18),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: const TextStyle(
+                        color: _C.textLight,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500)),
+                const SizedBox(height: 2),
+                TextFormField(
+                  controller: controller,
+                  obscureText: true,
+                  style: const TextStyle(
+                      color: _C.dark,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                    border: UnderlineInputBorder(
+                        borderSide: BorderSide(color: _C.coral.withOpacity(0.5))),
+                    focusedBorder: const UnderlineInputBorder(
+                        borderSide: BorderSide(color: _C.coral, width: 1.5)),
+                    enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: _C.divider, width: 1)),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
