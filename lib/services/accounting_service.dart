@@ -25,35 +25,48 @@ class AccountingService {
     return (res as List).map((m) => AffectationHistoryModel.fromJson(m)).toList();
   }
 
-  // 4. Détails complets (Inclut maintenant les dépenses globales divisées)
+  // 4. Détails complets (Filtrés par les dates du mandat)
   Future<Map<String, dynamic>> getMandateAuditDetails(int mandateId, int trancheId) async {
-    // A. Récupérer l'ID de la résidence
+    // A. Récupérer les dates du mandat
+    final mandate = await _db.from('historique_affectations').select().eq('id', mandateId).single();
+    final String startDate = mandate['date_debut'];
+    final String? endDate = mandate['date_fin'];
+
+    // B. Récupérer l'ID de la résidence
     final trancheInfo = await _db.from('tranches').select('residence_id').eq('id', trancheId).single();
     final int residenceId = trancheInfo['residence_id'];
 
-    // B. Récupérer le nombre total de tranches dans cette résidence
+    // C. Récupérer le nombre total de tranches dans cette résidence
     final allTranches = await _db.from('tranches').select('id').eq('residence_id', residenceId);
     final int totalTranchesCount = (allTranches as List).length;
 
-    // C. Requêtes parallèles
-    final res = await Future.wait([
-      // Dépenses de la tranche
-      _db.from('depenses').select('*, categories(nom)').eq('tranche_id', trancheId).order('date'),
-      
-      // Dépenses globales (sans tranche_id) ajoutées par le SG
-      _db.from('depenses').select('*, categories(nom)').eq('residence_id', residenceId).isFilter('tranche_id', null).order('date'),
+    // D. Préparer les requêtes de dépenses avec filtre de date
+    var trancheExpQuery = _db.from('depenses').select('*, categories(nom)')
+        .eq('tranche_id', trancheId)
+        .gte('date', startDate);
+    
+    var globalExpQuery = _db.from('depenses').select('*, categories(nom)')
+        .eq('residence_id', residenceId)
+        .isFilter('tranche_id', null)
+        .gte('date', startDate);
 
-      // Paiements
+    if (endDate != null) {
+      trancheExpQuery = trancheExpQuery.lte('date', endDate);
+      globalExpQuery = globalExpQuery.lte('date', endDate);
+    }
+
+    // E. Requêtes parallèles
+    final res = await Future.wait([
+      trancheExpQuery.order('date'),
+      globalExpQuery.order('date'),
       _db.from('paiements').select('*, resident:resident_id(nom, prenom), appartements(id, numero, immeuble_id)').eq('mandat_id', mandateId),
-      
-      // Appartements (Correction : Ajout du champ nom pour l'immeuble)
       _db.from('appartements').select('id, numero, immeuble_id, immeubles!inner(nom, tranche_id)').eq('immeubles.tranche_id', trancheId),
     ]);
 
     final List<Map<String, dynamic>> trancheExpenses = List<Map<String, dynamic>>.from(res[0] as List);
     final List<Map<String, dynamic>> globalExpenses = List<Map<String, dynamic>>.from(res[1] as List);
 
-    // D. Transformer les dépenses globales pour n'afficher que la part de cette tranche
+    // F. Transformer les dépenses globales pour n'afficher que la part de cette tranche
     final List<Map<String, dynamic>> dividedGlobalExpenses = globalExpenses.map((e) {
       double fullAmount = (e['montant'] as num).toDouble();
       return {
@@ -64,7 +77,7 @@ class AccountingService {
       };
     }).toList();
 
-    // E. Fusionner les deux listes de dépenses
+    // G. Fusionner les deux listes de dépenses
     final List<Map<String, dynamic>> allExpenses = [...trancheExpenses, ...dividedGlobalExpenses];
     allExpenses.sort((a, b) => (a['date'] ?? '').compareTo(b['date'] ?? ''));
 
