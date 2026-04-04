@@ -480,9 +480,10 @@ class ResidentService {
         }
         if (user == null) continue;
         if (trancheId != null) {
-          final residentTrancheId =
-          r['appartements']?['immeubles']?['tranche_id'];
-          if (residentTrancheId != trancheId) continue;
+          final residentTrancheId = r['appartements']?['immeubles']?['tranche_id'];
+          // Only filter out if the resident is assigned to another tranche.
+          // If they are unassigned (residentTrancheId == null), allow them to appear.
+          if (residentTrancheId != null && residentTrancheId != trancheId) continue;
         }
         result.add(ResidentModel(
           id: r['id'] as int,

@@ -876,7 +876,7 @@ class _ApartmentsListScreenState extends State<ApartmentsListScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                apartment.titreAffichage,
+                                apartment.numero,
                                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: InterSyndicPalette.dark),
                               ),
                               const SizedBox(height: 4),

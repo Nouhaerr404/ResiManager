@@ -164,7 +164,7 @@ class _TranchesManagementScreenState extends State<TranchesManagementScreen> {
                 TextField(
                   controller: prixController,
                   keyboardType: TextInputType.number,
-                  decoration: _buildInputDecoration("Ex: 50000 DH"),
+                  decoration: _buildInputDecoration("Ex: 3000 DH"),
                 ),
               ],
             ),

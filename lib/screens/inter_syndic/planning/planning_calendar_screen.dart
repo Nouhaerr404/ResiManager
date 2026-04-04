@@ -131,43 +131,51 @@ class _PlanningCalendarScreenState extends State<PlanningCalendarScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('Planning & Calendrier', 
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
       body: Stack(
         children: [
-          // Background Gradient
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF1A1A2E), Color(0xFF16213E)],
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/tranche_bg.png',
+              fit: BoxFit.cover,
+            ),
+          ),
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color.fromRGBO(0, 0, 0, 0.20),
+                    Color.fromRGBO(0, 0, 0, 0.90),
+                  ],
+                  stops: [0.0, 1.0],
+                ),
               ),
             ),
           ),
           
           // Main Content
           SafeArea(
-            child: _loading 
-              ? const Center(child: CircularProgressIndicator(color: Color(0xFFE8603C)))
-              : Column(
-                  children: [
-                    _buildCalendarCard(),
-                    const SizedBox(height: 20),
-                    Expanded(
-                      child: _buildDayDetails(),
-                    ),
-                  ],
+            child: Column(
+              children: [
+                _buildHeader(),
+                Expanded(
+                  child: _loading 
+                    ? const Center(child: CircularProgressIndicator(color: Color(0xFFE8603C)))
+                    : Column(
+                        children: [
+                          const SizedBox(height: 10),
+                          _buildCalendarCard(),
+                          const SizedBox(height: 20),
+                          Expanded(
+                            child: _buildDayDetails(),
+                          ),
+                        ],
+                      ),
                 ),
+              ],
+            ),
           ),
         ],
       ),
@@ -175,6 +183,62 @@ class _PlanningCalendarScreenState extends State<PlanningCalendarScreen> {
         onPressed: _showAddNoteDialog,
         backgroundColor: const Color(0xFFE8603C),
         child: const Icon(Icons.note_add_rounded, color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      color: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white24)),
+              child: const Icon(Icons.arrow_back_ios_new_rounded,
+                  size: 14, color: Colors.white),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Center(
+              child: Icon(Icons.calendar_month_rounded, color: Colors.white, size: 18),
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Planning",
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    letterSpacing: -0.2),
+              ),
+              Text('Calendrier & Mandats',
+                  style: TextStyle(
+                      color: Colors.white60,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -209,6 +273,10 @@ class _PlanningCalendarScreenState extends State<PlanningCalendarScreen> {
             },
             eventLoader: _getEventsForDay,
             startingDayOfWeek: StartingDayOfWeek.monday,
+            daysOfWeekStyle: const DaysOfWeekStyle(
+              weekdayStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+              weekendStyle: TextStyle(color: Colors.white70),
+            ),
             calendarStyle: CalendarStyle(
               outsideDaysVisible: false,
               defaultTextStyle: const TextStyle(color: Colors.white),
@@ -247,12 +315,16 @@ class _PlanningCalendarScreenState extends State<PlanningCalendarScreen> {
                   margin: const EdgeInsets.all(4),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: inMandate ? const Color(0xFF34C98B).withOpacity(0.12) : null,
+                    color: inMandate ? const Color(0xFF34C98B).withOpacity(0.2) : null,
+                    border: inMandate ? Border.all(color: const Color(0xFF34C98B).withOpacity(0.4), width: 1) : null,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     '${day.day}',
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: inMandate ? FontWeight.bold : FontWeight.w500,
+                    ),
                   ),
                 );
               },
@@ -319,11 +391,11 @@ class _PlanningCalendarScreenState extends State<PlanningCalendarScreen> {
             padding: const EdgeInsets.only(top: 8),
             child: Row(
               children: [
-                const Icon(Icons.history_rounded, color: Colors.white38, size: 12),
+                const Icon(Icons.history_rounded, color: Colors.white70, size: 12),
                 const SizedBox(width: 6),
                 Text(
                   "Mandat : ${DateFormat('dd/MM/yyyy').format(DateTime.parse(currentMandate['date_debut']))} → ${currentMandate['date_fin'] != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(currentMandate['date_fin'])) : 'En cours'}",
-                  style: const TextStyle(color: Colors.white38, fontSize: 12, fontWeight: FontWeight.w500),
+                  style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -334,7 +406,7 @@ class _PlanningCalendarScreenState extends State<PlanningCalendarScreen> {
             child: Padding(
               padding: EdgeInsets.only(top: 40),
               child: Text('Aucun événement pour ce jour', 
-                style: TextStyle(color: Colors.white38, fontSize: 14)),
+                style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500)),
             ),
           )
         else
