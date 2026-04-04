@@ -2,20 +2,20 @@
 
 Residence Management Application
 
-## 🚀 Quick Start
+##  Quick Start
 
 ```bash
 flutter pub get
 flutter run
 ```
 
-## 📋 Requirements
+##  Requirements
 
 - Flutter SDK
 - Dart 3.0+
 - Android Studio / Xcode
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 ├── assets/          # Images, fonts, data
@@ -27,17 +27,14 @@ flutter run
 └── analysis_options.yaml
 ```
 
-## 🔧 Configuration
+##  Configuration
 
-See `Guide_Installation_V2.pdf` and `Guide_Utilisation.pdf` for detailed setup and usage instructions.
+See `Guide_Installation.pdf` and `Guide_Utilisation.pdf` for detailed setup and usage instructions.
 
 Database: `ResiManager.sql`
 
-## 📚 Resources
+## Resources
 
 - [Learn Flutter](https://flutter.dev)
 - [Online Documentation](https://flutter.dev/docs)
 
-## 📄 License
-
-See project documentation for details.
