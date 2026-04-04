@@ -21,8 +21,7 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   // ── Filtres
-  String _filter      = "Toutes";
-  String _searchQuery = "";
+  String _searchQuery  = "";
   String _filterPortee = "Toutes";
 
   // ── Mandats
@@ -78,8 +77,6 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
     });
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     final bool inLayout = widget.onNavigate != null;
@@ -101,15 +98,13 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
         final filteredDeps = allDeps.where((d) {
           final desc = (d['description']?.toString() ??
               d['categories']?['nom'] ?? '').toLowerCase();
-          final bool matchesSearch  = desc.contains(_searchQuery.toLowerCase());
-          final bool isPaye         = d['facture_path'] != null;
-          final bool matchesStatut  = _filter == 'Toutes' ||
-              (_filter == 'Payées'     && isPaye) ||
-              (_filter == 'En attente' && !isPaye);
+          final String catNom = d['categories']?['nom']?.toString() ?? 'Autre';
+          final bool matchesSearch  = desc.contains(_searchQuery.toLowerCase()) ||
+              catNom.toLowerCase().contains(_searchQuery.toLowerCase());
           final bool matchesPortee  = _filterPortee == 'Toutes' ||
               (_filterPortee == 'Commune'      && d['categories']?['type'] == 'globale') ||
               (_filterPortee == 'Individuelle' && d['categories']?['type'] != 'globale');
-          return matchesSearch && matchesStatut && matchesPortee;
+          return matchesSearch && matchesPortee;
         }).toList();
 
         return RefreshIndicator(
@@ -124,7 +119,7 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── HEADER CORRIGÉ (Expanded pour éviter overflow)
+                // ── HEADER
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -149,9 +144,7 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
                   _buildMandatBanner(),
                 const SizedBox(height: 16),
 
-                _buildKpis(data),
-                const SizedBox(height: 20),
-                _buildSearchAndFilters(allDeps),
+                _buildSearchAndFilters(),
                 const SizedBox(height: 20),
 
                 if (filteredDeps.isEmpty)
@@ -171,7 +164,7 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Container(
-                      width: 820,
+                      width: 720,
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
@@ -327,13 +320,11 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
     return FutureBuilder<Map<String, dynamic>>(
       future: _expensesFuture,
       builder: (context, snapshot) {
-        // Période exposée par le service dans la réponse
         final String? debut = snapshot.data?['periode_debut']?.toString();
         final String? fin   = snapshot.data?['periode_fin']?.toString();
 
         String periodeLabel = '';
         if (debut != null && fin != null) {
-          // Formatter en dd/MM/yyyy
           String fmt(String iso) {
             try {
               final d = DateTime.parse(iso);
@@ -396,57 +387,9 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
     );
   }
 
-  Widget _buildKpis(Map data) {
-    return Row(children: [
-      Expanded(child: _kpiCard('Total',
-          '${((data['total'] as num?) ?? 0).toInt()} DH',
-          Icons.account_balance_wallet_outlined, _dark,
-          const Color(0xFFEEF2FF))),
-      const SizedBox(width: 12),
-      Expanded(child: _kpiCard('Payé',
-          '${((data['payees'] as num?) ?? 0).toInt()} DH',
-          Icons.check_circle_outline, Colors.green,
-          const Color(0xFFECFDF5))),
-      const SizedBox(width: 12),
-      Expanded(child: _kpiCard('En attente',
-          '${((data['attente'] as num?) ?? 0).toInt()} DH',
-          Icons.timer_outlined, _coral,
-          const Color(0xFFFFF5F3))),
-    ]);
-  }
-
-  Widget _kpiCard(String label, String value, IconData icon,
-      Color color, Color bg) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
-            blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(color: bg,
-              borderRadius: BorderRadius.circular(10)),
-          child: Icon(icon, color: color, size: 18),
-        ),
-        const SizedBox(height: 12),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(value, style: TextStyle(fontSize: 18,
-              fontWeight: FontWeight.bold, color: color)),
-        ),
-        const SizedBox(height: 2),
-        Text(label, style: TextStyle(fontSize: 11,
-            color: Colors.grey.shade500)),
-      ]),
-    );
-  }
-
-  Widget _buildSearchAndFilters(List all) {
-    return Column(children: [
+  Widget _buildSearchAndFilters() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // ── Barre de recherche
       Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -458,36 +401,26 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
         child: TextField(
           controller: _searchController,
           decoration: InputDecoration(
-            hintText: 'Rechercher une dépense...',
+            hintText: 'Rechercher par description ou type...',
             hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-            prefixIcon: Icon(Icons.search,
-                color: Colors.grey.shade400, size: 22),
+            prefixIcon: Icon(Icons.search, color: Colors.grey.shade400, size: 22),
             suffixIcon: _searchQuery.isNotEmpty
                 ? IconButton(
-                    icon: Icon(Icons.clear, color: Colors.grey.shade400, size: 18),
-                    onPressed: () => _searchController.clear(),
-                  )
+              icon: Icon(Icons.clear, color: Colors.grey.shade400, size: 18),
+              onPressed: () => _searchController.clear(),
+            )
                 : null,
             border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(
-                horizontal: 20, vertical: 15),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
           ),
         ),
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: 14),
 
-      SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(children: [
-          _filterChip('Toutes', all.length),
-          _filterChip('Payées',
-              all.where((e) => e['facture_path'] != null).length),
-          _filterChip('En attente',
-              all.where((e) => e['facture_path'] == null).length),
-        ]),
-      ),
+      // ── Filtre Portée
+      Text('Portée', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+          color: Colors.grey.shade500, letterSpacing: 0.5)),
       const SizedBox(height: 8),
-
       SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(children: [
@@ -497,30 +430,6 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
         ]),
       ),
     ]);
-  }
-
-  Widget _filterChip(String label, int count) {
-    bool isSel = _filter == label;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: () => setState(() => _filter = label),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: isSel ? _dark : Colors.white,
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: isSel ? _dark : Colors.grey.shade200),
-            boxShadow: isSel ? [BoxShadow(color: _dark.withOpacity(0.2),
-                blurRadius: 8, offset: const Offset(0, 3))] : [],
-          ),
-          child: Text('$label ($count)',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-                  color: isSel ? Colors.white : Colors.grey.shade600)),
-        ),
-      ),
-    );
   }
 
   Widget _porteeChip(String label) {
@@ -536,9 +445,7 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
             color: isSel ? const Color(0xFF7C5CBF) : Colors.white,
             borderRadius: BorderRadius.circular(30),
             border: Border.all(
-                color: isSel
-                    ? const Color(0xFF7C5CBF)
-                    : Colors.grey.shade200),
+                color: isSel ? const Color(0xFF7C5CBF) : Colors.grey.shade200),
           ),
           child: Text(label,
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
@@ -571,9 +478,6 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
         Expanded(flex: 2, child: Text('MONTANT', textAlign: TextAlign.right,
             style: TextStyle(color: Colors.white70, fontSize: 10,
                 fontWeight: FontWeight.bold, letterSpacing: 1))),
-        Expanded(flex: 2, child: Text('STATUT', textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white70, fontSize: 10,
-                fontWeight: FontWeight.bold, letterSpacing: 1))),
         Expanded(flex: 1, child: Text('FACTURE', textAlign: TextAlign.right,
             style: TextStyle(color: Colors.white70, fontSize: 10,
                 fontWeight: FontWeight.bold, letterSpacing: 1))),
@@ -585,7 +489,6 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
     final String catName    = d['categories']?['nom'] ?? 'Charge';
     final String description = d['description']?.toString() ?? catName;
     final bool isCommune    = d['categories']?['type'] == 'globale';
-    final bool isPaye       = d['facture_path'] != null;
     final bg = index.isEven ? Colors.white : const Color(0xFFFAFAFC);
 
     return Container(
@@ -624,12 +527,11 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
             textAlign: TextAlign.right,
             style: const TextStyle(
                 fontWeight: FontWeight.bold, fontSize: 13))),
-        Expanded(flex: 2, child: _statusBadge(isPaye)),
         Expanded(flex: 1, child: IconButton(
           icon: Icon(
             d['facture_path'] != null
                 ? Icons.receipt_long_rounded
-                : Icons.visibility_outlined,
+                : Icons.visibility_off_outlined,
             size: 18,
             color: d['facture_path'] != null
                 ? Colors.red.shade400
@@ -671,24 +573,6 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
           fontWeight: FontWeight.bold, letterSpacing: 0.5)),
     ),
   );
-
-  Widget _statusBadge(bool paye) {
-    final Color c  = paye ? Colors.green : Colors.orange;
-    final Color bg = paye ? Colors.green.shade50 : Colors.orange.shade50;
-    return Center(child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-          color: bg, borderRadius: BorderRadius.circular(20)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(paye ? Icons.check_circle : Icons.schedule,
-            size: 11, color: c),
-        const SizedBox(width: 4),
-        Text(paye ? 'Payé' : 'En attente',
-            style: TextStyle(color: c, fontSize: 10,
-                fontWeight: FontWeight.bold)),
-      ]),
-    ));
-  }
 
   void _showFacture(Map d) async {
     final String? url = d['facture_path']?.toString();
