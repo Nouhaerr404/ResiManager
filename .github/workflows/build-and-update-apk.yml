@@ -1,0 +1,43 @@
+name: Manual Build and Update APK
+
+on:
+  workflow_dispatch: # Permet de lancer le workflow manuellement
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Important pour pouvoir push le fichier
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Move and Overwrite APK
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk ./app-release.apk
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add app-release.apk
+          git commit -m "chore: update release apk [skip ci]" || echo "No changes to commit"
+          git push
