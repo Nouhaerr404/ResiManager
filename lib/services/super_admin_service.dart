@@ -99,9 +99,17 @@ class SuperAdminService {
         return "Cet utilisateur est déjà enregistré dans la base de données. La demande a été marquée comme acceptée.";
       }
 
-      // 3. Créer l'utilisateur dans Supabase Auth (Déclenche l'email)
+      // 3. Créer l'utilisateur dans Supabase Auth (Déclenche l'email avec role syndic_general)
       try {
-        await _supabase.auth.signUp(email: email, password: password);
+        await _supabase.auth.signUp(
+          email: email, 
+          password: password,
+          data: {
+            'nom': demande['nom'],
+            'prenom': demande['prenom'],
+            'role': 'syndic_general',
+          }
+        );
       } on AuthException catch (e) {
         // Si déjà dans Auth, on continue quand même pour essayer d'insérer dans public.users
         if (!e.message.contains('already registered') && !e.message.contains('already exists')) {

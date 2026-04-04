@@ -25,7 +25,6 @@ class SyndicCollaboratorService {
   Future<List<Map<String, dynamic>>> getMyInterSyndics(int myId, int residenceId) async {
     try {
       await checkAndDisableExpiredMandates();
-      // Correction du nom de la clé étrangère : inter_syndic_id
       final response = await _db.from('liens_syndics').select('''
             inter_syndic:users!inter_syndic_id (
               *,
@@ -59,14 +58,15 @@ class SyndicCollaboratorService {
       final String tempPassword = _generateRandomPassword();
       final String hashedPassword = await _hashPassword(tempPassword);
 
-      // Inscription Auth avec métadonnées pour l'email
+      // Inscription Auth avec métadonnées role
       await _db.auth.signUp(
         email: email.trim(), 
         password: tempPassword,
         data: {
           'temp_pass': tempPassword,
-          'nom': nom,
-          'prenom': prenom,
+          'nom': nom.trim(),
+          'prenom': prenom.trim(),
+          'role': 'inter_syndic',
         }
       );
 
@@ -81,7 +81,6 @@ class SyndicCollaboratorService {
         'password': hashedPassword,
       }).select('id').single();
 
-      // Correction du nom de la colonne : inter_syndic_id
       await _db.from('liens_syndics').insert({
         'syndic_general_id': mySyndicGeneralId,
         'inter_syndic_id': newUser['id'],

@@ -658,10 +658,7 @@ class ResidentService {
         debugPrint(
             '>>> Mot de passe généré pour ${email.trim()}: $generatedPassword');
 
-        // ── Inscription Auth + envoi email — même logique que SyndicCollaboratorService ──
-        // auth.signUp() avec data {temp_pass, nom, prenom} :
-        // Supabase envoie automatiquement l'email de bienvenue via le template
-        // configuré (Resend), qui inclut le mot de passe provisoire.
+        // ── Inscription Auth + envoi email avec métadonnées role ──
         try {
           await _db.auth.signUp(
             email: email.trim(),
@@ -670,6 +667,7 @@ class ResidentService {
               'temp_pass': generatedPassword,
               'nom': nom.trim(),
               'prenom': prenom.trim(),
+              'role': 'resident',
             },
           );
           emailSent = true;
