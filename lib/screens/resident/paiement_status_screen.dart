@@ -20,28 +20,30 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
 
   final ResidentService _service = ResidentService();
   late TabController _tabController;
-  int _selectedYear = DateTime.now().year;
+
   Map<String, dynamic>? _overview;
   Map<String, dynamic>? _history;
   bool _loadingOverview = true;
-  bool _loadingHistory = true;
+  bool _loadingHistory  = true;
 
-  // FILTRES AVANCÉS
-  int? _filterYear;
-  int? _filterMonth;
+  // ── Filtres historique
+  int?   _filterYear;
+  int?   _filterMonth;
   String _filterStatus = 'tous';
-  String _filterType = 'tous';
-  List<Map<String, dynamic>> _mandats = [];
-  Map<String, dynamic>? _mandatSelectionne;
-  bool _mandatsLoaded = false;
+  String _filterType   = 'tous';
 
-  static const Color _orange  = Color(0xFFFF6B4A);
-  static const Color _purple  = Color(0xFF6C63FF);
-  static const Color _green   = Color(0xFF2ECC71);
-  static const Color _yellow  = Color(0xFFFFC107);
-  static const Color _dark    = Color(0xFF1E1E2C);
-  static const Color _bg      = Color(0xFFF4F6F9);
-  static const Color _white   = Colors.white;
+  // ── Mandats
+  List<Map<String, dynamic>> _mandats          = [];
+  Map<String, dynamic>?      _mandatSelectionne;
+  bool                       _mandatsLoaded    = false;
+
+  static const Color _orange = Color(0xFFFF6B4A);
+  static const Color _purple = Color(0xFF6C63FF);
+  static const Color _green  = Color(0xFF2ECC71);
+  static const Color _yellow = Color(0xFFFFC107);
+  static const Color _dark   = Color(0xFF1E1E2C);
+  static const Color _bg     = Color(0xFFF4F6F9);
+  static const Color _white  = Colors.white;
 
   @override
   void initState() {
@@ -50,6 +52,13 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
     _loadMandats();
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  // ── 1. Charger les mandats ────────────────────────────────────────
   Future<void> _loadMandats() async {
     final mandats = await _service.getMandatsVecus(widget.userId);
     setState(() {
@@ -61,40 +70,114 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
           : null;
       _mandatsLoaded = true;
     });
-    _fetchOverview();
-    _fetchHistory();
-  }
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
+    await Future.wait([_fetchOverview(), _fetchHistory()]);
   }
 
+  // ── 2. Overview filtré par mandat ─────────────────────────────────
+  // CORRECTION : on utilise getHistoriquePaiementsParMandat(mandatId)
+  // au lieu de getPaiementOverview(année) pour rester dans le périmètre
+  // du mandat sélectionné, exactement comme AccountingService.
   Future<void> _fetchOverview() async {
     setState(() => _loadingOverview = true);
-    final data = await _service.getPaiementOverview(widget.userId, _selectedYear);
-    setState(() { _overview = data; _loadingOverview = false; });
+
+    final int? mandatId = _mandatSelectionne?['id'] as int?;
+
+    // Paiements filtrés par mandat_id (table paiements)
+    final histData = await _service.getHistoriquePaiementsParMandat(
+      widget.userId,
+      mandatId: mandatId,
+    );
+
+    final List<Map<String, dynamic>> paiements =
+    List<Map<String, dynamic>>.from(
+        histData['historique'] as List? ?? []);
+
+    // Calculer totaux depuis les paiements du mandat
+    double montantTotal = 0;
+    double montantPaye  = 0;
+    final List<Map<String, dynamic>> lignes = [];
+
+    for (final p in paiements) {
+      final double mt  = (p['montant_total'] as num?)?.toDouble() ?? 0.0;
+      final double mp  = (p['montant_paye']  as num?)?.toDouble() ?? 0.0;
+      final String ref = p['reference']?.toString() ?? '';
+      montantTotal += mt;
+      montantPaye  += mp;
+
+      lignes.add({
+        'type':          p['type_paiement']?.toString() ?? 'charges',
+        'reference':     ref.isNotEmpty ? ref : null,
+        'montant_total': mt,
+        'montant_paye':  mp,
+        'reste':         mt - mp,
+        'statut':        p['statut']?.toString() ?? 'impaye',
+      });
+    }
+
+    final double reste  = montantTotal - montantPaye;
+    final String statut = montantPaye >= montantTotal && montantTotal > 0
+        ? 'complet'
+        : (montantPaye > 0 ? 'partiel' : 'impaye');
+
+    // Infos appartement (inchangé — juste pour l'affichage du header)
+    final overviewData = await _service.getPaiementOverview(
+        widget.userId, DateTime.now().year);
+
+    setState(() {
+      _overview = {
+        'num_appart':   overviewData['num_appart'],
+        'tranche_nom':  overviewData['tranche_nom'],
+        'immeuble_nom': overviewData['immeuble_nom'],
+        'total_annee':  montantTotal,
+        'paye_annee':   montantPaye,
+        'reste_annee':  reste,
+        'statut':       statut,
+        'lignes':       lignes,
+      };
+      _loadingOverview = false;
+    });
   }
 
+  // ── 3. Historique filtré par mandat ──────────────────────────────
+  // CORRECTION : mandatId passé directement, plus de filtre par année.
   Future<void> _fetchHistory() async {
     setState(() => _loadingHistory = true);
+
+    final int? mandatId = _mandatSelectionne?['id'] as int?;
+
     final data = await _service.getHistoriquePaiementsParMandat(
       widget.userId,
-      mandatId: _mandatSelectionne?['id'],
+      mandatId: mandatId,
     );
-    setState(() { _history = data; _loadingHistory = false; });
+
+    setState(() {
+      _history      = data;
+      _loadingHistory = false;
+      // Reset filtres à chaque changement de mandat
+      _filterYear   = null;
+      _filterMonth  = null;
+      _filterStatus = 'tous';
+      _filterType   = 'tous';
+    });
+  }
+
+  // ── 4. Changement de mandat ───────────────────────────────────────
+  void _onMandatChanged(Map<String, dynamic> mandat) {
+    setState(() => _mandatSelectionne = mandat);
+    Future.wait([_fetchOverview(), _fetchHistory()]);
   }
 
   @override
   Widget build(BuildContext context) {
     final bool inLayout = widget.onNavigate != null;
 
+    if (!_mandatsLoaded) {
+      return const Center(child: CircularProgressIndicator(color: _orange));
+    }
+
     final body = Column(
       children: [
-        // ── HEADER ORANGE ──
         _buildHeader(),
-
-        // ── TABS + CONTENU ──
         Expanded(
           child: Column(children: [
             _buildTabBar(),
@@ -113,12 +196,10 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
 
     return WillPopScope(
       onWillPop: () async {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ResidentDashboardScreen(userId: widget.userId),
-          ),
-        );
+        Navigator.pushReplacement(context,
+            MaterialPageRoute(
+                builder: (_) =>
+                    ResidentDashboardScreen(userId: widget.userId)));
         return false;
       },
       child: Scaffold(
@@ -131,22 +212,22 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
           elevation: 0,
           iconTheme: const IconThemeData(color: Colors.white),
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_rounded, color: Colors.white),
-            onPressed: () => Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ResidentDashboardScreen(userId: widget.userId),
-              ),
-            ),
+            icon: const Icon(Icons.arrow_back_ios_rounded,
+                color: Colors.white),
+            onPressed: () => Navigator.pushReplacement(context,
+                MaterialPageRoute(
+                    builder: (_) =>
+                        ResidentDashboardScreen(userId: widget.userId))),
           ),
         ),
-        drawer: ResidentMobileDrawer(currentIndex: 2, userId: widget.userId),
+        drawer: ResidentMobileDrawer(
+            currentIndex: 2, userId: widget.userId),
         body: body,
       ),
     );
   }
 
-  // ── HEADER ──
+  // ── HEADER ────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -158,137 +239,107 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(28),
+          bottomLeft:  Radius.circular(28),
           bottomRight: Radius.circular(28),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text("Mes Paiements",
-                      style: TextStyle(color: Colors.white,
-                          fontSize: 20, fontWeight: FontWeight.bold)),
-                  if (_overview != null && _overview!['num_appart'] != null)
-                    Text(
-                        'App. ${_overview!['num_appart']} • ${_overview!['tranche_nom'] ?? ''}',
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Mes Paiements',
+                        style: TextStyle(color: Colors.white,
+                            fontSize: 20, fontWeight: FontWeight.bold)),
+                    if (_overview != null &&
+                        _overview!['num_appart'] != null)
+                      Text(
+                        'App. ${_overview!['num_appart']} · '
+                            '${_overview!['tranche_nom'] ?? ''}',
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                         style: const TextStyle(
-                            color: Colors.white70, fontSize: 12)),
-                ]),
-              ),
-              const SizedBox(width: 8),
-              _buildYearSelector(),
-            ],
-          ),
-          const SizedBox(height: 20),
+                            color: Colors.white70, fontSize: 12),
+                      ),
+                    // Mandat en cours dans le sous-titre
+                    if (_mandatSelectionne != null)
+                      Text(
+                        'Mandat : ${_mandatSelectionne!['label']}',
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: const TextStyle(
+                            color: Colors.white60, fontSize: 11),
+                      ),
+                  ]),
+            ),
+            const SizedBox(width: 8),
+            // Sélecteur de mandat (remplace le sélecteur d'année)
+            _buildMandatSelector(),
+          ],
+        ),
+        const SizedBox(height: 20),
 
-          // ── 3 KPIs ──
-          if (!_loadingOverview && _overview != null)
-            Row(children: [
-              _headerKpi("Total",
-                  "${_format((_overview!['total_annee'] as num?)?.toDouble() ?? 0)} DH",
-                  Icons.account_balance_wallet_outlined),
-              const SizedBox(width: 10),
-              _headerKpi("Payé",
-                  "${_format((_overview!['paye_annee'] as num?)?.toDouble() ?? 0)} DH",
-                  Icons.check_circle_outline),
-              const SizedBox(width: 10),
-              _headerKpi("Reste",
-                  "${_format((_overview!['reste_annee'] as num?)?.toDouble() ?? 0)} DH",
-                  Icons.timer_outlined),
-            ]),
-        ],
-      ),
+        // ── 3 KPIs calculés depuis le mandat ──
+        if (!_loadingOverview && _overview != null)
+          Row(children: [
+            _headerKpi(
+              'Total',
+              '${_format((_overview!['total_annee'] as num?)?.toDouble() ?? 0)} DH',
+              Icons.account_balance_wallet_outlined,
+            ),
+            const SizedBox(width: 10),
+            _headerKpi(
+              'Payé',
+              '${_format((_overview!['paye_annee'] as num?)?.toDouble() ?? 0)} DH',
+              Icons.check_circle_outline,
+            ),
+            const SizedBox(width: 10),
+            _headerKpi(
+              'Reste',
+              '${_format((_overview!['reste_annee'] as num?)?.toDouble() ?? 0)} DH',
+              Icons.timer_outlined,
+            ),
+          ]),
+      ]),
     );
   }
 
   Widget _headerKpi(String label, String value, IconData icon) {
-    return Expanded(child: Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(children: [
-        Icon(icon, color: Colors.white, size: 18),
-        const SizedBox(height: 6),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(value, style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(14),
         ),
-        Text(label, style: const TextStyle(
-            color: Colors.white70, fontSize: 10)),
-      ]),
-    ));
+        child: Column(children: [
+          Icon(icon, color: Colors.white, size: 18),
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(value,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13)),
+          ),
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.white70, fontSize: 10)),
+        ]),
+      ),
+    );
   }
 
-  Widget _buildYearSelector() {
+  // ── Sélecteur mandat (dans le header) ────────────────────────────
+  Widget _buildMandatSelector() {
     if (_mandats.isEmpty) return const SizedBox();
     final bool enCours = _mandatSelectionne?['est_en_cours'] == true;
     return GestureDetector(
-      onTap: () => showModalBottomSheet(
-        context: context,
-        shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-        builder: (ctx) => Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 4),
-              width: 40, height: 4,
-              decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2)),
-            ),
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('Mes mandats',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
-            ..._mandats.map((m) {
-              final bool isSel = _mandatSelectionne?['id'] == m['id'];
-              final bool ec    = m['est_en_cours'] == true;
-              return ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: ec ? Colors.green.withOpacity(0.1)
-                        : _orange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    ec ? Icons.radio_button_checked : Icons.history_rounded,
-                    color: ec ? Colors.green : _orange, size: 18,
-                  ),
-                ),
-                title: Text(m['label'],
-                    style: TextStyle(fontWeight: FontWeight.w600,
-                        color: isSel ? _orange : _dark)),
-                subtitle: Text(
-                  '${m['syndic_nom']}${ec ? ' · En cours' : ''}',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                ),
-                trailing: isSel
-                    ? const Icon(Icons.check_circle_rounded, color: _orange)
-                    : null,
-                onTap: () {
-                  setState(() => _mandatSelectionne = m);
-                  Navigator.pop(ctx);
-                  _fetchHistory();
-                },
-              );
-            }),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
+      onTap: _showMandatPicker,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
@@ -298,7 +349,9 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(
-            enCours ? Icons.radio_button_checked : Icons.history_rounded,
+            enCours
+                ? Icons.radio_button_checked
+                : Icons.history_rounded,
             color: Colors.white, size: 14,
           ),
           const SizedBox(width: 6),
@@ -306,18 +359,88 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
             child: Text(
               _mandatSelectionne?['label'] ?? 'Mandat',
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white,
-                  fontWeight: FontWeight.bold, fontSize: 12),
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12),
             ),
           ),
           const SizedBox(width: 4),
-          const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 16),
+          const Icon(Icons.keyboard_arrow_down,
+              color: Colors.white, size: 16),
         ]),
       ),
     );
   }
 
-  // ── TAB BAR ──
+  void _showMandatPicker() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius:
+          BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 12, bottom: 4),
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('Mes mandats',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+          ..._mandats.map((m) {
+            final bool isSel   = _mandatSelectionne?['id'] == m['id'];
+            final bool enCours = m['est_en_cours'] == true;
+            return ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: enCours
+                      ? Colors.green.withOpacity(0.1)
+                      : _orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  enCours
+                      ? Icons.radio_button_checked
+                      : Icons.history_rounded,
+                  color: enCours ? Colors.green : _orange,
+                  size: 18,
+                ),
+              ),
+              title: Text(m['label'],
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: isSel ? _orange : _dark)),
+              subtitle: Text(
+                '${m['syndic_nom']}${enCours ? ' · En cours' : ''}',
+                style: TextStyle(
+                    fontSize: 11, color: Colors.grey.shade500),
+              ),
+              trailing: isSel
+                  ? const Icon(Icons.check_circle_rounded,
+                  color: _orange)
+                  : null,
+              onTap: () {
+                Navigator.pop(ctx);
+                _onMandatChanged(m);
+              },
+            );
+          }),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  // ── TAB BAR ──────────────────────────────────────────────────────
   Widget _buildTabBar() {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -325,15 +448,17 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
       ),
       child: TabBar(
         controller: _tabController,
         indicator: BoxDecoration(
-            color: _orange,
-            borderRadius: BorderRadius.circular(10)),
+            color: _orange, borderRadius: BorderRadius.circular(10)),
         indicatorSize: TabBarIndicatorSize.tab,
         dividerColor: Colors.transparent,
         labelColor: Colors.white,
@@ -341,22 +466,26 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
         labelStyle: const TextStyle(
             fontWeight: FontWeight.w600, fontSize: 13),
         tabs: const [
-          Tab(child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.dashboard_outlined, size: 15),
-            SizedBox(width: 6), Text("Vue d'ensemble"),
-          ])),
-          Tab(child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.history_outlined, size: 15),
-            SizedBox(width: 6), Text('Historique'),
-          ])),
+          Tab(
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.dashboard_outlined, size: 15),
+                SizedBox(width: 6),
+                Text("Vue d'ensemble"),
+              ])),
+          Tab(
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.history_outlined, size: 15),
+                SizedBox(width: 6),
+                Text('Historique'),
+              ])),
         ],
       ),
     );
   }
 
-  // ══════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════
   // ONGLET 1 — VUE D'ENSEMBLE
-  // ══════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════
   Widget _buildOverviewTab() {
     if (_loadingOverview) {
       return const Center(
@@ -364,11 +493,11 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
     }
     if (_overview == null) return const SizedBox();
 
-    final double total = (_overview!['total_annee'] as num?)?.toDouble() ?? 0.0;
-    final double paye  = (_overview!['paye_annee']  as num?)?.toDouble() ?? 0.0;
-    final double reste = (_overview!['reste_annee'] as num?)?.toDouble() ?? 0.0;
+    final double total  = (_overview!['total_annee'] as num?)?.toDouble() ?? 0.0;
+    final double paye   = (_overview!['paye_annee']  as num?)?.toDouble() ?? 0.0;
+    final double reste  = (_overview!['reste_annee'] as num?)?.toDouble() ?? 0.0;
     final String statut = (_overview!['statut'] as String?) ?? 'impaye';
-    final double pct = total > 0 ? (paye / total).clamp(0.0, 1.0) : 0.0;
+    final double pct    = total > 0 ? (paye / total).clamp(0.0, 1.0) : 0.0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -383,25 +512,45 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
             borderRadius: BorderRadius.circular(18),
             boxShadow: [BoxShadow(
                 color: Colors.black.withOpacity(0.06),
-                blurRadius: 12, offset: const Offset(0, 4))],
+                blurRadius: 12,
+                offset: const Offset(0, 4))],
           ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text('Cotisation $_selectedYear',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 16)),
-              _statutChip(statut),
-            ]),
+          child:
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Mandat : ${_mandatSelectionne?['label'] ?? ''}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            'Syndic : ${_mandatSelectionne?['syndic_nom'] ?? ''}',
+                            style: TextStyle(
+                                color: Colors.grey.shade500, fontSize: 12),
+                          ),
+                        ]),
+                  ),
+                  const SizedBox(width: 8),
+                  _statutChip(statut),
+                ]),
             const SizedBox(height: 16),
 
             // ── BARRE PROGRESSION ──
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text('Progression', style: TextStyle(
-                  color: Colors.grey.shade600, fontSize: 12)),
-              Text('${(pct * 100).toStringAsFixed(1)}%',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, color: _orange)),
-            ]),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Progression',
+                      style: TextStyle(
+                          color: Colors.grey.shade600, fontSize: 12)),
+                  Text('${(pct * 100).toStringAsFixed(1)}%',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, color: _orange)),
+                ]),
             const SizedBox(height: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(6),
@@ -409,7 +558,8 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
                 value: pct,
                 minHeight: 10,
                 backgroundColor: Colors.grey.shade100,
-                valueColor: const AlwaysStoppedAnimation<Color>(_orange),
+                valueColor:
+                const AlwaysStoppedAnimation<Color>(_orange),
               ),
             ),
             const SizedBox(height: 20),
@@ -426,19 +576,17 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
         ),
         const SizedBox(height: 16),
 
-        // ── BANNER STATUT ──
         _statutBanner(statut, reste),
         const SizedBox(height: 16),
         _buildLignesDetail(),
-
       ]),
     );
   }
+
   Widget _buildLignesDetail() {
-    final List lignes = (_overview!['lignes'] as List?) ?? [];
+    final List lignes = (_overview?['lignes'] as List?) ?? [];
     if (lignes.isEmpty) return const SizedBox();
 
-    // Icône + couleur selon type
     IconData _typeIcon(String type) {
       switch (type) {
         case 'parking': return Icons.local_parking_rounded;
@@ -465,15 +613,17 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
         borderRadius: BorderRadius.circular(18),
         boxShadow: [BoxShadow(
             color: Colors.black.withOpacity(0.06),
-            blurRadius: 12, offset: const Offset(0, 4))],
+            blurRadius: 12,
+            offset: const Offset(0, 4))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Détail des cotisations',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            style: TextStyle(
+                fontWeight: FontWeight.bold, fontSize: 15)),
         const SizedBox(height: 14),
         ...lignes.map((l) {
-          final String type   = l['type']  as String? ?? 'charges';
-          final String? ref   = l['reference'] as String?;
+          final String  type  = l['type']          as String? ?? 'charges';
+          final String? ref   = l['reference']     as String?;
           final double  mt    = (l['montant_total'] as num?)?.toDouble() ?? 0;
           final double  mp    = (l['montant_paye']  as num?)?.toDouble() ?? 0;
           final double  reste = (l['reste']         as num?)?.toDouble() ?? 0;
@@ -495,43 +645,48 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: color.withOpacity(0.2)),
             ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(_typeIcon(type), color: color, size: 15),
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: Text(
-                  _typeLabel(type, ref),
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                )),
-                _statutChip(stat),
-              ]),
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: pct,
-                  minHeight: 6,
-                  backgroundColor: Colors.grey.shade100,
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _ligneMontant('Payé',  mp,     _green),
-                  _ligneMontant('Reste', reste,  _orange),
-                  _ligneMontant('Total', mt,     _purple),
-                ],
-              ),
-            ]),
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(_typeIcon(type), color: color, size: 15),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _typeLabel(type, ref),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                    ),
+                    _statutChip(stat),
+                  ]),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: pct,
+                      minHeight: 6,
+                      backgroundColor: Colors.grey.shade100,
+                      valueColor: AlwaysStoppedAnimation<Color>(color),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                      mainAxisAlignment:
+                      MainAxisAlignment.spaceBetween,
+                      children: [
+                        _ligneMontant('Payé',  mp,    _green),
+                        _ligneMontant('Reste', reste, _orange),
+                        _ligneMontant('Total', mt,    _purple),
+                      ]),
+                ]),
           );
         }).toList(),
       ]),
@@ -540,32 +695,47 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
 
   Widget _ligneMontant(String label, double amount, Color color) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 10)),
+        Text(label,
+            style: TextStyle(
+                color: Colors.grey.shade500, fontSize: 10)),
         Text('${_format(amount)} DH',
-            style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+            style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 12)),
       ]);
+
   Widget _montantCard(String label, double amount, Color color) {
-    return Expanded(child: Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: TextStyle(
-            color: color, fontSize: 10, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 4),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text('${_format(amount)}',
-              style: TextStyle(color: color,
-                  fontSize: 15, fontWeight: FontWeight.bold)),
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.2)),
         ),
-        Text('DH', style: TextStyle(color: color.withOpacity(0.7),
-            fontSize: 10)),
-      ]),
-    ));
+        child:
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label,
+              style: TextStyle(
+                  color: color,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text('${_format(amount)}',
+                style: TextStyle(
+                    color: color,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold)),
+          ),
+          Text('DH',
+              style: TextStyle(
+                  color: color.withOpacity(0.7), fontSize: 10)),
+        ]),
+      ),
+    );
   }
 
   Widget _statutChip(String statut) {
@@ -590,8 +760,11 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, color: color, size: 12),
         const SizedBox(width: 4),
-        Text(label, style: TextStyle(
-            color: color, fontWeight: FontWeight.bold, fontSize: 11)),
+        Text(label,
+            style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 11)),
       ]),
     );
   }
@@ -602,15 +775,15 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
       case 'complet':
         color = _green; icon = Icons.check_circle_rounded;
         title = 'Paiement complet !';
-        msg = 'Vous êtes à jour pour cette année 🎉'; break;
+        msg   = 'Vous êtes à jour pour ce mandat 🎉'; break;
       case 'partiel':
         color = _yellow; icon = Icons.info_outline_rounded;
         title = 'Paiement partiel';
-        msg = 'Il reste ${_format(reste)} DH à régler'; break;
+        msg   = 'Il reste ${_format(reste)} DH à régler'; break;
       default:
         color = _orange; icon = Icons.warning_amber_rounded;
         title = 'Paiement impayé';
-        msg = 'Montant dû : ${_format(reste)} DH';
+        msg   = 'Montant dû : ${_format(reste)} DH';
     }
     return Container(
       width: double.infinity,
@@ -624,25 +797,31 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              shape: BoxShape.circle),
+              color: color.withOpacity(0.15), shape: BoxShape.circle),
           child: Icon(icon, color: color, size: 20),
         ),
         const SizedBox(width: 12),
-        Expanded(child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: TextStyle(
-              color: color, fontWeight: FontWeight.bold, fontSize: 13)),
-          Text(msg, style: TextStyle(
-              color: color.withOpacity(0.8), fontSize: 12)),
-        ])),
+        Expanded(
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13)),
+                Text(msg,
+                    style: TextStyle(
+                        color: color.withOpacity(0.8), fontSize: 12)),
+              ]),
+        ),
       ]),
     );
   }
 
-  // ══════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════
   // ONGLET 2 — HISTORIQUE
-  // ══════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════
   Widget _buildHistoryTab() {
     if (_loadingHistory) {
       return const Center(
@@ -650,86 +829,85 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
     }
     if (_history == null) return const SizedBox();
 
-    final List<Map<String, dynamic>> all = _history!['historique'] != null
-        ? List<Map<String, dynamic>>.from(_history!['historique'] as List)
-        : [];
+    final List<Map<String, dynamic>> all =
+    List<Map<String, dynamic>>.from(
+        _history!['historique'] as List? ?? []);
 
-    // Extraire les années et mois dispos
-    final Set<int> availableYears = all.map((h) => (h['annee'] as int?) ?? 0).toSet();
-    final List<int> sortedYears = availableYears.toList()..sort((a, b) => b.compareTo(a));
+    final Set<int> availableYears =
+    all.map((h) => (h['annee'] as int?) ?? 0).toSet();
+    final List<int> sortedYears =
+    availableYears.toList()..sort((a, b) => b.compareTo(a));
 
-    // Filtrage combiné
+    // Filtrage combiné (type + statut + année + mois)
     final List<Map<String, dynamic>> filtered = all.where((h) {
-      final bool yearMatch   = _filterYear == null   || h['annee'] == _filterYear;
-      final bool monthMatch  = _filterMonth == null  || h['mois'] == _filterMonth;
-      final bool statusMatch = _filterStatus == 'tous' || h['statut'] == _filterStatus;
-      final bool typeMatch   = _filterType == 'tous'   || h['type_paiement'] == _filterType;
+      final bool yearMatch   = _filterYear   == null || h['annee']          == _filterYear;
+      final bool monthMatch  = _filterMonth  == null || h['mois']           == _filterMonth;
+      final bool statusMatch = _filterStatus == 'tous' || h['statut']       == _filterStatus;
+      final bool typeMatch   = _filterType   == 'tous' || h['type_paiement'] == _filterType;
       return yearMatch && monthMatch && statusMatch && typeMatch;
     }).toList();
 
     final double filteredTotal = filtered.fold(0.0,
-            (double s, h) => s + ((h['montant_paye'] as num?)?.toDouble() ?? 0.0));
+            (double s, h) =>
+        s + ((h['montant_paye'] as num?)?.toDouble() ?? 0.0));
 
     return Column(children: [
-      // ── BARRE DE FILTRES AVANCÉS ──
+      // ── BARRE FILTRES AVANCÉS ──
       Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+          border:
+          Border(bottom: BorderSide(color: Colors.grey.shade200)),
         ),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(children: [
-            // FILTRE TYPE
             _filterDropdown<String>(
-              label: "Type",
+              label: 'Type',
               value: _filterType,
-              items: {
-                'tous': 'Tous types',
+              items: const {
+                'tous':    'Tous types',
                 'charges': 'Charges',
                 'parking': 'Parking',
-                'garage': 'Garage',
-                'box': 'Box',
+                'garage':  'Garage',
+                'box':     'Box',
               },
               onChanged: (v) => setState(() => _filterType = v!),
             ),
             const SizedBox(width: 8),
-            // FILTRE STATUT
             _filterDropdown<String>(
-              label: "Statut",
+              label: 'Statut',
               value: _filterStatus,
-              items: {
-                'tous': 'Tous statuts',
+              items: const {
+                'tous':    'Tous statuts',
                 'complet': 'Complet',
                 'partiel': 'Partiel',
-                'impaye': 'Impayé',
+                'impaye':  'Impayé',
               },
               onChanged: (v) => setState(() => _filterStatus = v!),
             ),
             const SizedBox(width: 8),
-            // FILTRE ANNÉE
             _filterDropdown<int?>(
-              label: "Année",
+              label: 'Année',
               value: _filterYear,
               items: {
                 null: 'Toutes',
-                for (var y in sortedYears) y: '$y',
+                for (final y in sortedYears) y: '$y',
               },
               onChanged: (v) => setState(() => _filterYear = v),
             ),
             const SizedBox(width: 8),
-            // FILTRE MOIS
             _filterDropdown<int?>(
-              label: "Mois",
+              label: 'Mois',
               value: _filterMonth,
-              items: {
+              items: const {
                 null: 'Tous',
-                1: 'Janv', 2: 'Févr', 3: 'Mars', 4: 'Avril',
-                5: 'Mai', 6: 'Juin', 7: 'Juil', 8: 'Août',
-                9: 'Sept', 10: 'Oct', 11: 'Nov', 12: 'Déc',
+                1: 'Janv', 2: 'Févr',  3: 'Mars',  4: 'Avril',
+                5: 'Mai',  6: 'Juin',  7: 'Juil',  8: 'Août',
+                9: 'Sept', 10: 'Oct',  11: 'Nov',  12: 'Déc',
               },
               onChanged: (v) => setState(() => _filterMonth = v),
             ),
@@ -737,21 +915,32 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
         ),
       ),
 
-      // ── COMPTEUR ──
+      // ── COMPTEUR + RESET ──
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
         child: Row(children: [
           Text('${filtered.length} résultat(s)',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w600)),
+              style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600)),
           const Spacer(),
-          if (_filterYear != null || _filterMonth != null || _filterStatus != 'tous' || _filterType != 'tous')
+          if (_filterYear != null ||
+              _filterMonth != null ||
+              _filterStatus != 'tous' ||
+              _filterType != 'tous')
             GestureDetector(
               onTap: () => setState(() {
-                _filterYear = null; _filterMonth = null;
-                _filterStatus = 'tous'; _filterType = 'tous';
+                _filterYear   = null;
+                _filterMonth  = null;
+                _filterStatus = 'tous';
+                _filterType   = 'tous';
               }),
               child: const Text('Réinitialiser',
-                  style: TextStyle(color: _orange, fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: TextStyle(
+                      color: _orange,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold)),
             ),
         ]),
       ),
@@ -759,17 +948,20 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
       // ── LISTE ──
       Expanded(
         child: filtered.isEmpty
-            ? Center(child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.filter_list_off_rounded,
-                size: 64, color: Colors.grey.shade300),
-            const SizedBox(height: 12),
-            Text('Aucun résultat pour ces filtres',
-                style: TextStyle(
-                    color: Colors.grey.shade400, fontSize: 15)),
-          ],
-        ))
+            ? Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.filter_list_off_rounded,
+                  size: 64, color: Colors.grey.shade300),
+              const SizedBox(height: 12),
+              Text('Aucun résultat pour ces filtres',
+                  style: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontSize: 15)),
+            ],
+          ),
+        )
             : ListView.builder(
           padding: const EdgeInsets.symmetric(
               horizontal: 16, vertical: 8),
@@ -785,28 +977,30 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
         padding: const EdgeInsets.symmetric(
             horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: _dark,
-          borderRadius: BorderRadius.circular(14),
-        ),
+            color: _dark, borderRadius: BorderRadius.circular(14)),
         child: Row(children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8)),
-            child: const Icon(Icons.account_balance_wallet_outlined,
+            child: const Icon(
+                Icons.account_balance_wallet_outlined,
                 color: Colors.white70, size: 18),
           ),
           const SizedBox(width: 10),
           const Text('TOTAL FILTRÉ',
-              style: TextStyle(color: Colors.white70,
+              style: TextStyle(
+                  color: Colors.white70,
                   fontWeight: FontWeight.bold,
-                  fontSize: 12, letterSpacing: 0.5)),
+                  fontSize: 12,
+                  letterSpacing: 0.5)),
           const Spacer(),
-          Text(
-              '${_format(filteredTotal)} DH',
-              style: const TextStyle(color: _green,
-                  fontWeight: FontWeight.bold, fontSize: 18)),
+          Text('${_format(filteredTotal)} DH',
+              style: const TextStyle(
+                  color: _green,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18)),
         ]),
       ),
     ]);
@@ -829,12 +1023,18 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
         child: DropdownButton<T>(
           value: value,
           isDense: true,
-          hint: Text(label, style: const TextStyle(fontSize: 12)),
-          style: const TextStyle(color: _dark, fontSize: 12, fontWeight: FontWeight.w600),
-          items: items.entries.map((e) => DropdownMenuItem<T>(
+          hint: Text(label,
+              style: const TextStyle(fontSize: 12)),
+          style: const TextStyle(
+              color: _dark,
+              fontSize: 12,
+              fontWeight: FontWeight.w600),
+          items: items.entries
+              .map((e) => DropdownMenuItem<T>(
             value: e.key,
             child: Text(e.value),
-          )).toList(),
+          ))
+              .toList(),
           onChanged: onChanged,
         ),
       ),
@@ -842,62 +1042,66 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
   }
 
   Widget _buildPaymentItem(Map<String, dynamic> item, int index) {
-    final String? dateStr  = item['date_paiement'] as String?;
-    final double  amount   = (item['montant_paye'] as num?)?.toDouble() ?? 0.0;
-    final int?    year     = item['annee'] as int?;
-    final int?    month    = item['mois'] as int?;
-    final String  type     = item['type_paiement']?.toString() ?? 'charges';
-    final String? ref      = item['reference'] as String?;
-    final String  statut   = item['statut']?.toString() ?? 'impaye';
+    final String? dateStr = item['date_paiement'] as String?;
+    final double  amount  = (item['montant_paye']  as num?)?.toDouble() ?? 0.0;
+    final int?    year    = item['annee']           as int?;
+    final int?    month   = item['mois']            as int?;
+    final String  type    = item['type_paiement']?.toString() ?? 'charges';
+    final String? ref     = item['reference']       as String?;
+    final String  statut  = item['statut']?.toString() ?? 'impaye';
 
     String dateLabel = 'Date inconnue';
     if (dateStr != null) {
       try {
         final dt = DateTime.parse(dateStr);
-        const months = ['', 'jan', 'fév', 'mar', 'avr', 'mai',
-          'juin', 'juil', 'aoû', 'sep', 'oct', 'nov', 'déc'];
+        const months = [
+          '', 'jan', 'fév', 'mar', 'avr', 'mai',
+          'juin', 'juil', 'aoû', 'sep', 'oct', 'nov', 'déc'
+        ];
         dateLabel = '${dt.day} ${months[dt.month]} ${dt.year}';
-      } catch (_) { dateLabel = dateStr; }
+      } catch (_) {
+        dateLabel = dateStr;
+      }
     }
 
-    // Libellé mois/année de la cotisation
-    String targetLabel = "";
+    String targetLabel = '';
     if (month != null && year != null) {
-      const monthsFull = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
-      targetLabel = "Cotisation ${monthsFull[month]} $year";
+      const monthsFull = [
+        '', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+        'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+      ];
+      targetLabel = 'Cotisation ${monthsFull[month]} $year';
     }
 
-    // ── Couleur selon STATUT
     Color statusColor; String statusLabel; IconData statusIcon;
     switch (statut) {
       case 'complet':
-        statusColor = _green; statusLabel = 'Complet';
-        statusIcon = Icons.check_circle_rounded; break;
+        statusColor = _green;  statusLabel = 'Complet';
+        statusIcon  = Icons.check_circle_rounded; break;
       case 'partiel':
         statusColor = _yellow; statusLabel = 'Partiel';
-        statusIcon = Icons.timelapse_rounded; break;
+        statusIcon  = Icons.timelapse_rounded; break;
       default:
         statusColor = _orange; statusLabel = 'Impayé';
-        statusIcon = Icons.cancel_rounded;
+        statusIcon  = Icons.cancel_rounded;
     }
 
-    // ── Icône + couleur selon TYPE
     IconData typeIcon; Color typeColor; String typeLabel;
     switch (type) {
       case 'garage':
-        typeIcon = Icons.garage_rounded;
+        typeIcon  = Icons.garage_rounded;
         typeColor = const Color(0xFF0891B2);
         typeLabel = 'Garage${ref != null ? ' $ref' : ''}'; break;
       case 'parking':
-        typeIcon = Icons.local_parking_rounded;
+        typeIcon  = Icons.local_parking_rounded;
         typeColor = _purple;
         typeLabel = 'Parking${ref != null ? ' $ref' : ''}'; break;
       case 'box':
-        typeIcon = Icons.inventory_2_rounded;
+        typeIcon  = Icons.inventory_2_rounded;
         typeColor = _yellow;
         typeLabel = 'Box${ref != null ? ' $ref' : ''}'; break;
       default:
-        typeIcon = Icons.home_work_rounded;
+        typeIcon  = Icons.home_work_rounded;
         typeColor = _orange;
         typeLabel = 'Charges';
     }
@@ -914,7 +1118,6 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Row(children: [
-          // ── ICONE TYPE
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
@@ -923,80 +1126,87 @@ class _PaiementStatusScreenState extends State<PaiementStatusScreen>
             child: Icon(typeIcon, color: typeColor, size: 20),
           ),
           const SizedBox(width: 12),
-
-          // ── INFOS ──
-          Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(targetLabel.isNotEmpty ? targetLabel : dateLabel,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            if (targetLabel.isNotEmpty)
-              Text("Payé le $dateLabel", style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
-            const SizedBox(height: 6),
-
-            Row(children: [
-              // BADGE TYPE
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: typeColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    targetLabel.isNotEmpty ? targetLabel : dateLabel,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13),
                   ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(typeIcon, size: 10, color: typeColor),
-                    const SizedBox(width: 3),
+                  if (targetLabel.isNotEmpty)
+                    Text('Payé le $dateLabel',
+                        style: TextStyle(
+                            color: Colors.grey.shade500, fontSize: 11)),
+                  const SizedBox(height: 6),
+                  Row(children: [
                     Flexible(
-                      child: Text(typeLabel,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: typeColor, fontSize: 10,
-                              fontWeight: FontWeight.w600)),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: typeColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(typeIcon, size: 10, color: typeColor),
+                          const SizedBox(width: 3),
+                          Flexible(
+                            child: Text(typeLabel,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    color: typeColor,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600)),
+                          ),
+                        ]),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20)),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(statusIcon, size: 10, color: statusColor),
+                        const SizedBox(width: 3),
+                        Text(statusLabel,
+                            style: TextStyle(
+                                color: statusColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold)),
+                      ]),
                     ),
                   ]),
-                ),
-              ),
-              const SizedBox(width: 6),
-              // BADGE STATUT
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20)),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(statusIcon, size: 10, color: statusColor),
-                  const SizedBox(width: 3),
-                  Text(statusLabel, style: TextStyle(
-                      color: statusColor, fontSize: 10,
-                      fontWeight: FontWeight.bold)),
                 ]),
-              ),
-            ]),
-          ])),
-
-          // ── MONTANT ──
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('${_format(amount)} DH',
-                  style: TextStyle(
-                      color: statusColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16)),
-              _btnRecuMini(),
-            ],
           ),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('${_format(amount)} DH',
+                style: TextStyle(
+                    color: statusColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16)),
+            _btnRecuMini(),
+          ]),
         ]),
       ),
     );
   }
 
   Widget _btnRecuMini() => GestureDetector(
-    onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Téléchargement du reçu...'),
-            behavior: SnackBarBehavior.floating)),
+    onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Téléchargement du reçu...'),
+        behavior: SnackBarBehavior.floating)),
     child: Padding(
       padding: const EdgeInsets.only(top: 4),
-      child: Text('Détails >', style: TextStyle(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.bold)),
+      child: Text('Détails >',
+          style: TextStyle(
+              color: Colors.grey.shade400,
+              fontSize: 10,
+              fontWeight: FontWeight.bold)),
     ),
   );
 
