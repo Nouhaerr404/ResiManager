@@ -215,6 +215,10 @@ class _ResidentReunionsScreenState extends State<ResidentReunionsScreen>
 
   // ─── SÉPARATION À VENIR / PASSÉ ───
   bool _isUpcoming(Map<String, dynamic> r) {
+    // Une réunion terminée ou annulée va directement dans l'historique
+    final statut = r['statut']?.toString() ?? '';
+    if (statut == 'terminee' || statut == 'annulee') return false;
+
     final date = DateTime.tryParse(r['date']?.toString() ?? '');
     if (date == null) return false;
     return !date.isBefore(DateTime.now().subtract(const Duration(days: 1)));

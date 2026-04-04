@@ -30,6 +30,8 @@ class _ResidentReclamationsScreenState
   String?    _fileName;
   List<Map<String, dynamic>> _reclamations = [];
 
+  static const brand = Color(0xFFFF6B4A);
+
   @override
   void initState() {
     super.initState();
@@ -136,9 +138,148 @@ class _ResidentReclamationsScreenState
     );
   }
 
+  // ✅ _showDetail est ici — méthode de CLASSE, pas dans _buildCard
+  void _showDetail(Map<String, dynamic> r) {
+    final String statut = r['statut']?.toString() ?? 'en_cours';
+    final Color color = statut == 'resolue'
+        ? Colors.green
+        : statut == 'en_cours'
+        ? Colors.orange
+        : Colors.grey;
+    final String label = statut == 'resolue'
+        ? 'Résolue'
+        : statut == 'en_cours'
+        ? 'En cours'
+        : 'Fermée';
+
+    String date = '—';
+    if (r['created_at'] != null) {
+      final String fullDate = r['created_at'].toString();
+      if (fullDate.length >= 10) date = fullDate.substring(0, 10);
+    }
+
+    final String? docUrl = r['document_url'];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        builder: (_, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          child: ListView(
+            controller: scrollController,
+            shrinkWrap: true,
+            children: [
+              // Handle bar
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              // Titre + badge statut
+              Row(children: [
+                Expanded(
+                  child: Text(
+                    r['titre']?.toString() ?? 'Sans titre',
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(label,
+                      style: TextStyle(
+                          color: color,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold)),
+                ),
+              ]),
+              const SizedBox(height: 16),
+              // Date
+              Row(children: [
+                const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                const SizedBox(width: 6),
+                Text(date,
+                    style:
+                    const TextStyle(color: Colors.grey, fontSize: 13)),
+              ]),
+              const SizedBox(height: 16),
+              Divider(color: Colors.grey.shade200),
+              const SizedBox(height: 12),
+              // Description complète
+              const Text('Description',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black54)),
+              const SizedBox(height: 8),
+              Text(
+                r['description']?.toString() ?? 'Pas de description',
+                style: const TextStyle(
+                    fontSize: 14, color: Colors.black87, height: 1.6),
+              ),
+              // Fichier joint
+              if (docUrl != null) ...[
+                const SizedBox(height: 20),
+                Divider(color: Colors.grey.shade200),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showImage(docUrl);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: brand.withOpacity(0.07),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: brand.withOpacity(0.3)),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.attach_file, color: brand, size: 18),
+                      const SizedBox(width: 10),
+                      const Text('Voir le fichier joint',
+                          style: TextStyle(
+                              color: brand,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13)),
+                      const Spacer(),
+                      const Icon(Icons.arrow_forward_ios_rounded,
+                          size: 14, color: brand),
+                    ]),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    const brand = Color(0xFFFF6B4A);
     final bool inLayout = widget.onNavigate != null;
 
     final body = SingleChildScrollView(
@@ -270,8 +411,8 @@ class _ResidentReclamationsScreenState
           ),
           const SizedBox(height: 24),
           const Text('Mes réclamations',
-              style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.bold)),
+              style:
+              TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           _loading
               ? const Center(
@@ -282,11 +423,11 @@ class _ResidentReclamationsScreenState
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border:
-              Border.all(color: Colors.grey.shade200),
+              border: Border.all(color: Colors.grey.shade200),
             ),
             child: const Center(
-              child: Text('Aucune réclamation pour l\'instant',
+              child: Text(
+                  'Aucune réclamation pour l\'instant',
                   style: TextStyle(color: Colors.grey)),
             ),
           )
@@ -322,13 +463,15 @@ class _ResidentReclamationsScreenState
           ),
         ),
       ),
-      drawer: ResidentMobileDrawer(currentIndex: 5, userId: _userId is int ? _userId : 3),
+      drawer: ResidentMobileDrawer(
+          currentIndex: 5,
+          userId: _userId is int ? _userId : 3),
       body: body,
     );
   }
 
+  // ✅ _buildCard propre — GestureDetector fermé correctement
   Widget _buildCard(Map<String, dynamic> r) {
-    const brand = Color(0xFFFF6B4A);
     final String statut = r['statut']?.toString() ?? 'en_cours';
     final Color color = statut == 'resolue'
         ? Colors.green
@@ -340,79 +483,94 @@ class _ResidentReclamationsScreenState
         : statut == 'en_cours'
         ? 'En cours'
         : 'Fermée';
-    
+
     String date = '—';
     if (r['created_at'] != null) {
       final String fullDate = r['created_at'].toString();
-      if (fullDate.length >= 10) {
-        date = fullDate.substring(0, 10);
-      }
+      if (fullDate.length >= 10) date = fullDate.substring(0, 10);
     }
 
     final String? docUrl = r['document_url'];
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Expanded(
-              child: Text(r['titre']?.toString() ?? 'Sans titre',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 14)),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
+    return GestureDetector(
+      onTap: () => _showDetail(r), // ✅ appel propre à la méthode de classe
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Expanded(
+                child: Text(r['titre']?.toString() ?? 'Sans titre',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14)),
               ),
-              child: Text(label,
-                  style: TextStyle(
-                      color: color,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold)),
-            ),
-          ]),
-          const SizedBox(height: 8),
-          Text(r['description']?.toString() ?? 'Pas de description',
-              style:
-              const TextStyle(color: Colors.grey, fontSize: 13),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 8),
-          Row(children: [
-            const Icon(Icons.calendar_today,
-                size: 12, color: Colors.grey),
-            const SizedBox(width: 4),
-            Text(date,
-                style: const TextStyle(
-                    color: Colors.grey, fontSize: 11)),
-            if (docUrl != null) ...[
-              const Spacer(),
-              GestureDetector(
-                onTap: () => _showImage(docUrl),
-                child: Row(
-                  children: [
-                    Icon(Icons.attach_file, size: 14, color: brand),
-                    const SizedBox(width: 4),
-                    const Text('Fichier joint',
-                        style: TextStyle(color: brand, fontSize: 11, decoration: TextDecoration.underline)),
-                  ],
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
                 ),
+                child: Text(label,
+                    style: TextStyle(
+                        color: color,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold)),
               ),
-            ],
-          ]),
-        ],
+            ]),
+            const SizedBox(height: 8),
+            Text(
+              r['description']?.toString() ?? 'Pas de description',
+              style: const TextStyle(color: Colors.grey, fontSize: 13),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Row(children: [
+              const Icon(Icons.calendar_today,
+                  size: 12, color: Colors.grey),
+              const SizedBox(width: 4),
+              Text(date,
+                  style: const TextStyle(
+                      color: Colors.grey, fontSize: 11)),
+              if (docUrl != null) ...[
+                const Spacer(),
+                Row(children: [
+                  Icon(Icons.attach_file, size: 14, color: brand),
+                  const SizedBox(width: 4),
+                  const Text('Fichier joint',
+                      style: TextStyle(
+                          color: brand,
+                          fontSize: 11,
+                          decoration: TextDecoration.underline)),
+                ]),
+              ],
+            ]),
+            // Hint visuel pour indiquer que c'est cliquable
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: const [
+                Text('Voir détails',
+                    style: TextStyle(
+                        color: brand,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600)),
+                SizedBox(width: 4),
+                Icon(Icons.arrow_forward_ios_rounded,
+                    size: 11, color: brand),
+              ],
+            ),
+          ],
+        ),
       ),
-    );
+    ); // ✅ parenthèse fermante correcte
   }
 }
