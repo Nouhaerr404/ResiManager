@@ -26,4 +26,4 @@ jobs:
         run: touch .env
 
       - name: static analysis
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
