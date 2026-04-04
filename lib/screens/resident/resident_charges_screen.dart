@@ -18,6 +18,7 @@ class ResidentChargesScreen extends StatefulWidget {
 
 class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
   final ResidentService _service = ResidentService();
+  final TextEditingController _searchController = TextEditingController();
 
   // ── Filtres
   String _filter      = "Toutes";
@@ -29,6 +30,9 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
   Map<String, dynamic>? _mandatSelectionne;
   bool _mandatsLoaded = false;
 
+  // ── Data Future
+  Future<Map<String, dynamic>>? _expensesFuture;
+
   static const _coral = Color(0xFFFF6B4A);
   static const _dark  = Color(0xFF1A1A2E);
 
@@ -36,6 +40,17 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
   void initState() {
     super.initState();
     _loadMandats();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadMandats() async {
@@ -48,8 +63,22 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
           orElse: () => mandats.first)
           : null;
       _mandatsLoaded = true;
+      if (_mandatSelectionne != null) {
+        _loadExpenses();
+      }
     });
   }
+
+  void _loadExpenses() {
+    setState(() {
+      _expensesFuture = _service.getTrancheExpensesDetailedByMandat(
+        widget.userId,
+        mandatId: _mandatSelectionne?['id'] as int?,
+      );
+    });
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -60,11 +89,7 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
     }
 
     final body = FutureBuilder<Map<String, dynamic>>(
-      future: _service.getTrancheExpensesDetailedByMandat(
-        widget.userId,
-        dateDebut: _mandatSelectionne?['date_debut'],
-        dateFin:   _mandatSelectionne?['date_fin'],
-      ),
+      future: _expensesFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: _coral));
@@ -89,7 +114,10 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
 
         return RefreshIndicator(
           color: _coral,
-          onRefresh: () async => setState(() {}),
+          onRefresh: () async {
+            _loadExpenses();
+            await _expensesFuture;
+          },
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(20),
@@ -169,10 +197,11 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
 
     if (inLayout) return body;
 
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ResidentDashboardScreen(userId: widget.userId)));
-        return false;
       },
       child: Scaffold(
         backgroundColor: const Color(0xFFF9F8F6),
@@ -278,7 +307,10 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
                   ? const Icon(Icons.check_circle_rounded, color: _coral)
                   : null,
               onTap: () {
-                setState(() => _mandatSelectionne = m);
+                setState(() {
+                  _mandatSelectionne = m;
+                  _loadExpenses();
+                });
                 Navigator.pop(ctx);
               },
             );
@@ -291,36 +323,76 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
 
   Widget _buildMandatBanner() {
     final bool enCours = _mandatSelectionne?['est_en_cours'] == true;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: enCours
-            ? Colors.green.withOpacity(0.08)
-            : const Color(0xFFEEF1FF),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: enCours
-              ? Colors.green.withOpacity(0.3)
-              : const Color(0xFF4B6BFB).withOpacity(0.3),
-        ),
-      ),
-      child: Row(children: [
-        Icon(Icons.verified_user_rounded,
-            color: enCours ? Colors.green : const Color(0xFF4B6BFB),
-            size: 16),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            'Mandat : ${_mandatSelectionne?['label'] ?? ''}'
-                '  ·  Syndic : ${_mandatSelectionne?['syndic_nom'] ?? ''}',
-            style: TextStyle(
-              color: enCours ? Colors.green : const Color(0xFF4B6BFB),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _expensesFuture,
+      builder: (context, snapshot) {
+        // Période exposée par le service dans la réponse
+        final String? debut = snapshot.data?['periode_debut']?.toString();
+        final String? fin   = snapshot.data?['periode_fin']?.toString();
+
+        String periodeLabel = '';
+        if (debut != null && fin != null) {
+          // Formatter en dd/MM/yyyy
+          String fmt(String iso) {
+            try {
+              final d = DateTime.parse(iso);
+              return '${d.day.toString().padLeft(2,'0')}/'
+                  '${d.month.toString().padLeft(2,'0')}/'
+                  '${d.year}';
+            } catch (_) { return iso; }
+          }
+          final finLabel = enCours ? 'aujourd\'hui' : fmt(fin);
+          periodeLabel = '${fmt(debut)} → $finLabel';
+        }
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: enCours
+                ? Colors.green.withOpacity(0.08)
+                : const Color(0xFFEEF1FF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: enCours
+                  ? Colors.green.withOpacity(0.3)
+                  : const Color(0xFF4B6BFB).withOpacity(0.3),
             ),
           ),
-        ),
-      ]),
+          child: Row(children: [
+            Icon(Icons.verified_user_rounded,
+                color: enCours ? Colors.green : const Color(0xFF4B6BFB),
+                size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Syndic : ${_mandatSelectionne?['syndic_nom'] ?? ''}',
+                    style: TextStyle(
+                      color: enCours ? Colors.green : const Color(0xFF4B6BFB),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (periodeLabel.isNotEmpty)
+                    Text(
+                      'Période : $periodeLabel',
+                      style: TextStyle(
+                        color: (enCours
+                            ? Colors.green
+                            : const Color(0xFF4B6BFB))
+                            .withOpacity(0.75),
+                        fontSize: 11,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ]),
+        );
+      },
     );
   }
 
@@ -378,20 +450,27 @@ class _ResidentChargesScreenState extends State<ResidentChargesScreen> {
       Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: Colors.grey.shade200),
           boxShadow: [BoxShadow(
-              color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+              color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: TextField(
-          onChanged: (v) => setState(() => _searchQuery = v),
+          controller: _searchController,
           decoration: InputDecoration(
             hintText: 'Rechercher une dépense...',
             hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
             prefixIcon: Icon(Icons.search,
-                color: Colors.grey.shade400, size: 20),
+                color: Colors.grey.shade400, size: 22),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+                    icon: Icon(Icons.clear, color: Colors.grey.shade400, size: 18),
+                    onPressed: () => _searchController.clear(),
+                  )
+                : null,
             border: InputBorder.none,
             contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 14),
+                horizontal: 20, vertical: 15),
           ),
         ),
       ),

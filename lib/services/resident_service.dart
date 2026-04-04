@@ -1853,23 +1853,18 @@ class ResidentService {
 
   Future<Map<String, dynamic>> getTrancheExpensesDetailedByMandat(
       dynamic userId, {
-        String? dateDebut,
-        String? dateFin,
+        int? mandatId,
       }) async {
     try {
+      // ── 1. Appartement du résident ────────────────────────────────
       final resData = await _db
           .from('residents')
           .select('appartement_id')
           .eq('user_id', userId)
           .maybeSingle();
+
       if (resData == null || resData['appartement_id'] == null) {
-        return {
-          'depenses': [],
-          'total': 0.0,
-          'payees': 0.0,
-          'attente': 0.0,
-          'tranche_nom': ''
-        };
+        return _emptyExpenses();
       }
 
       final appart = await _db
@@ -1877,45 +1872,93 @@ class ResidentService {
           .select('immeuble_id')
           .eq('id', resData['appartement_id'])
           .maybeSingle();
+
       final immeuble = await _db
           .from('immeubles')
           .select('tranche_id')
           .eq('id', appart?['immeuble_id'])
           .maybeSingle();
+
       final dynamic trancheId = immeuble?['tranche_id'];
+      if (trancheId == null) return _emptyExpenses();
+
       final tranche = await _db
           .from('tranches')
           .select('residence_id, nom')
           .eq('id', trancheId)
           .maybeSingle();
+
       final dynamic residenceId = tranche?['residence_id'];
 
+      // ── 2. Nombre de tranches (pour diviser les dépenses globales) ─
       final countRes = await _db
           .from('tranches')
           .select('id')
           .eq('residence_id', residenceId);
-      final int nbTranches = (countRes as List).length;
+      final int nbTranches =
+      (countRes as List).isNotEmpty ? (countRes as List).length : 1;
 
+      // ── 3. Récupérer les dates du mandat sélectionné ──────────────
+      //    MÊME LOGIQUE qu'AccountingService : on part du mandatId
+      //    pour avoir les bornes exactes, pas des strings passés depuis
+      //    l'écran (qui pouvaient être null pour un mandat en cours).
+      String? dateDebut;
+      String effectiveDateFin =
+      DateTime.now().toIso8601String().substring(0, 10);
+
+      if (mandatId != null) {
+        final mandatData = await _db
+            .from('historique_affectations')
+            .select('date_debut, date_fin')
+            .eq('id', mandatId)
+            .maybeSingle();
+
+        if (mandatData != null) {
+          dateDebut = mandatData['date_debut']?.toString();
+          // Si date_fin est null → mandat en cours → on borne à aujourd'hui
+          effectiveDateFin = mandatData['date_fin']?.toString() ??
+              DateTime.now().toIso8601String().substring(0, 10);
+        }
+      }
+
+      // ── 4. Requêtes dépenses filtrées par période du mandat ───────
+      //    (identique à AccountingService.getMandateAuditDetails)
       var queryTranche = _db
           .from('depenses')
           .select('*, categories(*)')
           .eq('tranche_id', trancheId);
-      if (dateDebut != null) queryTranche = queryTranche.gte('date', dateDebut);
-      if (dateFin != null) queryTranche = queryTranche.lte('date', dateFin);
+
+      if (dateDebut != null) {
+        queryTranche = queryTranche.gte('date', dateDebut);
+      }
+      queryTranche = queryTranche.lte('date', effectiveDateFin);
 
       var queryResidence = _db
           .from('depenses')
           .select('*, categories(*)')
           .eq('residence_id', residenceId)
           .isFilter('tranche_id', null);
-      if (dateDebut != null)
-        queryResidence = queryResidence.gte('date', dateDebut);
-      if (dateFin != null) queryResidence = queryResidence.lte('date', dateFin);
 
-      final List depsTranche = await queryTranche as List? ?? [];
-      final List depsResidence = await queryResidence as List? ?? [];
+      if (dateDebut != null) {
+        queryResidence = queryResidence.gte('date', dateDebut);
+      }
+      queryResidence = queryResidence.lte('date', effectiveDateFin);
+
+      // Paralléliser les deux requêtes comme dans AccountingService
+      final results = await Future.wait([
+        queryTranche,
+        queryResidence,
+      ]);
+
+      final List depsTranche = results[0] as List? ?? [];
+      final List depsResidence = results[1] as List? ?? [];
       final List allDeps = [...depsTranche, ...depsResidence];
 
+      // Trier par date (même logique qu'AccountingService)
+      allDeps.sort((a, b) =>
+          (a['date'] ?? '').toString().compareTo((b['date'] ?? '').toString()));
+
+      // ── 5. Calculer la part du résident ───────────────────────────
       final List<Map<String, dynamic>> processedDeps = [];
       double totalResident = 0;
       double payeesResident = 0;
@@ -1926,15 +1969,19 @@ class ResidentService {
         final String typeCat =
             d['categories']?['type']?.toString().toLowerCase() ??
                 'individuelle';
+
+        // Dépenses globales (sans tranche_id) → diviser par nb tranches
+        // Dépenses individuelles (avec tranche_id) → montant complet
+        final bool isGlobal = typeCat == 'globale';
         final double montantFinal =
-        typeCat == 'globale' ? montantSaisi / nbTranches : montantSaisi;
+        isGlobal ? montantSaisi / nbTranches : montantSaisi;
 
         processedDeps.add({
           ...Map<String, dynamic>.from(d),
           'montant': montantFinal.toStringAsFixed(2),
           'montant_original': montantSaisi,
-          'type_affichage':
-          typeCat == 'globale' ? 'Commune' : 'Individuelle',
+          'type_affichage': isGlobal ? 'Commune' : 'Individuelle',
+          'is_global': isGlobal,
         });
 
         totalResident += montantFinal;
@@ -1947,18 +1994,27 @@ class ResidentService {
         'total': totalResident,
         'payees': payeesResident,
         'attente': totalResident - payeesResident,
+        // Exposer la période pour l'afficher dans le banner
+        'periode_debut': dateDebut,
+        'periode_fin': effectiveDateFin,
       };
     } catch (e) {
       debugPrint('=== ERREUR getTrancheExpensesDetailedByMandat: $e ===');
-      return {
-        'depenses': [],
-        'total': 0.0,
-        'payees': 0.0,
-        'attente': 0.0,
-        'tranche_nom': ''
-      };
+      return _emptyExpenses();
     }
   }
+
+// Helper privé pour éviter la répétition
+  Map<String, dynamic> _emptyExpenses() => {
+    'depenses': [],
+    'total': 0.0,
+    'payees': 0.0,
+    'attente': 0.0,
+    'tranche_nom': '',
+    'periode_debut': null,
+    'periode_fin': null,
+  };
+
 
   Future<String?> updatePassword(dynamic userId, String newPassword) async {
     try {
