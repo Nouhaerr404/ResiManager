@@ -1,17 +1,43 @@
-# resimanager
+# ResiManager
 
 Residence Management Application
 
-## Getting Started
+## 🚀 Quick Start
 
-This project is a starting point for a Flutter application.
+```bash
+flutter pub get
+flutter run
+```
 
-A few resources to get you started if this is your first Flutter project:
+## 📋 Requirements
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+- Flutter SDK
+- Dart 3.0+
+- Android Studio / Xcode
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 📁 Project Structure
+
+```
+├── assets/          # Images, fonts, data
+├── ios/             # iOS configuration
+├── lib/             # Source code
+├── web/             # Web support
+├── windows/         # Windows support
+├── pubspec.yaml     # Dependencies
+└── analysis_options.yaml
+```
+
+## 🔧 Configuration
+
+See `Guide_Installation_V2.pdf` and `Guide_Utilisation.pdf` for detailed setup and usage instructions.
+
+Database: `ResiManager.sql`
+
+## 📚 Resources
+
+- [Learn Flutter](https://flutter.dev)
+- [Online Documentation](https://flutter.dev/docs)
+
+## 📄 License
+
+See project documentation for details.
