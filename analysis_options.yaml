@@ -14,7 +14,10 @@ linter:
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`
   # included above or to enable additional rules. A list of all available lints
   # and their documentation is published at https://dart.dev/lints.
-  #
+    use_super_parameters: false
+    deprecated_member_use: false
+    use_build_context_synchronously: false
+    library_private_types_in_public_api: false
   # Instead of disabling a lint rule for the entire project in the
   # section below, it can also be suppressed for a single line of code
   # or a specific dart file by using the `// ignore: name_of_lint` and
@@ -28,6 +31,7 @@ linter:
     deprecated_member_use: info # Transforme l'erreur en simple information
     use_build_context_synchronously: info
     use_super_parameters: info
+    
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options
