@@ -1,13 +1,13 @@
 name: Manual Build and Update APK
 
 on:
-  workflow_dispatch: # Permet de lancer le workflow manuellement
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Important pour pouvoir push le fichier
+      contents: write
 
     steps:
       - name: Checkout code
@@ -26,6 +26,11 @@ jobs:
 
       - name: Get dependencies
         run: flutter pub get
+
+      - name: Create .env file
+        run: |
+          echo "SUPABASE_URL=https://ltcmjsjkyxwbiszrcayr.supabase.co" > .env
+          echo "SUPABASE_ANON_KEY=sb_publishable_xWAQePu4kNDwO6wumpWb6g_Zw3h75Gg" >> .env
 
       - name: Build APK
         run: flutter build apk --release
