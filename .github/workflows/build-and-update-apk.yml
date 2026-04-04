@@ -1,13 +1,13 @@
-name: Manual Build and Update APK
+name: Build and Create Release
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Lancement manuel
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # Obligatoire pour créer la release
 
     steps:
       - name: Checkout code
@@ -29,20 +29,23 @@ jobs:
 
       - name: Create .env file
         run: |
-          echo "SUPABASE_URL=https://ltcmjsjkyxwbiszrcayr.supabase.co" > .env
-          echo "SUPABASE_ANON_KEY=sb_publishable_xWAQePu4kNDwO6wumpWb6g_Zw3h75Gg" >> .env
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" > .env
+          echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> .env
 
       - name: Build APK
         run: flutter build apk --release
 
-      - name: Move and Overwrite APK
-        run: |
-          cp build/app/outputs/flutter-apk/app-release.apk ./app-release.apk
+      - name: Generate Tag Name
+        id: tag
+        run: echo "tag_name=v$(date +'%Y.%m.%d-%H%M')" >> $GITHUB_OUTPUT
 
-      - name: Commit and Push
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add app-release.apk
-          git commit -m "chore: update release apk [skip ci]" || echo "No changes to commit"
-          git push
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          name: Release ${{ steps.steps.tag.outputs.tag_name }}
+          files: build/app/outputs/flutter-apk/app-release.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
