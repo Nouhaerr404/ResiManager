@@ -1,15 +1,14 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../services/auth_service.dart';
 import '../../services/resident_service.dart';
 
 class _C {
   static const coral      = Color(0xFFFF6B4A);
   static const coralLight = Color(0xFFFFF0EB);
-  static const bg         = Color(0xFFF9F8F6);
+  static const bg         = Color(0xFFF2F3F5);
   static const white      = Color(0xFFFFFFFF);
-  static const dark       = Color(0xFF222222);
+  static const dark       = Color(0xFF1A1A1A);
   static const textMid    = Color(0xFF5A5A6A);
   static const textLight  = Color(0xFF9A9AAF);
   static const divider    = Color(0xFFE8E8F0);
@@ -27,23 +26,33 @@ class ResidentProfileScreen extends StatefulWidget {
 class _ResidentProfileScreenState extends State<ResidentProfileScreen>
     with SingleTickerProviderStateMixin {
   final _supabase = Supabase.instance.client;
-  final _authService = AuthService();
   final _residentService = ResidentService();
 
   bool _editMode = false;
   bool _saving   = false;
   bool _loading  = true;
 
+  // ── Form controllers
   final _nomCtrl       = TextEditingController();
   final _prenomCtrl    = TextEditingController();
   final _emailCtrl     = TextEditingController();
   final _telCtrl       = TextEditingController();
   final _formKey        = GlobalKey<FormState>();
 
+  // ── Password controllers
   final _newPasswordCtrl = TextEditingController();
   final _confirmPasswordCtrl = TextEditingController();
   bool _changingPassword = false;
+  bool _obscureNewPass = true;
+  bool _obscureConfirmPass = true;
 
+  // ── Housing info (Read-only)
+  String _numAppart = '-';
+  String _nomImmeuble = '-';
+  String _nomTranche = '-';
+  String _residentType = 'Résident';
+
+  // ── Original values
   late String _origNom, _origPrenom, _origEmail, _origTel;
 
   late AnimationController _fadeCtrl;
@@ -73,6 +82,7 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
   Future<void> _loadProfile() async {
     setState(() => _loading = true);
     try {
+      // 1. Charger Infos Utilisateur
       final res = await _supabase
           .from('users')
           .select('nom, prenom, email, telephone')
@@ -85,6 +95,30 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
         _emailCtrl.text  = res['email']     ?? '';
         _telCtrl.text    = res['telephone'] ?? '';
       }
+
+      // 2. Charger Infos Logement
+      final residentRes = await _supabase
+          .from('residents')
+          .select('type, appartements(numero, immeubles(nom, tranches(nom)))')
+          .eq('user_id', widget.userId)
+          .maybeSingle();
+      
+      if (residentRes != null) {
+        _residentType = residentRes['type']?.toString() ?? 'Résident';
+        final app = residentRes['appartements'];
+        if (app != null) {
+          _numAppart = app['numero']?.toString() ?? '-';
+          final imm = app['immeubles'];
+          if (imm != null) {
+            _nomImmeuble = imm['nom']?.toString() ?? '-';
+            final tr = imm['tranches'];
+            if (tr != null) {
+              _nomTranche = tr['nom']?.toString() ?? '-';
+            }
+          }
+        }
+      }
+
       _saveOriginals();
     } catch (e) {
       debugPrint('Error loading profile: $e');
@@ -113,15 +147,19 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
         'telephone': _telCtrl.text.trim(),
       }).eq('id', widget.userId);
 
+      if (_emailCtrl.text.trim() != _origEmail) {
+        await _supabase.auth.updateUser(UserAttributes(email: _emailCtrl.text.trim()));
+      }
+
       _saveOriginals();
       setState(() {
         _editMode = false;
         _saving   = false;
       });
-      _showSnack('Profil mis à jour avec succès', success: true);
+      _showSnack('Profil mis à jour avec succès !', success: true);
     } catch (e) {
       setState(() => _saving = false);
-      _showSnack('Erreur lors de la mise à jour : $e');
+      _showSnack('Erreur lors de l\'enregistrement : $e');
     }
   }
 
@@ -143,7 +181,7 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
       return;
     }
     if (_newPasswordCtrl.text.length < 6) {
-      _showSnack('Le mot de passe doit contenir au moins 6 caractères');
+      _showSnack('Minimum 6 caractères pour le mot de passe');
       return;
     }
 
@@ -155,7 +193,7 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
       );
 
       if (error == null) {
-        _showSnack('Mot de passe modifié avec succès', success: true);
+        _showSnack('Mot de passe modifié avec succès !', success: true);
         _newPasswordCtrl.clear();
         _confirmPasswordCtrl.clear();
       } else {
@@ -200,48 +238,117 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _C.bg,
-      appBar: AppBar(
-        title: const Text('Mon Profil',
-            style: TextStyle(color: _C.dark, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: _C.coral),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _C.coral))
-          : FadeTransition(
-              opacity: _fadeAnim,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildAvatarBanner(),
-                      const SizedBox(height: 28),
-                      _buildSectionLabel('Informations personnelles'),
-                      const SizedBox(height: 14),
-                      _buildInfoCard(),
-                      const SizedBox(height: 28),
-                      _buildSectionLabel('Compte'),
-                      const SizedBox(height: 14),
-                      _buildAccountCard(),
-                      const SizedBox(height: 28),
-                      _buildSectionLabel('Sécurité'),
-                      const SizedBox(height: 14),
-                      _buildPasswordCard(),
-                      const SizedBox(height: 32),
-                      if (!_editMode)
-                        _buildEditButton()
-                      else
-                        _buildSaveCancel(),
-                    ],
-                  ),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/tranche_bg.png',
+              fit: BoxFit.cover,
+            ),
+          ),
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color.fromRGBO(0, 0, 0, 0.45),
+                    Color.fromRGBO(0, 0, 0, 0.92),
+                  ],
                 ),
               ),
             ),
+          ),
+          Column(
+            children: [
+              _buildHeader(),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator(color: _C.coral))
+                    : FadeTransition(
+                        opacity: _fadeAnim,
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildAvatarBanner(),
+                                const SizedBox(height: 28),
+
+                                _buildSectionLabel('Mon Logement'),
+                                const SizedBox(height: 14),
+                                _buildHousingCard(),
+                                const SizedBox(height: 28),
+
+                                _buildSectionLabel('Informations personnelles'),
+                                const SizedBox(height: 14),
+                                _buildInfoCard(),
+                                const SizedBox(height: 28),
+
+                                _buildSectionLabel('Sécurité'),
+                                const SizedBox(height: 14),
+                                _buildPasswordCard(),
+                                const SizedBox(height: 32),
+
+                                if (!_editMode)
+                                  _buildEditButton()
+                                else
+                                  _buildSaveCancel(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    final top = MediaQuery.of(context).padding.top;
+    return Container(
+      color: Colors.transparent,
+      padding: EdgeInsets.only(top: top + 14, bottom: 14, left: 16, right: 16),
+      child: Row(
+        children: [
+          const Text('Mon Profil',
+              style: TextStyle(
+                  color: _C.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 17,
+                  letterSpacing: -0.3)),
+          const Spacer(),
+          if (!_editMode && !_loading)
+            GestureDetector(
+              onTap: () => setState(() => _editMode = true),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _C.coral,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.edit_rounded, size: 13, color: _C.white),
+                    SizedBox(width: 6),
+                    Text('Modifier',
+                        style: TextStyle(
+                            color: _C.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12)),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -255,9 +362,10 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: _C.coral,
+              border: Border.all(color: Colors.white.withOpacity(0.3), width: 3),
               boxShadow: [
                 BoxShadow(
-                    color: _C.coral.withOpacity(0.2),
+                    color: _C.coral.withOpacity(0.4),
                     blurRadius: 20,
                     spreadRadius: 2),
               ],
@@ -276,7 +384,7 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
           Text(
             '${_prenomCtrl.text} ${_nomCtrl.text}',
             style: const TextStyle(
-                color: _C.dark,
+                color: _C.white,
                 fontWeight: FontWeight.w800,
                 fontSize: 22,
                 letterSpacing: -0.5),
@@ -285,12 +393,13 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             decoration: BoxDecoration(
-              color: _C.coral.withOpacity(0.1),
+              color: Colors.white.withOpacity(0.12),
               borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white24),
             ),
-            child: const Text('Résident',
-                style: TextStyle(
-                    color: _C.coral,
+            child: Text(_residentType,
+                style: const TextStyle(
+                    color: Colors.white70,
                     fontSize: 12,
                     fontWeight: FontWeight.w600)),
           ),
@@ -302,14 +411,28 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
   Widget _buildSectionLabel(String text) {
     return Text(text,
         style: const TextStyle(
-            color: _C.textMid,
+            color: Colors.white70,
             fontSize: 12,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.0));
   }
 
+  Widget _buildHousingCard() {
+    return _glassCard(
+      child: Column(
+        children: [
+          _infoRowReadOnly(Icons.grid_view_rounded, 'Tranche', _nomTranche),
+          _divider(),
+          _infoRowReadOnly(Icons.business_rounded, 'Immeuble', _nomImmeuble),
+          _divider(),
+          _infoRowReadOnly(Icons.home_rounded, 'Appartement', 'N°$_numAppart'),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInfoCard() {
-    return _card(
+    return _glassCard(
       child: Column(
         children: [
           _fieldRow(
@@ -331,6 +454,14 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
           ),
           _divider(),
           _fieldRow(
+            icon: Icons.email_outlined,
+            label: 'Email',
+            controller: _emailCtrl,
+            enabled: _editMode,
+            keyboardType: TextInputType.emailAddress,
+          ),
+          _divider(),
+          _fieldRow(
             icon: Icons.phone_outlined,
             label: 'Téléphone',
             controller: _telCtrl,
@@ -342,77 +473,24 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
     );
   }
 
-  Widget _buildAccountCard() {
-    return _card(
-      child: Column(
-        children: [
-          _fieldRow(
-            icon: Icons.email_outlined,
-            label: 'Email',
-            controller: _emailCtrl,
-            enabled: _editMode,
-            keyboardType: TextInputType.emailAddress,
-            validator: (v) {
-              if (v == null || v.trim().isEmpty) return 'Email requis';
-              if (!v.contains('@')) return 'Email invalide';
-              return null;
-            },
-          ),
-          _divider(),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                      color: _C.coralLight,
-                      borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.shield_outlined,
-                      color: _C.coral, size: 18),
-                ),
-                const SizedBox(width: 14),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Rôle',
-                          style: TextStyle(
-                              color: _C.textLight,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500)),
-                      SizedBox(height: 2),
-                      Text('Résident',
-                          style: TextStyle(
-                              color: _C.dark,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildPasswordCard() {
-    return _card(
+    return _glassCard(
       child: Column(
         children: [
           _passwordFieldRow(
             icon: Icons.lock_outline,
             label: 'Nouveau mot de passe',
             controller: _newPasswordCtrl,
+            obscureText: _obscureNewPass,
+            onToggle: () => setState(() => _obscureNewPass = !_obscureNewPass),
           ),
           _divider(),
           _passwordFieldRow(
             icon: Icons.lock_reset,
             label: 'Confirmer le mot de passe',
             controller: _confirmPasswordCtrl,
+            obscureText: _obscureConfirmPass,
+            onToggle: () => setState(() => _obscureConfirmPass = !_obscureConfirmPass),
           ),
           const SizedBox(height: 10),
           SizedBox(
@@ -423,11 +501,10 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
                 backgroundColor: _C.coral,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(vertical: 12),
               ),
               child: _changingPassword
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Mettre à jour le mot de passe', style: TextStyle(fontWeight: FontWeight.bold)),
+                  : const Text('Mettre à jour le mot de passe'),
             ),
           ),
           const SizedBox(height: 10),
@@ -441,7 +518,7 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
       width: double.infinity,
       child: GestureDetector(
         onTap: () => setState(() => _editMode = true),
-        child: _card(
+        child: _glassCard(
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -455,7 +532,7 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
                     color: _C.coral, size: 18),
               ),
               const SizedBox(width: 12),
-              const Text('Modifier mon profil',
+              const Text('Modifier mes informations',
                   style: TextStyle(
                       color: _C.dark,
                       fontWeight: FontWeight.w700,
@@ -474,54 +551,124 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
     return Row(
       children: [
         Expanded(
-          child: OutlinedButton(
-            onPressed: _cancelEdit,
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: _C.divider),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(vertical: 14),
+          child: GestureDetector(
+            onTap: _cancelEdit,
+            child: Container(
+              height: 50,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: const Center(
+                child: Text('Annuler',
+                    style: TextStyle(
+                        color: _C.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14)),
+              ),
             ),
-            child: const Text('Annuler', style: TextStyle(color: _C.textMid)),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           flex: 2,
-          child: ElevatedButton(
-            onPressed: _saving ? null : _saveProfile,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _C.coral,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(vertical: 14),
+          child: GestureDetector(
+            onTap: _saving ? null : _saveProfile,
+            child: Container(
+              height: 50,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [_C.coral, Color(0xFFFF8C42)],
+                ),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                      color: _C.coral.withOpacity(0.4),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Center(
+                child: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            color: _C.white, strokeWidth: 2))
+                    : const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check_rounded,
+                              color: _C.white, size: 18),
+                          SizedBox(width: 8),
+                          Text('Enregistrer',
+                              style: TextStyle(
+                                  color: _C.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14)),
+                        ],
+                      ),
+              ),
             ),
-            child: _saving
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Text('Enregistrer les modifications', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ),
       ],
     );
   }
 
-  Widget _card({required Widget child}) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
+  Widget _glassCard({required Widget child}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.88),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white),
+          ),
+          child: child,
+        ),
       ),
-      child: child,
     );
   }
 
   Widget _divider() => Container(height: 1, color: _C.divider);
+
+  Widget _infoRowReadOnly(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+                color: _C.coralLight, borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: _C.coral, size: 18),
+          ),
+          const SizedBox(width: 14),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: const TextStyle(
+                      color: _C.textLight,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500)),
+              Text(value,
+                  style: const TextStyle(
+                      color: _C.dark,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _fieldRow({
     required IconData icon,
@@ -532,7 +679,7 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
     String? Function(String?)? validator,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
       child: Row(
         children: [
           Container(
@@ -563,10 +710,11 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
                             color: _C.dark,
                             fontWeight: FontWeight.w600,
                             fontSize: 14),
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           isDense: true,
-                          contentPadding: EdgeInsets.symmetric(vertical: 4),
-                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                          border: UnderlineInputBorder(
+                              borderSide: BorderSide(color: _C.coral.withOpacity(0.5))),
                         ),
                       )
                     : Text(
@@ -588,9 +736,11 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
     required IconData icon,
     required String label,
     required TextEditingController controller,
+    required bool obscureText,
+    required VoidCallback onToggle,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
       child: Row(
         children: [
           Container(
@@ -612,15 +762,25 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
                         fontWeight: FontWeight.w500)),
                 TextFormField(
                   controller: controller,
-                  obscureText: true,
+                  obscureText: obscureText,
                   style: const TextStyle(
                       color: _C.dark,
                       fontWeight: FontWeight.w600,
                       fontSize: 14),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 4),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 4),
                     border: InputBorder.none,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                        size: 18,
+                        color: _C.textLight,
+                      ),
+                      onPressed: onToggle,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
                   ),
                 ),
               ],
