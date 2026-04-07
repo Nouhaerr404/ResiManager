@@ -32,27 +32,23 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
   bool _saving   = false;
   bool _loading  = true;
 
-  // ── Form controllers
   final _nomCtrl       = TextEditingController();
   final _prenomCtrl    = TextEditingController();
   final _emailCtrl     = TextEditingController();
   final _telCtrl       = TextEditingController();
   final _formKey        = GlobalKey<FormState>();
 
-  // ── Password controllers
   final _newPasswordCtrl = TextEditingController();
   final _confirmPasswordCtrl = TextEditingController();
   bool _changingPassword = false;
   bool _obscureNewPass = true;
   bool _obscureConfirmPass = true;
 
-  // ── Housing info (Read-only)
   String _numAppart = '-';
   String _nomImmeuble = '-';
   String _nomTranche = '-';
   String _residentType = 'Résident';
 
-  // ── Original values
   late String _origNom, _origPrenom, _origEmail, _origTel;
 
   late AnimationController _fadeCtrl;
@@ -82,7 +78,6 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
   Future<void> _loadProfile() async {
     setState(() => _loading = true);
     try {
-      // 1. Charger Infos Utilisateur
       final res = await _supabase
           .from('users')
           .select('nom, prenom, email, telephone')
@@ -96,7 +91,6 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
         _telCtrl.text    = res['telephone'] ?? '';
       }
 
-      // 2. Charger Infos Logement
       final residentRes = await _supabase
           .from('residents')
           .select('type, appartements(numero, immeubles(nom, tranches(nom)))')
@@ -269,6 +263,7 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
                     : FadeTransition(
                         opacity: _fadeAnim,
                         child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
                           padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
                           child: Form(
                             key: _formKey,
@@ -383,6 +378,7 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
           const SizedBox(height: 14),
           Text(
             '${_prenomCtrl.text} ${_nomCtrl.text}',
+            textAlign: TextAlign.center,
             style: const TextStyle(
                 color: _C.white,
                 fontWeight: FontWeight.w800,
@@ -532,12 +528,13 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
                     color: _C.coral, size: 18),
               ),
               const SizedBox(width: 12),
-              const Text('Modifier mes informations',
-                  style: TextStyle(
-                      color: _C.dark,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15)),
-              const Spacer(),
+              const Expanded(
+                child: Text('Modifier mes informations',
+                    style: TextStyle(
+                        color: _C.dark,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15)),
+              ),
               const Icon(Icons.chevron_right_rounded,
                   color: _C.textLight, size: 20),
             ],
@@ -650,20 +647,24 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
             child: Icon(icon, color: _C.coral, size: 18),
           ),
           const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: const TextStyle(
-                      color: _C.textLight,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500)),
-              Text(value,
-                  style: const TextStyle(
-                      color: _C.dark,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14)),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: const TextStyle(
+                        color: _C.textLight,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500)),
+                Text(value,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: _C.dark,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14)),
+              ],
+            ),
           ),
         ],
       ),
@@ -719,6 +720,8 @@ class _ResidentProfileScreenState extends State<ResidentProfileScreen>
                       )
                     : Text(
                         controller.text.isNotEmpty ? controller.text : '—',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: _C.dark,
                             fontWeight: FontWeight.w600,
