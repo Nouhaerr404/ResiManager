@@ -46,7 +46,7 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
           children: [
             _buildActionHeader(isWeb),
             const SizedBox(height: 35),
-            _buildSearchAndFilters(!isWeb),
+            _buildFilters(!isWeb),
             const SizedBox(height: 25),
             _buildExpensesTable(!isWeb, screenWidth),
           ],
@@ -80,18 +80,14 @@ class _ResidenceFinancesScreenState extends State<ResidenceFinancesScreen> {
     );
   }
 
-  Widget _buildSearchAndFilters(bool isMobile) {
+  Widget _buildFilters(bool isMobile) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey.shade100)),
-      child: Column(children: [
-        TextField(decoration: InputDecoration(hintText: "Rechercher...", prefixIcon: const Icon(Icons.search), filled: true, fillColor: const Color(0xFFF8F9FA), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none))),
-        const SizedBox(height: 20),
-        Wrap(spacing: 15, runSpacing: 15, children: [
-          SizedBox(width: isMobile ? double.infinity : 120, child: _dropdownAnnee()),
-          SizedBox(width: isMobile ? double.infinity : 160, child: _dropdownMois()),
-          SizedBox(width: isMobile ? double.infinity : 220, child: _dropdownCat()),
-        ]),
+      child: Wrap(spacing: 15, runSpacing: 15, children: [
+        SizedBox(width: isMobile ? double.infinity : 120, child: _dropdownAnnee()),
+        SizedBox(width: isMobile ? double.infinity : 160, child: _dropdownMois()),
+        SizedBox(width: isMobile ? double.infinity : 220, child: _dropdownCat()),
       ]),
     );
   }
